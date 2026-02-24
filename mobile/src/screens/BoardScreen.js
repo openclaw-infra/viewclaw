@@ -68,28 +68,27 @@ export function BoardScreen() {
   return (
     <ScreenShell
       title="Board"
-      subtitle={`${tasks.length} tasks`}
+      subtitle={`${tasks.length} tasks recorded`}
       loading={loading}
       error={error}
-      right={<Button size="$3" circular onPress={load} chromeless><Ionicons name="refresh" size={18} color="#a1a1aa" /></Button>}
+      right={<Button size="$3" circular onPress={load} chromeless bc="transparent"><Ionicons name="reload" size={18} color="$textMuted" /></Button>}
     >
       {toast && <ToastBanner text={toast.text} type={toast.type} />}
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 80 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {tasks.length === 0 && !loading ? (
-          <EmptyState title="No Tasks Found" subtitle="Create tasks from Templates to get started" />
+          <EmptyState title="Clean Workspace" subtitle="No active tasks in the queue" />
         ) : (
-          <YStack gap="$5">
+          <YStack gap="$4">
             {Object.entries(groups).map(([key, list]) =>
               list.length > 0 ? (
-                <YStack key={key} gap="$3">
-                  <XStack ai="center" gap="$2" px="$1">
-                    <Text color="$textMuted" fontSize="$3" fontWeight="800" letterSpacing={1}>{key.toUpperCase()}</Text>
-                    <YStack bg="$card" px="$2" py="$1" br="$pill">
-                      <Text color="$textMuted" fontSize="$2" fontWeight="700">{list.length}</Text>
-                    </YStack>
+                <YStack key={key} gap="$2">
+                  <XStack ai="center" gap="$2" px="$1" mb="$1">
+                    <Text color="$textMuted" fontSize="$2" fontWeight="700" letterSpacing={0.5}>{key.toUpperCase()}</Text>
+                    <Text color="$textSubtle" fontSize="$1">•</Text>
+                    <Text color="$textSubtle" fontSize="$2">{list.length}</Text>
                   </XStack>
-                  <YStack gap="$3">
+                  <YStack>
                     {list.map((task) => (
                       <TaskCard key={task.id} task={task} onAction={onAction} onPress={() => setSelectedTask(task)} />
                     ))}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { TamaguiProvider, Tabs, Text, Theme, YStack } from 'tamagui';
+import { TamaguiProvider, Tabs, Text, Theme, YStack, XStack } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import config from './tamagui.config';
 import { BoardScreen } from './src/screens/BoardScreen';
@@ -21,12 +21,16 @@ export default function App() {
         unstyled 
         onInteraction={() => setTab(value)}
       >
-        <YStack ai="center" jc="center" gap="$1" py="$3" opacity={isActive ? 1 : 0.5}>
-          <Ionicons name={icon} size={20} color={isActive ? '#6366f1' : '#a1a1aa'} />
+        <YStack ai="center" jc="center" gap="$1" py="$2" opacity={isActive ? 1 : 0.4}>
+          <Ionicons 
+            name={isActive ? icon.replace('-outline', '') : icon} 
+            size={22} 
+            color={isActive ? '#1677ff' : '#8c8c8c'} 
+          />
           <Text 
             fontSize={10} 
             color={isActive ? '$primary' : '$textMuted'} 
-            fontWeight={isActive ? '700' : '500'}
+            fontWeight={isActive ? '600' : '400'}
           >
             {label}
           </Text>
@@ -54,16 +58,16 @@ export default function App() {
               orientation="horizontal" 
               flexDirection="column"
               bg="$card"
-              borderTopWidth={1}
+              borderTopWidth={0.5}
               borderColor="$border"
-              pb="$4" // Extra padding for safe area
+              paddingBottom={20} // Safe area adjustment
             >
-              <Tabs.List bg="transparent" jc="space-around">
-                <TabItem value="board" label="Board" icon="grid-outline" />
+              <Tabs.List bg="transparent" jc="space-around" px="$2">
+                <TabItem value="board" label="Tasks" icon="grid-outline" />
                 <TabItem value="runs" label="Runs" icon="pulse-outline" />
-                <TabItem value="templates" label="Templates" icon="document-text-outline" />
-                <TabItem value="audits" label="Audits" icon="shield-checkmark-outline" />
-                <TabItem value="settings" label="Settings" icon="settings-outline" />
+                <TabItem value="templates" label="Design" icon="layers-outline" />
+                <TabItem value="audits" label="Audit" icon="shield-checkmark-outline" />
+                <TabItem value="settings" label="Config" icon="options-outline" />
               </Tabs.List>
             </Tabs>
           </YStack>
