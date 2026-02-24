@@ -6,8 +6,8 @@ Stack:
 - Zustand + AsyncStorage (persistent state)
 
 ## Pages
-- Board
-- Runs
+- Board（任务看板 + task detail + confirm actions）
+- Runs（执行记录 + finalize actions）
 - Templates
 - Audits
 - Settings

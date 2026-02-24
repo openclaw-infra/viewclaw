@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Alert } from 'react-native';
 import { Button, Paragraph, ScrollView, Separator, XStack, YStack } from 'tamagui';
 import { ScreenShell } from '../components/ScreenShell';
 import { StatusPill } from '../components/StatusPill';
@@ -13,6 +14,7 @@ export function BoardScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [selectedTask, setSelectedTask] = useState(null);
   const refreshSeconds = useAppStore((s) => s.refreshSeconds);
 
   const load = async () => {
@@ -36,6 +38,18 @@ export function BoardScreen() {
     failed: tasks.filter((x) => x.status === 'failed'),
   };
 
+  const act = async (task, type) => {
+    try {
+      if (type === 'pickup') await apiPost(`/api/tasks/${task.id}/pickup`);
+      if (type === 'complete') await apiPost(`/api/tasks/${task.id}/complete`, { result: 'complete from mobile' });
+      if (type === 'fail') await apiPost(`/api/tasks/${task.id}/fail`, { error: 'failed from mobile confirm action' });
+      setToast(`任务 ${type} 成功`);
+      await load();
+    } catch {
+      setToast(`任务 ${type} 失败`);
+    }
+  };
+
   return (
     <ScreenShell
       title="Board"
@@ -57,19 +71,64 @@ export function BoardScreen() {
             ) : (
               list.map((task) => (
                 <YStack key={task.id} bg="$background" br="$2" p="$2" gap="$1">
-                  <Paragraph color="white" fontWeight="700">{task.title}</Paragraph>
+                  <XStack jc="space-between" ai="center">
+                    <Paragraph color="white" fontWeight="700">{task.title}</Paragraph>
+                    <Button size="$1" onPress={() => setSelectedTask(task)}>详情</Button>
+                  </XStack>
                   <XStack gap="$2" ai="center">
                     <StatusPill value={task.status} />
                     <Paragraph color="$gray10">{task.priority} · retry {task.retryCount}/{task.maxRetries}</Paragraph>
                   </XStack>
                   {!!task.error && <Paragraph color="$red10">{task.error}</Paragraph>}
                   {!!task.result && <Paragraph color="$green10">{task.result}</Paragraph>}
+                  <XStack gap="$2" mt="$1">
+                    {task.status !== 'in-progress' && task.status !== 'done' && (
+                      <Button size="$1" onPress={() => act(task, 'pickup')}>Pickup</Button>
+                    )}
+                    {task.status !== 'done' && (
+                      <Button
+                        size="$1"
+                        onPress={() => Alert.alert('确认完成', `确定将任务「${task.title}」标记为完成吗？`, [
+                          { text: '取消', style: 'cancel' },
+                          { text: '确定', onPress: () => act(task, 'complete') },
+                        ])}
+                      >
+                        Complete
+                      </Button>
+                    )}
+                    {task.status !== 'failed' && task.status !== 'done' && (
+                      <Button
+                        size="$1"
+                        theme="red"
+                        onPress={() => Alert.alert('确认失败', `确定将任务「${task.title}」标记为失败吗？`, [
+                          { text: '取消', style: 'cancel' },
+                          { text: '确定', style: 'destructive', onPress: () => act(task, 'fail') },
+                        ])}
+                      >
+                        Fail
+                      </Button>
+                    )}
+                  </XStack>
                 </YStack>
               ))
             )}
           </YStack>
         ))}
       </ScrollView>
+
+      {!!selectedTask && (
+        <YStack bg="$secondary" br="$3" p="$3" mt="$2" gap="$1">
+          <XStack jc="space-between" ai="center">
+            <Paragraph color="white" fontWeight="700">Task Detail</Paragraph>
+            <Button size="$1" onPress={() => setSelectedTask(null)}>关闭</Button>
+          </XStack>
+          <Paragraph color="$gray10">id: {selectedTask.id}</Paragraph>
+          <Paragraph color="$gray10">title: {selectedTask.title}</Paragraph>
+          <Paragraph color="$gray10">status: {selectedTask.status}</Paragraph>
+          <Paragraph color="$gray10">skill: {selectedTask.skill || '-'}</Paragraph>
+          <Paragraph color="$gray10">updatedAt: {selectedTask.updatedAt}</Paragraph>
+        </YStack>
+      )}
     </ScreenShell>
   );
 }
