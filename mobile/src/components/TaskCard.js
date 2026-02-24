@@ -1,7 +1,6 @@
 import React from 'react';
-import { YStack, XStack, Text, Button, Spacer } from 'tamagui';
+import { YStack, XStack, Text, Button } from 'tamagui';
 import { StatusPill } from './StatusPill';
-import { Play, CheckCircle, AlertOctagon, MoreHorizontal } from 'lucide-react-native';
 
 export function TaskCard({ task, onAction, onPress }) {
   return (
@@ -51,7 +50,6 @@ export function TaskCard({ task, onAction, onPress }) {
           <Button 
             size="$2" 
             bg="$primary" 
-            icon={Play} 
             color="white"
             onPress={() => onAction(task, 'pickup')}
           >
@@ -64,15 +62,13 @@ export function TaskCard({ task, onAction, onPress }) {
             <Button 
               size="$2" 
               bg="$success" 
-              icon={CheckCircle} 
               onPress={() => onAction(task, 'complete')}
-            />
+            >Done</Button>
             <Button 
               size="$2" 
               bg="$danger" 
-              icon={AlertOctagon} 
               onPress={() => onAction(task, 'fail')}
-            />
+            >Fail</Button>
           </>
         )}
       </XStack>

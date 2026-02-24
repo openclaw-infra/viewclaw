@@ -1,18 +1,17 @@
 import React from 'react';
 import { XStack, Text } from 'tamagui';
-import { Info, CheckCircle, AlertCircle } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 export function ToastBanner({ text, type = 'info' }) {
   if (!text) return null;
 
   const config = {
-    error: { bg: '$dangerBg', text: '$dangerText', icon: AlertCircle },
-    success: { bg: '$successBg', text: '$successText', icon: CheckCircle },
-    info: { bg: '$primaryBg', text: '$primaryText', icon: Info },
+    error: { bg: '$dangerBg', text: '$dangerText', icon: 'alert-circle-outline' },
+    success: { bg: '$successBg', text: '$successText', icon: 'checkmark-circle-outline' },
+    info: { bg: '$primaryBg', text: '$primaryText', icon: 'information-circle-outline' },
   };
 
   const style = config[type] || config.info;
-  const Icon = style.icon;
 
   return (
     <XStack 
@@ -26,7 +25,7 @@ export function ToastBanner({ text, type = 'info' }) {
       animation="quick"
       enterStyle={{ opacity: 0, y: -10 }}
     >
-      <Icon size={16} color={style.text} />
+      <Ionicons name={style.icon} size={16} color={style.text} />
       <Text color={style.text} fontWeight="600" fontSize="$3">{text}</Text>
     </XStack>
   );

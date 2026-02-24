@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
 import { ScrollView, YStack, Input, Button, XStack } from 'tamagui';
-import { Search } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenShell } from '../components/ScreenShell';
 import { RunCard } from '../components/RunCard';
 import { ToastBanner } from '../components/ToastBanner';
@@ -85,11 +85,11 @@ export function RunsScreen() {
           borderColor="$border"
         />
         <Button 
-          icon={Search} 
           onPress={() => finalize(runId, 'done')}
           bg="$primary"
           color="white"
         >
+          <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
           Done
         </Button>
       </XStack>

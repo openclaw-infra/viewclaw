@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
 import { Button, ScrollView, YStack, Text, XStack } from 'tamagui';
-import { RefreshCw, X } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenShell } from '../components/ScreenShell';
 import { TaskCard } from '../components/TaskCard';
 import { ToastBanner } from '../components/ToastBanner';
@@ -71,7 +71,7 @@ export function BoardScreen() {
       subtitle={`${tasks.length} tasks`}
       loading={loading}
       error={error}
-      right={<Button size="$3" circular icon={RefreshCw} onPress={load} chromeless />}
+      right={<Button size="$3" circular onPress={load} chromeless><Ionicons name="refresh" size={18} color="#a1a1aa" /></Button>}
     >
       {toast && <ToastBanner text={toast.text} type={toast.type} />}
 
@@ -105,7 +105,7 @@ export function BoardScreen() {
         <YStack position="absolute" bottom={0} left={0} right={0} bg="$card" borderTopLeftRadius="$5" borderTopRightRadius="$5" p="$5" gap="$3" borderTopWidth={1} borderColor="$border">
           <XStack jc="space-between" ai="center">
             <Text fontSize="$6" fontWeight="700" color="$text">Task Details</Text>
-            <Button size="$2" circular icon={X} onPress={() => setSelectedTask(null)} chromeless />
+            <Button size="$2" circular onPress={() => setSelectedTask(null)} chromeless><Ionicons name="close" size={18} color="#a1a1aa" /></Button>
           </XStack>
           <DetailRow label="ID" value={selectedTask.id} />
           <DetailRow label="Title" value={selectedTask.title} />

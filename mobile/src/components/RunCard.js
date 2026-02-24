@@ -1,7 +1,6 @@
 import React from 'react';
 import { YStack, XStack, Text, Button } from 'tamagui';
 import { StatusPill } from './StatusPill';
-import { Play, CheckCircle, XCircle } from 'lucide-react-native';
 
 export function RunCard({ run, onAction }) {
   return (
@@ -45,7 +44,6 @@ export function RunCard({ run, onAction }) {
             bg="$successBg" 
             borderColor="$successBg" 
             color="$successText"
-            icon={CheckCircle}
             onPress={() => onAction(run, 'done')}
           >
             Finalize Done
@@ -55,7 +53,6 @@ export function RunCard({ run, onAction }) {
             bg="$dangerBg" 
             borderColor="$dangerBg" 
             color="$dangerText"
-            icon={XCircle}
             onPress={() => onAction(run, 'failed')}
           >
             Finalize Fail
