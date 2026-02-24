@@ -293,6 +293,10 @@ function runningCount(projectId?: string) {
   return loadTasks().filter((x) => x.status === 'in-progress' && (!projectId || x.projectId === projectId)).length;
 }
 
+function assertSameProject(resourceProjectId: string, requestProjectId: string) {
+  return resourceProjectId === requestProjectId;
+}
+
 async function dispatchNextTask(projectId?: string) {
   if (runningCount(projectId) >= MAX_CONCURRENCY) {
     return { ok: true, message: 'Concurrency limit reached', maxConcurrency: MAX_CONCURRENCY };
@@ -318,9 +322,26 @@ async function dispatchNextTask(projectId?: string) {
     if (EXECUTOR_MODE === 'openclaw') await runOpenClawExecutor(target, run.id);
     else await runMockExecutor(target, run.id);
 
-    audit({ actor: 'worker', role: 'operator', action: 'task.dispatch.success', projectId: target.projectId, resourceId: target.id, detail: `run=${run.id}` });
-    await notify('task.done', { taskId: target.id, projectId: target.projectId, runId: run.id });
-    return { ok: true, taskId: target.id, runId: run.id, executor: EXECUTOR_MODE };
+    const latestTask = getTaskById(target.id);
+    const isDone = latestTask?.status === 'done';
+
+    audit({
+      actor: 'worker',
+      role: 'operator',
+      action: isDone ? 'task.dispatch.success' : 'task.dispatch.spawned',
+      projectId: target.projectId,
+      resourceId: target.id,
+      detail: `run=${run.id}`,
+    });
+
+    await notify(isDone ? 'task.done' : 'task.spawned', {
+      taskId: target.id,
+      projectId: target.projectId,
+      runId: run.id,
+      status: latestTask?.status || 'in-progress',
+    });
+
+    return { ok: true, taskId: target.id, runId: run.id, executor: EXECUTOR_MODE, status: latestTask?.status || 'in-progress' };
   } catch (e: any) {
     const failed = failTask(target.id, e?.message ?? 'Unknown worker error');
     const finalStatus = failed?.status === 'failed' ? 'failed' : 'queued';
@@ -350,12 +371,19 @@ const app = new Elysia()
     const projectId = (query.projectId as string) || (headers['x-project-id'] as string) || 'default';
     return loadTasks().filter((x) => x.projectId === projectId && x.status === 'queued');
   })
-  .get('/api/tasks/:id', ({ params, set }) => {
-    const task = getTaskById(params.id);
+  .get('/api/tasks/:id', (ctx) => {
+    const task = getTaskById(ctx.params.id);
     if (!task) {
-      set.status = 404;
+      ctx.set.status = 404;
       return { error: 'Task not found' };
     }
+
+    const projectId = getProjectId(ctx);
+    if (!assertSameProject(task.projectId, projectId)) {
+      ctx.set.status = 403;
+      return { error: 'Cross-project access denied' };
+    }
+
     return { ...task, runs: loadRuns().filter((r) => r.taskId === task.id) };
   })
   .get('/api/runs', ({ query, headers }) => {
@@ -428,10 +456,15 @@ const app = new Elysia()
         priority = priority || tpl.priority;
       }
 
+      if (!title || !title.trim()) {
+        ctx.set.status = 400;
+        return { error: 'title is required (or provide a valid templateId)' };
+      }
+
       const task: Task = {
         id: randomUUID(),
         projectId,
-        title,
+        title: title.trim(),
         description,
         priority,
         skill,
@@ -451,7 +484,7 @@ const app = new Elysia()
     },
     {
       body: t.Object({
-        title: t.String({ minLength: 1 }),
+        title: t.Optional(t.String({ minLength: 1 })),
         description: t.Optional(t.String()),
         priority: t.Optional(t.Union([t.Literal('low'), t.Literal('medium'), t.Literal('high'), t.Literal('urgent')])),
         skill: t.Optional(t.String()),
@@ -504,6 +537,16 @@ const app = new Elysia()
       return { error: 'Run not found' };
     }
 
+    const projectId = getProjectId(ctx);
+    if (!assertSameProject(run.projectId, projectId)) {
+      ctx.set.status = 403;
+      return { error: 'Cross-project access denied' };
+    }
+
+    if (run.finishedAt) {
+      return { ok: true, idempotent: true, status: run.status };
+    }
+
     if (ctx.body.status === 'done') {
       completeTask(run.taskId, ctx.body.result);
       updateRun(run.id, {
@@ -542,7 +585,7 @@ const app = new Elysia()
 
 if (AUTO_EXECUTE) {
   setInterval(() => {
-    const projects = [...new Set(loadTasks().map((x) => x.projectId))];
+    const projects = [...new Set(loadTasks().filter((x) => x.status === 'queued').map((x) => x.projectId))];
     if (projects.length === 0) {
       dispatchNextTask('default').catch(() => undefined);
       return;
