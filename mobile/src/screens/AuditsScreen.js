@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { H3, Paragraph, ScrollView, YStack } from 'tamagui';
+import { Paragraph, ScrollView, YStack } from 'tamagui';
+import { ScreenShell } from '../components/ScreenShell';
 import { apiGet } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
@@ -7,6 +8,7 @@ import { useAppStore } from '../store/useAppStore';
 export function AuditsScreen() {
   const [items, setItems] = useState([]);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
   const refreshSeconds = useAppStore((s) => s.refreshSeconds);
 
   const load = async () => {
@@ -16,14 +18,14 @@ export function AuditsScreen() {
       setError('');
     } catch (e) {
       setError('需要 admin token 才能查看 audits');
+    } finally {
+      setLoading(false);
     }
   };
   usePolling(load, [], refreshSeconds * 1000);
 
   return (
-    <YStack f={1} p="$3" gap="$3">
-      <H3 color="white">Audits</H3>
-      {!!error && <Paragraph color="$red10">{error}</Paragraph>}
+    <ScreenShell title="Audits" subtitle="审计日志（admin）" loading={loading} error={error}>
       <ScrollView>
         {items.map((a) => (
           <YStack key={a.id} bg="$secondary" br="$3" p="$3" mb="$2" gap="$1">
@@ -33,6 +35,6 @@ export function AuditsScreen() {
           </YStack>
         ))}
       </ScrollView>
-    </YStack>
+    </ScreenShell>
   );
 }

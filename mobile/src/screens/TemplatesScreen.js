@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Button, H3, Input, Paragraph, ScrollView, TextArea, XStack, YStack } from 'tamagui';
+import { Button, Input, Paragraph, ScrollView, TextArea, XStack, YStack } from 'tamagui';
+import { ScreenShell } from '../components/ScreenShell';
 import { apiGet, apiPost } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
@@ -8,11 +9,20 @@ export function TemplatesScreen() {
   const [items, setItems] = useState([]);
   const [name, setName] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const refreshSeconds = useAppStore((s) => s.refreshSeconds);
 
   const load = async () => {
-    const data = await apiGet('/api/templates');
-    setItems(Array.isArray(data) ? data : []);
+    try {
+      const data = await apiGet('/api/templates');
+      setItems(Array.isArray(data) ? data : []);
+      setError('');
+    } catch (e) {
+      setError('加载模板失败');
+    } finally {
+      setLoading(false);
+    }
   };
   usePolling(load, [], refreshSeconds * 1000);
 
@@ -29,8 +39,7 @@ export function TemplatesScreen() {
   };
 
   return (
-    <YStack f={1} p="$3" gap="$3">
-      <H3 color="white">Templates</H3>
+    <ScreenShell title="Templates" subtitle="模板管理（V3）" loading={loading} error={error}>
       <Input placeholder="Template Name" value={name} onChangeText={setName} />
       <TextArea placeholder="Prompt" value={prompt} onChangeText={setPrompt} />
       <Button onPress={create}>Create Template</Button>
@@ -45,6 +54,6 @@ export function TemplatesScreen() {
           </YStack>
         ))}
       </ScrollView>
-    </YStack>
+    </ScreenShell>
   );
 }

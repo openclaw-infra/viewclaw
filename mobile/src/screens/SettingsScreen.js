@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Button, H3, Input, Paragraph, YStack } from 'tamagui';
+import { Button, Input, Paragraph } from 'tamagui';
+import { ScreenShell } from '../components/ScreenShell';
 import { useAppStore } from '../store/useAppStore';
 import { apiGet } from '../api/client';
 
@@ -27,8 +28,7 @@ export function SettingsScreen() {
   };
 
   return (
-    <YStack f={1} p="$3" gap="$2">
-      <H3 color="white">Settings</H3>
+    <ScreenShell title="Settings" subtitle="连接与运行参数" loading={false}>
       <Input value={draft.baseUrl} onChangeText={(v) => setDraft((s) => ({ ...s, baseUrl: v }))} placeholder="API Base URL" />
       <Input value={draft.projectId} onChangeText={(v) => setDraft((s) => ({ ...s, projectId: v }))} placeholder="Project ID" />
       <Input value={draft.token} onChangeText={(v) => setDraft((s) => ({ ...s, token: v }))} placeholder="Bearer Token" />
@@ -36,6 +36,6 @@ export function SettingsScreen() {
       <Button onPress={save}>Save</Button>
       <Button theme="active" onPress={check}>Health Check</Button>
       {!!health && <Paragraph color="$gray10">{health}</Paragraph>}
-    </YStack>
+    </ScreenShell>
   );
 }
