@@ -38,10 +38,17 @@ npm run start
 
 - `GET /health`
 - `GET /api/tasks`
+- `GET /api/tasks/queue`
+- `GET /api/tasks/:id`（含 runs）
+- `GET /api/runs`
 - `POST /api/tasks`
 - `POST /api/tasks/:id/pickup`
 - `POST /api/tasks/:id/complete`
 - `POST /api/tasks/:id/fail`
+- `POST /api/worker/tick`（手动触发一次 worker 调度）
+
+> 任务执行模式当前为 mock executor，可先用于看板联调。
+> 设置 `AUTO_EXECUTE=1` 可让服务端自动轮询执行 queued 任务。
 
 ## 后续可扩展
 
