@@ -1,5 +1,6 @@
 import React from 'react';
-import { H3, Paragraph, Spinner, YStack } from 'tamagui';
+import { H3, Paragraph, YStack } from 'tamagui';
+import { SkeletonList } from './SkeletonList';
 
 export function ScreenShell({ title, subtitle, loading, error, children, right }) {
   return (
@@ -13,9 +14,8 @@ export function ScreenShell({ title, subtitle, loading, error, children, right }
       </YStack>
 
       {loading ? (
-        <YStack ai="center" mt="$6">
-          <Spinner size="large" color="$blue10" />
-          <Paragraph color="$gray10" mt="$2">Loading...</Paragraph>
+        <YStack mt="$2">
+          <SkeletonList count={4} />
         </YStack>
       ) : (
         <>

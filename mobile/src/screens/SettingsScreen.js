@@ -3,6 +3,7 @@ import { Button, Input, Paragraph } from 'tamagui';
 import { ScreenShell } from '../components/ScreenShell';
 import { useAppStore } from '../store/useAppStore';
 import { apiGet } from '../api/client';
+import { toErrorText } from '../utils/errorText';
 
 export function SettingsScreen() {
   const { baseUrl, projectId, token, refreshSeconds, setConnection, setRefreshSeconds } = useAppStore();
@@ -23,7 +24,7 @@ export function SettingsScreen() {
       const h = await apiGet('/health');
       setHealth(JSON.stringify(h));
     } catch (e) {
-      setHealth('连接失败');
+      setHealth(toErrorText(e, '连接失败'));
     }
   };
 

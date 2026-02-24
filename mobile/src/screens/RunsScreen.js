@@ -8,6 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { apiGet, apiPost } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
+import { toErrorText } from '../utils/errorText';
 
 export function RunsScreen() {
   const [runs, setRuns] = useState([]);
@@ -23,7 +24,7 @@ export function RunsScreen() {
       setRuns(Array.isArray(data) ? data : []);
       setError('');
     } catch (e) {
-      setError('加载 runs 失败');
+      setError(toErrorText(e, '加载 runs 失败'));
     } finally {
       setLoading(false);
     }

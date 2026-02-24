@@ -8,6 +8,7 @@ import { EmptyState } from '../components/EmptyState';
 import { apiGet, apiPost } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
+import { toErrorText } from '../utils/errorText';
 
 export function BoardScreen() {
   const [tasks, setTasks] = useState([]);
@@ -23,7 +24,7 @@ export function BoardScreen() {
       setTasks(Array.isArray(data) ? data : []);
       setError('');
     } catch (e) {
-      setError('加载任务失败，请检查服务端连接');
+      setError(toErrorText(e, '加载任务失败，请检查服务端连接'));
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { apiGet, apiPost } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
+import { toErrorText } from '../utils/errorText';
 
 export function TemplatesScreen() {
   const [items, setItems] = useState([]);
@@ -22,7 +23,7 @@ export function TemplatesScreen() {
       setItems(Array.isArray(data) ? data : []);
       setError('');
     } catch (e) {
-      setError('加载模板失败');
+      setError(toErrorText(e, '加载模板失败'));
     } finally {
       setLoading(false);
     }

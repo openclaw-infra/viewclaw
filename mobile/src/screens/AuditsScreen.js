@@ -5,6 +5,7 @@ import { EmptyState } from '../components/EmptyState';
 import { apiGet } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
+import { toErrorText } from '../utils/errorText';
 
 export function AuditsScreen() {
   const [items, setItems] = useState([]);
@@ -18,7 +19,7 @@ export function AuditsScreen() {
       setItems(Array.isArray(data) ? data : []);
       setError('');
     } catch (e) {
-      setError('需要 admin token 才能查看 audits');
+      setError(toErrorText(e, '需要 admin token 才能查看 audits'));
     } finally {
       setLoading(false);
     }
