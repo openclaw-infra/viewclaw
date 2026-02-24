@@ -28,7 +28,7 @@ export function TemplatesScreen() {
       setLoading(false);
     }
   };
-  usePolling(load, [], refreshSeconds * 1000);
+  usePolling(load, [refreshSeconds], refreshSeconds * 1000);
 
   const create = async () => {
     if (!name.trim() || !prompt.trim()) return;

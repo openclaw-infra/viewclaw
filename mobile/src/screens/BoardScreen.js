@@ -30,7 +30,7 @@ export function BoardScreen() {
     }
   };
 
-  usePolling(load, [], refreshSeconds * 1000);
+  usePolling(load, [refreshSeconds], refreshSeconds * 1000);
 
   const groups = {
     queued: tasks.filter((x) => x.status === 'queued'),

@@ -29,7 +29,7 @@ export function RunsScreen() {
       setLoading(false);
     }
   };
-  usePolling(load, [], refreshSeconds * 1000);
+  usePolling(load, [refreshSeconds], refreshSeconds * 1000);
 
   const finalize = async (id, status) => {
     try {

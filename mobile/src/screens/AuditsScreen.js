@@ -24,7 +24,7 @@ export function AuditsScreen() {
       setLoading(false);
     }
   };
-  usePolling(load, [], refreshSeconds * 1000);
+  usePolling(load, [refreshSeconds], refreshSeconds * 1000);
 
   return (
     <ScreenShell title="Audits" subtitle="审计日志（admin）" loading={loading} error={error}>
