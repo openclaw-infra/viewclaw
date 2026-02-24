@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "viewclaw-mobile",
-    "slug": "viewclaw-mobile",
+    "name": "viewclaw-mobile-20260224",
+    "slug": "viewclaw-mobile-20260224",
     "version": "0.1.1",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
@@ -10,7 +10,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+        "projectId": "a6ba2a70-522c-428a-933b-d2896caf4c32"
       }
     }
   }
