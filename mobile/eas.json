@@ -7,6 +7,7 @@
     "production-apk": {
       "node": "20.19.4",
       "android": {
+        "image": "latest",
         "buildType": "apk"
       }
     }
