@@ -54,9 +54,16 @@ npm run start
 >
 > 设置 `AUTO_EXECUTE=1` 可让服务端自动轮询执行 queued 任务。
 
+## 服务端能力（当前）
+
+- V1: 任务 CRUD + 状态流转 + run 记录
+- V2: 自动调度、并发控制、失败重试、OpenClaw 执行适配、Webhook 通知
+- V3: 多项目隔离、RBAC（viewer/operator/admin）、审计日志、任务模板
+
+详见：`docs/server-v2-v3.md`
+
 ## 后续可扩展
 
-- 增加 `sessions_spawn` 执行器 worker（接入 OpenClaw）
 - SSE/WebSocket 实时更新
-- 鉴权（Bearer token）
-- 多用户/多项目隔离
+- 成本统计与报表
+- 更细粒度权限模型
