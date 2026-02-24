@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Button, Input, Paragraph } from 'tamagui';
+import { Button, Input, Text, YStack } from 'tamagui';
 import { ScreenShell } from '../components/ScreenShell';
 import { useAppStore } from '../store/useAppStore';
 import { apiGet } from '../api/client';
@@ -17,6 +17,7 @@ export function SettingsScreen() {
   const save = () => {
     setConnection({ baseUrl: draft.baseUrl, projectId: draft.projectId, token: draft.token });
     setRefreshSeconds(Math.max(3, Number(draft.refreshSeconds || 8)));
+    setHealth('Saved.');
   };
 
   const check = async () => {
@@ -24,19 +25,21 @@ export function SettingsScreen() {
       const h = await apiGet('/health');
       setHealth(JSON.stringify(h));
     } catch (e) {
-      setHealth(toErrorText(e, '连接失败'));
+      setHealth(toErrorText(e, 'Connection failed'));
     }
   };
 
   return (
-    <ScreenShell title="Settings" subtitle="连接与运行参数" loading={false}>
-      <Input value={draft.baseUrl} onChangeText={(v) => setDraft((s) => ({ ...s, baseUrl: v }))} placeholder="API Base URL" />
-      <Input value={draft.projectId} onChangeText={(v) => setDraft((s) => ({ ...s, projectId: v }))} placeholder="Project ID" />
-      <Input value={draft.token} onChangeText={(v) => setDraft((s) => ({ ...s, token: v }))} placeholder="Bearer Token" />
-      <Input value={draft.refreshSeconds} onChangeText={(v) => setDraft((s) => ({ ...s, refreshSeconds: v }))} placeholder="Refresh Seconds" keyboardType="numeric" />
-      <Button onPress={save}>Save</Button>
-      <Button theme="active" onPress={check}>Health Check</Button>
-      {!!health && <Paragraph color="$gray10">{health}</Paragraph>}
+    <ScreenShell title="Settings" subtitle="Connection & Runtime" loading={false}>
+      <YStack gap="$3" bg="$card" p="$4" br="$4" borderWidth={1} borderColor="$border">
+        <Input value={draft.baseUrl} onChangeText={(v) => setDraft((s) => ({ ...s, baseUrl: v }))} placeholder="API Base URL" bg="$background" borderColor="$border" color="$text" />
+        <Input value={draft.projectId} onChangeText={(v) => setDraft((s) => ({ ...s, projectId: v }))} placeholder="Project ID" bg="$background" borderColor="$border" color="$text" />
+        <Input value={draft.token} onChangeText={(v) => setDraft((s) => ({ ...s, token: v }))} placeholder="Bearer Token" bg="$background" borderColor="$border" color="$text" />
+        <Input value={draft.refreshSeconds} onChangeText={(v) => setDraft((s) => ({ ...s, refreshSeconds: v }))} placeholder="Refresh seconds" keyboardType="numeric" bg="$background" borderColor="$border" color="$text" />
+        <Button onPress={save} bg="$primary" color="white">Save</Button>
+        <Button onPress={check} bg="$primaryBg" color="$primaryText">Health Check</Button>
+        {!!health && <Text color="$textMuted">{health}</Text>}
+      </YStack>
     </ScreenShell>
   );
 }

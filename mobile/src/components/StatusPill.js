@@ -1,19 +1,36 @@
 import React from 'react';
-import { Paragraph, XStack } from 'tamagui';
+import { XStack, Text } from 'tamagui';
 
-const colorMap = {
-  queued: '#f59e0b',
-  'in-progress': '#3b82f6',
-  done: '#22c55e',
-  failed: '#ef4444',
-  running: '#3b82f6',
+const styles = {
+  queued: { bg: '$warningBg', text: '$warningText', label: 'QUEUED' },
+  'in-progress': { bg: '$primaryBg', text: '$primaryText', label: 'RUNNING' },
+  running: { bg: '$primaryBg', text: '$primaryText', label: 'RUNNING' },
+  done: { bg: '$successBg', text: '$successText', label: 'DONE' },
+  failed: { bg: '$dangerBg', text: '$dangerText', label: 'FAILED' },
 };
 
-export function StatusPill({ value }) {
-  const c = colorMap[value] || '#6b7280';
+export function StatusPill({ value, size = '$2' }) {
+  const style = styles[value] || { bg: '$card', text: '$textMuted', label: value?.toUpperCase() || 'UNKNOWN' };
+  
   return (
-    <XStack bg={c + '33'} px="$2" py="$1" br="$2">
-      <Paragraph color={c} fontSize={12} fontWeight="700">{value}</Paragraph>
+    <XStack 
+      bg={style.bg} 
+      px="$2.5" 
+      py="$1" 
+      br="$pill" 
+      ai="center" 
+      jc="center"
+      borderWidth={1}
+      borderColor="transparent"
+    >
+      <Text 
+        color={style.text} 
+        fontSize={10} 
+        fontWeight="700" 
+        letterSpacing={0.5}
+      >
+        {style.label}
+      </Text>
     </XStack>
   );
 }

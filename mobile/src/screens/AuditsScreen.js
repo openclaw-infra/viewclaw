@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Paragraph, ScrollView, YStack } from 'tamagui';
+import { Text, ScrollView, YStack } from 'tamagui';
 import { ScreenShell } from '../components/ScreenShell';
 import { EmptyState } from '../components/EmptyState';
 import { apiGet } from '../api/client';
@@ -19,7 +19,7 @@ export function AuditsScreen() {
       setItems(Array.isArray(data) ? data : []);
       setError('');
     } catch (e) {
-      setError(toErrorText(e, '需要 admin token 才能查看 audits'));
+      setError(toErrorText(e, 'Admin token required for audits'));
     } finally {
       setLoading(false);
     }
@@ -27,15 +27,19 @@ export function AuditsScreen() {
   usePolling(load, [refreshSeconds], refreshSeconds * 1000);
 
   return (
-    <ScreenShell title="Audits" subtitle="审计日志（admin）" loading={loading} error={error}>
-      <ScrollView>
-        {items.length === 0 ? <EmptyState title="暂无审计日志" subtitle="请确认使用 admin token，并触发一些任务操作" /> : items.map((a) => (
-          <YStack key={a.id} bg="$secondary" br="$3" p="$3" mb="$2" gap="$1">
-            <Paragraph color="white" fontWeight="700">{a.action}</Paragraph>
-            <Paragraph color="$gray10">{a.actor} · {a.role}</Paragraph>
-            <Paragraph color="$gray10">{a.detail || '-'}</Paragraph>
-          </YStack>
-        ))}
+    <ScreenShell title="Audits" subtitle="Operation History" loading={loading} error={error}>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {items.length === 0 ? (
+          <EmptyState title="No Audit Logs" subtitle="Use an admin token and perform task actions" />
+        ) : (
+          items.map((a) => (
+            <YStack key={a.id} bg="$card" br="$4" p="$4" mb="$3" gap="$1" borderWidth={1} borderColor="$border">
+              <Text color="$text" fontWeight="700">{a.action}</Text>
+              <Text color="$textMuted">{a.actor} · {a.role}</Text>
+              <Text color="$textSubtle">{a.detail || '-'}</Text>
+            </YStack>
+          ))
+        )}
       </ScrollView>
     </ScreenShell>
   );

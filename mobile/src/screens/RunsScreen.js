@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
-import { Button, Input, Paragraph, ScrollView, XStack, YStack } from 'tamagui';
+import { ScrollView, YStack, Input, Button, XStack } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 import { ScreenShell } from '../components/ScreenShell';
-import { StatusPill } from '../components/StatusPill';
+import { RunCard } from '../components/RunCard';
 import { ToastBanner } from '../components/ToastBanner';
 import { EmptyState } from '../components/EmptyState';
 import { apiGet, apiPost } from '../api/client';
@@ -15,7 +16,7 @@ export function RunsScreen() {
   const [runId, setRunId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [toast, setToast] = useState('');
+  const [toast, setToast] = useState(null);
   const refreshSeconds = useAppStore((s) => s.refreshSeconds);
 
   const load = async () => {
@@ -24,65 +25,85 @@ export function RunsScreen() {
       setRuns(Array.isArray(data) ? data : []);
       setError('');
     } catch (e) {
-      setError(toErrorText(e, '加载 runs 失败'));
+      setError(toErrorText(e, 'Failed to load runs'));
     } finally {
       setLoading(false);
     }
   };
+
   usePolling(load, [refreshSeconds], refreshSeconds * 1000);
+
+  const showToast = (text, type = 'success') => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const finalize = async (id, status) => {
     try {
-      await apiPost(`/api/runs/${id}/finalize`, status === 'done' ? { status, result: 'manual finalize from mobile' } : { status, error: 'manual fail from mobile' });
-      setToast(status === 'done' ? 'run 已完成' : 'run 已失败');
+      await apiPost(`/api/runs/${id}/finalize`, status === 'done' 
+        ? { status, result: 'Manual finalize from mobile' } 
+        : { status, error: 'Manual fail from mobile' }
+      );
+      showToast(status === 'done' ? 'Run finalized (Done)' : 'Run finalized (Failed)', 'success');
       load();
     } catch {
-      setToast('finalize 失败');
+      showToast('Finalize failed', 'error');
     }
   };
 
+  const onAction = (run, action) => {
+    Alert.alert(
+      `Finalize Run`,
+      `Mark run ${run.id.slice(0, 8)} as ${action}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Confirm', 
+          style: action === 'failed' ? 'destructive' : 'default',
+          onPress: () => finalize(run.id, action)
+        },
+      ]
+    );
+  };
+
   return (
-    <ScreenShell title="Runs" subtitle="执行记录（V2/V3）" loading={loading} error={error}>
-      <ToastBanner text={toast} type={toast.includes('失败') ? 'error' : 'success'} />
-      <XStack gap="$2">
-        <Input f={1} value={runId} onChangeText={setRunId} placeholder="Run ID to finalize" />
-        <Button onPress={() => finalize(runId, 'done')}>Done</Button>
+    <ScreenShell 
+      title="Runs" 
+      subtitle="Execution History" 
+      loading={loading} 
+      error={error}
+    >
+      {toast && <ToastBanner text={toast.text} type={toast.type} />}
+      
+      <XStack gap="$2" mb="$4">
+        <Input 
+          f={1} 
+          value={runId} 
+          onChangeText={setRunId} 
+          placeholder="Finalize Run ID..." 
+          bg="$card" 
+          borderColor="$border"
+        />
+        <Button 
+          onPress={() => finalize(runId, 'done')}
+          bg="$primary"
+          color="white"
+        >
+          <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+          Done
+        </Button>
       </XStack>
-      <ScrollView>
-        {runs.length === 0 ? <EmptyState title="暂无执行记录" subtitle="先在 Board 触发任务执行" /> : runs.map((run) => (
-          <YStack key={run.id} bg="$secondary" br="$3" p="$3" mb="$2" gap="$1">
-            <XStack ai="center" gap="$2">
-              <Paragraph color="white" fontWeight="700">{run.id.slice(0, 8)}</Paragraph>
-              <StatusPill value={run.status} />
-            </XStack>
-            <Paragraph color="$gray10">task: {run.taskId}</Paragraph>
-            <Paragraph color="$gray10">executor: {run.executor}</Paragraph>
-            {!!run.externalSessionKey && <Paragraph color="$blue10">session: {run.externalSessionKey}</Paragraph>}
-            {run.status === 'running' && (
-              <XStack gap="$2" mt="$1">
-                <Button
-                  size="$1"
-                  onPress={() => Alert.alert('确认完成', `Finalize run ${run.id.slice(0, 8)} as done?`, [
-                    { text: '取消', style: 'cancel' },
-                    { text: '确定', onPress: () => finalize(run.id, 'done') },
-                  ])}
-                >
-                  Finalize Done
-                </Button>
-                <Button
-                  size="$1"
-                  theme="red"
-                  onPress={() => Alert.alert('确认失败', `Finalize run ${run.id.slice(0, 8)} as failed?`, [
-                    { text: '取消', style: 'cancel' },
-                    { text: '确定', style: 'destructive', onPress: () => finalize(run.id, 'failed') },
-                  ])}
-                >
-                  Finalize Fail
-                </Button>
-              </XStack>
-            )}
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {runs.length === 0 && !loading ? (
+          <EmptyState title="No Runs" subtitle="Trigger tasks on the Board to see runs here" />
+        ) : (
+          <YStack gap="$3" pb="$8">
+            {runs.map((run) => (
+              <RunCard key={run.id} run={run} onAction={onAction} />
+            ))}
           </YStack>
-        ))}
+        )}
       </ScrollView>
     </ScreenShell>
   );

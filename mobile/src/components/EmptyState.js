@@ -1,12 +1,30 @@
 import React from 'react';
-import { Button, Paragraph, YStack } from 'tamagui';
+import { YStack, Text, Button } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 
-export function EmptyState({ title = '暂无数据', subtitle = '可以先创建一个任务', actionText, onAction }) {
+export function EmptyState({ title = 'No Data', subtitle = 'Nothing to see here yet', actionText, onAction }) {
   return (
-    <YStack ai="center" jc="center" py="$6" gap="$2">
-      <Paragraph color="white" fontWeight="700">{title}</Paragraph>
-      <Paragraph color="$gray10">{subtitle}</Paragraph>
-      {actionText && onAction ? <Button size="$2" onPress={onAction}>{actionText}</Button> : null}
+    <YStack ai="center" jc="center" py="$10" gap="$3" opacity={0.8}>
+      <YStack bg="$card" p="$4" br="$pill" mb="$2">
+        <Ionicons name="inbox-outline" size={32} color="#a1a1aa" />
+      </YStack>
+      <YStack ai="center" gap="$1">
+        <Text color="$text" fontSize="$5" fontWeight="700">{title}</Text>
+        <Text color="$textMuted" textAlign="center" maxWidth={250}>
+          {subtitle}
+        </Text>
+      </YStack>
+      {actionText && onAction && (
+        <Button 
+          mt="$4" 
+          size="$3" 
+          bg="$primary" 
+          color="white" 
+          onPress={onAction}
+        >
+          {actionText}
+        </Button>
+      )}
     </YStack>
   );
 }
