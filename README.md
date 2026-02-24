@@ -7,7 +7,7 @@
 ## 目录
 
 - `server/` 后端服务
-- `mobile/` Expo 客户端
+- `mobile/` Expo 客户端（Tamagui Tabs + Zustand 持久化）
 - `docs/` 部署说明
 
 ## 快速开始
