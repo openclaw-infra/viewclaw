@@ -1,35 +1,36 @@
-# viewClaw 🌌
+# viewClaw
 
-面向移动端的任务执行与可视化系统（OpenClaw-friendly）：
-- **Server**: Bun + Elysia（可部署到服务器）
-- **Mobile**: Expo + Tamagui Tabs + Zustand 持久化
+viewClaw is a mobile-oriented task orchestration and observability system designed to work with OpenClaw-style agent execution.
 
-支持：任务看板、执行记录、模板、审计、项目隔离、权限控制、重试与并发调度。
-
----
-
-## 当前状态
-
-- ✅ Server V1 / V2 / V3 已落地
-- ✅ Mobile 客户端已接入服务端核心能力
-- ✅ 已配置移动端自动打包与 Release（EAS + GitHub Actions）
+It provides:
+- A deployable backend service based on **Bun + Elysia**
+- A mobile client based on **Expo + Tamagui + Zustand**
+- End-to-end task lifecycle visibility (task queue, runs, templates, audits)
 
 ---
 
-## 仓库结构
+## 1. Project Status
 
-```txt
+- Server: **V1 / V2 / V3 completed**
+- Mobile client: core pages and server capability integration completed
+- CI/CD: Expo Android build and GitHub Release workflow configured
+
+---
+
+## 2. Repository Structure
+
+```text
 viewClaw/
-  server/   # Bun + Elysia API
-  mobile/   # Expo app (Tamagui + Zustand)
-  docs/     # 设计与部署文档
+  server/   Backend service (Bun + Elysia)
+  mobile/   Mobile application (Expo)
+  docs/     Technical and deployment documentation
 ```
 
 ---
 
-## 快速开始
+## 3. Quick Start
 
-### 1) 启动服务端
+### 3.1 Start Backend
 
 ```bash
 cd server
@@ -38,9 +39,9 @@ cp .env.example .env
 bun run dev
 ```
 
-默认监听：`0.0.0.0:8787`
+Default binding: `0.0.0.0:8787`
 
-### 2) 启动移动端
+### 3.2 Start Mobile App
 
 ```bash
 cd mobile
@@ -48,42 +49,42 @@ npm install
 npm run start
 ```
 
-在移动端 **Settings** 页面填写：
-- `API Base URL`（例如 `http://<server-ip>:8787`）
-- `Project ID`（默认 `default`）
-- `Token`（开启 RBAC 时必填）
+Configure the following in **Settings**:
+- `API Base URL` (e.g., `http://<server-ip>:8787`)
+- `Project ID` (default: `default`)
+- `Token` (required when RBAC is enabled)
 
-这些配置会持久化保存。
-
----
-
-## 服务端能力
-
-## V1（任务基础）
-- 任务 CRUD 与状态流转：`queued / in-progress / done / failed`
-- 运行记录（runs）
-- Worker 手动调度
-
-## V2（执行增强）
-- 自动调度（`AUTO_EXECUTE=1`）
-- 并发控制（`MAX_CONCURRENCY`）
-- 重试与退避（`RETRY_LIMIT` + `RETRY_BACKOFF_MS`）
-- OpenClaw 执行适配（`EXECUTOR_MODE=openclaw`）
-- Webhook 通知（`NOTIFY_WEBHOOK_URL`）
-
-## V3（治理能力）
-- 多项目隔离（`x-project-id` / `projectId`）
-- RBAC（viewer/operator/admin）
-- 审计日志（audits）
-- 任务模板（templates）
-
-详细说明见：`docs/server-v2-v3.md`
+These values are persisted locally.
 
 ---
 
-## 主要 API
+## 4. Server Capabilities
 
-### 健康与概览
+### V1 — Task Fundamentals
+- Task CRUD and lifecycle states: `queued / in-progress / done / failed`
+- Run records
+- Manual worker dispatch
+
+### V2 — Execution Enhancements
+- Auto scheduler (`AUTO_EXECUTE=1`)
+- Concurrency control (`MAX_CONCURRENCY`)
+- Retry strategy with backoff (`RETRY_LIMIT`, `RETRY_BACKOFF_MS`)
+- OpenClaw executor adapter (`EXECUTOR_MODE=openclaw`)
+- Optional webhook notifications (`NOTIFY_WEBHOOK_URL`)
+
+### V3 — Governance and Operations
+- Multi-project isolation (`x-project-id` / `projectId`)
+- RBAC (`viewer / operator / admin`)
+- Audit logs
+- Task templates
+
+For details, see: `docs/server-v2-v3.md`
+
+---
+
+## 5. Primary API Endpoints
+
+### Health
 - `GET /health`
 
 ### Tasks
@@ -107,59 +108,55 @@ npm run start
 - `POST /api/templates`
 
 ### Audits
-- `GET /api/audits`（admin）
+- `GET /api/audits` (admin role)
 
 ---
 
-## 移动端页面（已实现）
+## 6. Mobile Pages
 
-- **Board**：任务看板、手动调度、任务详情、状态操作（含二次确认）
-- **Runs**：执行记录、运行态 finalize（done/failed）
-- **Templates**：模板管理 + 一键生成任务
-- **Audits**：审计日志查看（admin）
-- **Settings**：连接配置、项目切换、token、健康检查
+- **Board**: task board, dispatch trigger, task details, state operations
+- **Runs**: run records and manual finalize actions
+- **Templates**: template management and task creation from template
+- **Audits**: audit stream view (admin)
+- **Settings**: connection config, project switching, token, health check
 
-体验增强：
-- skeleton loading
-- toast 反馈
-- 空态引导
-- 错误信息可读化映射
+UX features include loading skeletons, toast feedback, empty states, and user-friendly error mapping.
 
 ---
 
-## CI/CD（移动端）
+## 7. CI/CD (Mobile)
 
-已配置工作流：
-- 自动 bump 版本号
-- 触发 EAS 构建 APK
-- 自动生成结构化 Release Notes
-- 发布 GitHub Release
+Configured workflow includes:
+- automatic version bump
+- EAS Android APK build
+- structured release notes generation
+- GitHub Release publication
 
-相关文件：
+Key files:
 - `.github/workflows/mobile-release.yml`
 - `mobile/eas.json`
 - `mobile/scripts/bump-version.mjs`
 
-> 需要配置仓库 Secret：`EXPO_TOKEN`
+Required repository secret:
+- `EXPO_TOKEN`
 
 ---
 
-## 环境变量（server）
+## 8. Environment Configuration (Server)
 
-见 `server/.env.example`，核心项：
-- `AUTO_EXECUTE`
-- `MAX_CONCURRENCY`
-- `RETRY_LIMIT`
-- `EXECUTOR_MODE`
-- `OPENCLAW_BASE_URL`
-- `AUTH_ENABLED`
-- `USER_TOKEN` / `ADMIN_TOKEN`
+Refer to `server/.env.example`.
+
+Core variables include:
+- Scheduler and retry: `AUTO_EXECUTE`, `MAX_CONCURRENCY`, `RETRY_LIMIT`, `RETRY_BACKOFF_MS`
+- Executor: `EXECUTOR_MODE`, `OPENCLAW_BASE_URL`, `OPENCLAW_TOKEN`, `OPENCLAW_SPAWN_PATH`
+- Governance: `AUTH_ENABLED`, `USER_TOKEN`, `ADMIN_TOKEN`
+- Notification: `NOTIFY_WEBHOOK_URL`
 
 ---
 
-## 后续路线（可选）
+## 9. Roadmap
 
-- WebSocket/SSE 实时订阅
-- 成本统计与报表
-- 更细粒度权限模型
-- 任务依赖 DAG / 编排能力
+- Real-time updates via SSE/WebSocket
+- Cost analytics and reporting
+- Finer-grained permission model
+- Task dependency graph and orchestration
