@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Paragraph, ScrollView, YStack } from 'tamagui';
 import { ScreenShell } from '../components/ScreenShell';
+import { EmptyState } from '../components/EmptyState';
 import { apiGet } from '../api/client';
 import { usePolling } from '../hooks/usePolling';
 import { useAppStore } from '../store/useAppStore';
@@ -27,7 +28,7 @@ export function AuditsScreen() {
   return (
     <ScreenShell title="Audits" subtitle="审计日志（admin）" loading={loading} error={error}>
       <ScrollView>
-        {items.map((a) => (
+        {items.length === 0 ? <EmptyState title="暂无审计日志" subtitle="请确认使用 admin token，并触发一些任务操作" /> : items.map((a) => (
           <YStack key={a.id} bg="$secondary" br="$3" p="$3" mb="$2" gap="$1">
             <Paragraph color="white" fontWeight="700">{a.action}</Paragraph>
             <Paragraph color="$gray10">{a.actor} · {a.role}</Paragraph>
