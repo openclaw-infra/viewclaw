@@ -46,8 +46,12 @@ npm run start
 - `POST /api/tasks/:id/complete`
 - `POST /api/tasks/:id/fail`
 - `POST /api/worker/tick`（手动触发一次 worker 调度）
+- `POST /api/runs/:id/finalize`（外部回调收敛 run 与 task 状态）
 
-> 任务执行模式当前为 mock executor，可先用于看板联调。
+> 任务执行支持两种模式：
+> - `EXECUTOR_MODE=mock`：本地模拟执行（默认）
+> - `EXECUTOR_MODE=openclaw`：通过 `OPENCLAW_BASE_URL + OPENCLAW_SPAWN_PATH` 调用 OpenClaw 子会话
+>
 > 设置 `AUTO_EXECUTE=1` 可让服务端自动轮询执行 queued 任务。
 
 ## 后续可扩展

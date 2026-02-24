@@ -10,6 +10,10 @@ const DATA_DIR = join(process.cwd(), 'data');
 const TASKS_FILE = join(DATA_DIR, 'tasks.json');
 const RUNS_FILE = join(DATA_DIR, 'runs.json');
 const AUTO_EXECUTE = process.env.AUTO_EXECUTE === '1';
+const EXECUTOR_MODE = process.env.EXECUTOR_MODE || 'mock'; // mock | openclaw
+const OPENCLAW_BASE_URL = process.env.OPENCLAW_BASE_URL || '';
+const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
+const OPENCLAW_SPAWN_PATH = process.env.OPENCLAW_SPAWN_PATH || '/sessions_spawn';
 
 export type TaskStatus = 'queued' | 'in-progress' | 'done' | 'failed';
 export type RunStatus = 'running' | 'done' | 'failed';
@@ -37,7 +41,8 @@ type TaskRun = {
   finishedAt?: string;
   result?: string;
   error?: string;
-  executor: 'mock';
+  executor: 'mock' | 'openclaw';
+  externalSessionKey?: string;
   logs: string[];
 };
 
@@ -81,7 +86,7 @@ function createRun(taskId: string): TaskRun {
     taskId,
     status: 'running',
     startedAt: now(),
-    executor: 'mock',
+    executor: EXECUTOR_MODE === 'openclaw' ? 'openclaw' : 'mock',
     logs: ['Task picked by worker'],
   };
   runs.unshift(run);
@@ -164,6 +169,58 @@ async function runMockExecutor(taskId: string, runId: string) {
   });
 }
 
+async function runOpenClawExecutor(taskId: string, runId: string) {
+  const task = getTaskById(taskId);
+  if (!task) throw new Error('Task not found before execution');
+  if (!OPENCLAW_BASE_URL) throw new Error('OPENCLAW_BASE_URL is required for openclaw executor mode');
+
+  const url = `${OPENCLAW_BASE_URL.replace(/\/+$/, '')}${OPENCLAW_SPAWN_PATH}`;
+  const prompt = [task.title, task.description, task.skill ? `Skill: ${task.skill}` : ''].filter(Boolean).join('\n\n');
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(OPENCLAW_TOKEN ? { Authorization: `Bearer ${OPENCLAW_TOKEN}` } : {}),
+    },
+    body: JSON.stringify({
+      task: prompt,
+      label: `viewclaw-${task.id}`,
+      cleanup: 'keep',
+    }),
+  });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`openclaw spawn failed: ${res.status} ${txt}`);
+  }
+
+  const data = (await res.json()) as any;
+  const sessionKey = data?.sessionKey || data?.session?.key || data?.key;
+  const summary = data?.summary || data?.result || data?.message;
+
+  const existing = loadRuns().find((x) => x.id === runId);
+  const logs = [...(existing?.logs || []), `Spawned OpenClaw task via ${OPENCLAW_SPAWN_PATH}`];
+
+  if (sessionKey && !summary) {
+    updateRun(runId, {
+      externalSessionKey: sessionKey,
+      logs: [...logs, `Sub-session: ${sessionKey}`],
+    });
+    return;
+  }
+
+  const finalResult = summary || `Spawn requested successfully. sessionKey=${sessionKey || 'n/a'}`;
+  completeTask(taskId, finalResult);
+  updateRun(runId, {
+    status: 'done',
+    finishedAt: now(),
+    result: finalResult,
+    externalSessionKey: sessionKey,
+    logs: [...logs, 'OpenClaw execution completed (sync result)'],
+  });
+}
+
 async function dispatchNextTask() {
   const tasks = loadTasks();
   const target = tasks
@@ -179,8 +236,12 @@ async function dispatchNextTask() {
   const run = createRun(target.id);
 
   try {
-    await runMockExecutor(target.id, run.id);
-    return { ok: true, taskId: target.id, runId: run.id };
+    if (EXECUTOR_MODE === 'openclaw') {
+      await runOpenClawExecutor(target.id, run.id);
+    } else {
+      await runMockExecutor(target.id, run.id);
+    }
+    return { ok: true, taskId: target.id, runId: run.id, executor: EXECUTOR_MODE };
   } catch (e: any) {
     failTask(target.id, e?.message ?? 'Unknown worker error');
     updateRun(run.id, {
@@ -194,7 +255,7 @@ async function dispatchNextTask() {
 
 const app = new Elysia()
   .use(cors())
-  .get('/health', () => ({ ok: true, service: 'viewclaw-server', time: now(), autoExecute: AUTO_EXECUTE }))
+  .get('/health', () => ({ ok: true, service: 'viewclaw-server', time: now(), autoExecute: AUTO_EXECUTE, executorMode: EXECUTOR_MODE }))
   .get('/api/tasks', () => loadTasks())
   .get('/api/tasks/queue', () => loadTasks().filter((x) => x.status === 'queued'))
   .get('/api/tasks/:id', ({ params, set }) => {
@@ -265,6 +326,51 @@ const app = new Elysia()
       return task;
     },
     { body: t.Object({ error: t.String() }) }
+  )
+  .post(
+    '/api/runs/:id/finalize',
+    ({ params, body, set }) => {
+      const runs = loadRuns();
+      const run = runs.find((x) => x.id === params.id);
+      if (!run) {
+        set.status = 404;
+        return { error: 'Run not found' };
+      }
+
+      const task = getTaskById(run.taskId);
+      if (!task) {
+        set.status = 404;
+        return { error: 'Task not found' };
+      }
+
+      if (body.status === 'done') {
+        completeTask(run.taskId, body.result);
+        updateRun(run.id, {
+          status: 'done',
+          result: body.result,
+          finishedAt: now(),
+          logs: [...run.logs, body.log || 'Run finalized as done'],
+        });
+      } else {
+        failTask(run.taskId, body.error || 'Unknown error');
+        updateRun(run.id, {
+          status: 'failed',
+          error: body.error || 'Unknown error',
+          finishedAt: now(),
+          logs: [...run.logs, body.log || 'Run finalized as failed'],
+        });
+      }
+
+      return { ok: true };
+    },
+    {
+      body: t.Object({
+        status: t.Union([t.Literal('done'), t.Literal('failed')]),
+        result: t.Optional(t.String()),
+        error: t.Optional(t.String()),
+        log: t.Optional(t.String()),
+      }),
+    }
   )
   .post('/api/worker/tick', async () => dispatchNextTask())
   .listen({ port: PORT, hostname: HOST });
