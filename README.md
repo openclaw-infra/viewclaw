@@ -1,5 +1,7 @@
 # viewClaw
 
+[中文文档 (README_CN.md)](./README_CN.md) | English
+
 viewClaw is a mobile-oriented task orchestration and observability system designed to work with OpenClaw-style agent execution.
 
 It provides:
