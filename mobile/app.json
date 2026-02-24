@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "viewclaw-mobile",
+    "slug": "viewclaw-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "android": {
+      "package": "com.openclawinfra.viewclaw"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

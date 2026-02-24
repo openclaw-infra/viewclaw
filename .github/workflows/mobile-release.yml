@@ -1,0 +1,139 @@
+name: Mobile APK Release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/mobile-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release-android:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Bump app version
+        id: bump
+        run: |
+          NEXT_VERSION=$(node mobile/scripts/bump-version.mjs)
+          echo "next_version=$NEXT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Commit bumped version
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/app.json
+          git commit -m "chore(release): bump mobile version to v${{ steps.bump.outputs.next_version }} [skip ci]" || echo "No changes"
+          git push
+
+      - name: Setup Expo + EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build Android APK (EAS Cloud)
+        working-directory: mobile
+        run: |
+          set -e
+          for i in 1 2 3; do
+            echo "EAS build attempt $i/3"
+            if eas build --platform android --profile production-apk --non-interactive --wait --json > build.json; then
+              cat build.json
+              exit 0
+            fi
+            if [ "$i" -lt 3 ]; then
+              echo "Build failed, retrying in 30s..."
+              sleep 30
+            fi
+          done
+          echo "EAS build failed after 3 attempts"
+          exit 1
+
+      - name: Parse build info
+        id: buildinfo
+        working-directory: mobile
+        run: |
+          BUILD_URL=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('build.json','utf8'));process.stdout.write(j[0]?.artifacts?.buildUrl||'')")
+          BUILD_ID=$(node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('build.json','utf8'));process.stdout.write(j[0]?.id||'')")
+          if [ -z "$BUILD_URL" ]; then
+            echo "Failed to get build artifact URL" >&2
+            exit 1
+          fi
+          echo "build_url=$BUILD_URL" >> $GITHUB_OUTPUT
+          echo "build_id=$BUILD_ID" >> $GITHUB_OUTPUT
+
+      - name: Download APK
+        run: |
+          curl -L "${{ steps.buildinfo.outputs.build_url }}" -o viewclaw-mobile-${{ github.sha }}.apk
+
+      - name: Build release metadata
+        id: meta
+        run: |
+          TAG_NAME="mobile-v${{ steps.bump.outputs.next_version }}"
+          RELEASE_NAME="viewClaw Mobile v${{ steps.bump.outputs.next_version }}"
+          PREV_TAG=$(git tag --list 'mobile-v*' --sort=-v:refname | head -n 1 || true)
+          {
+            echo "tag_name=$TAG_NAME"
+            echo "release_name=$RELEASE_NAME"
+            echo "prev_tag=$PREV_TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Generate release notes
+        run: |
+          PREV_TAG="${{ steps.meta.outputs.prev_tag }}"
+          if [ -n "$PREV_TAG" ]; then
+            git log --pretty=format:'- %s (%h)' "$PREV_TAG"..HEAD -- mobile .github/workflows/mobile-release.yml > CHANGELOG_PART.md
+          else
+            git log -n 30 --pretty=format:'- %s (%h)' -- mobile .github/workflows/mobile-release.yml > CHANGELOG_PART.md
+          fi
+
+          if [ ! -s CHANGELOG_PART.md ]; then
+            echo "- 本次主要为自动版本递增与打包重试" > CHANGELOG_PART.md
+          fi
+
+          cat > RELEASE_NOTES.md << EOF
+          ## 📦 viewClaw Mobile Release
+
+          - 版本：\`${{ steps.bump.outputs.next_version }}\`
+          - Tag：\`${{ steps.meta.outputs.tag_name }}\`
+          - Commit：\`${{ github.sha }}\`
+          - EAS Build ID：\`${{ steps.buildinfo.outputs.build_id }}\`
+          - 触发来源：\`${{ github.event_name }}\`
+
+          ## 🧭 本次迭代内容
+
+          $(cat CHANGELOG_PART.md)
+
+          ## 📲 安装
+
+          - 下载本 Release 附件中的 APK 安装包。
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          name: ${{ steps.meta.outputs.release_name }}
+          body_path: RELEASE_NOTES.md
+          files: |
+            viewclaw-mobile-${{ github.sha }}.apk
+          make_latest: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
