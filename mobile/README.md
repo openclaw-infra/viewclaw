@@ -12,6 +12,10 @@ Stack:
 - Audits
 - Settings
 
+## Requirements
+
+- Node.js >= 20
+
 ## Run
 
 ```bash
