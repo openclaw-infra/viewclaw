@@ -1,1 +1,567 @@
-[]
+[
+  {
+    "id": "2009ad71-a63f-4674-af4a-37686806d6fa",
+    "at": "2026-02-25T06:07:57.973Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "default",
+    "resourceId": "9e2e84c9-eec2-4edb-813f-4f4a4b4e759e",
+    "detail": "run=3d2b61de-b5bf-452e-b7a4-e78c2b77fa74"
+  },
+  {
+    "id": "5f7dafdf-2fe7-4ad9-ac9b-0556210dd4d8",
+    "at": "2026-02-25T06:07:57.916Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "9e2e84c9-eec2-4edb-813f-4f4a4b4e759e"
+  },
+  {
+    "id": "84aae4c2-d6b2-49fb-bf2a-6ae9fa8fb81d",
+    "at": "2026-02-25T06:07:54.648Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "9e2e84c9-eec2-4edb-813f-4f4a4b4e759e",
+    "detail": "热报检查"
+  },
+  {
+    "id": "66d7bbe5-89d7-4f12-baba-3832efcf5c70",
+    "at": "2026-02-25T06:07:52.561Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "template.create",
+    "projectId": "default",
+    "resourceId": "dee6b72d-36d9-42a9-9c59-bb67437d509b",
+    "detail": "热报检查"
+  },
+  {
+    "id": "b6d341d2-25c2-4f24-9611-3958d640dbee",
+    "at": "2026-02-25T06:06:59.120Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "default",
+    "resourceId": "6f19bc53-581d-4698-8a8a-99ebcb60358f",
+    "detail": "run=19e39bf1-45f1-4d2a-848f-1f7a11b4bfb4"
+  },
+  {
+    "id": "87c2e8a8-2a2b-4a81-8abb-d7fe33660a54",
+    "at": "2026-02-25T06:06:59.016Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "6f19bc53-581d-4698-8a8a-99ebcb60358f"
+  },
+  {
+    "id": "b50cf396-ea9c-4a91-a03e-8ff3f0ca54e0",
+    "at": "2026-02-25T06:06:55.494Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "6f19bc53-581d-4698-8a8a-99ebcb60358f",
+    "detail": "重启后验证模板"
+  },
+  {
+    "id": "b289a3c6-6571-43bf-b54e-f0aab879d2cc",
+    "at": "2026-02-25T06:06:42.596Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "default",
+    "resourceId": "c5fa5234-d467-4e58-afab-8cd5192ecf8d",
+    "detail": "run=a11aa48c-3448-4e20-b805-e8948e860e81"
+  },
+  {
+    "id": "174876bd-b600-47ed-b68e-908aa0872a50",
+    "at": "2026-02-25T06:06:40.283Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "run.finalize",
+    "projectId": "default",
+    "resourceId": "8f725c87-11ca-4042-baec-c9fd4266f1de",
+    "detail": "done"
+  },
+  {
+    "id": "cf11d953-ab1d-462c-8d7f-3fef0738c6a0",
+    "at": "2026-02-25T06:06:36.040Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "run.finalize",
+    "projectId": "default",
+    "resourceId": "1f4b8cf3-4b40-49e5-b7e1-566d31efa9bd",
+    "detail": "done"
+  },
+  {
+    "id": "e79eccb6-4582-4057-a3a0-ba764ab55159",
+    "at": "2026-02-25T06:05:43.695Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "verify-accepted",
+    "resourceId": "a3cec0d5-ccce-4e8a-a5f9-1220adb2d765",
+    "detail": "run=69091d56-62ba-4bd1-bb9f-5c4d1573c754"
+  },
+  {
+    "id": "1ced4523-6545-4ecf-965f-3c8dbc59a382",
+    "at": "2026-02-25T06:05:43.452Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "verify-accepted",
+    "resourceId": "a3cec0d5-ccce-4e8a-a5f9-1220adb2d765",
+    "detail": "accepted测试"
+  },
+  {
+    "id": "9a7e7425-d37c-4c08-ae16-b49f671c20ee",
+    "at": "2026-02-25T06:03:59.709Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "c5fa5234-d467-4e58-afab-8cd5192ecf8d"
+  },
+  {
+    "id": "38dba3f9-ce9f-417d-a5cb-f3fa6fad8de3",
+    "at": "2026-02-25T06:03:48.892Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "c5fa5234-d467-4e58-afab-8cd5192ecf8d",
+    "detail": "重启后验证模板"
+  },
+  {
+    "id": "ff4341be-993d-4deb-935e-6d88c5d6752c",
+    "at": "2026-02-25T06:03:44.158Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.complete",
+    "projectId": "default",
+    "resourceId": "68a6fac6-9f36-4abd-aad3-c497176897a4"
+  },
+  {
+    "id": "a8cb87b7-07c5-497c-a8f8-077efadf6aa3",
+    "at": "2026-02-25T06:03:41.971Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.complete",
+    "projectId": "default",
+    "resourceId": "4a826c45-dbba-4975-960e-a16349cf42ea"
+  },
+  {
+    "id": "12642357-a5c8-4746-af28-f111a1c38911",
+    "at": "2026-02-25T06:02:39.353Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.spawned",
+    "projectId": "default",
+    "resourceId": "4a826c45-dbba-4975-960e-a16349cf42ea",
+    "detail": "run=8f725c87-11ca-4042-baec-c9fd4266f1de"
+  },
+  {
+    "id": "89f483c6-970d-44a0-ac3e-b331073ad49c",
+    "at": "2026-02-25T06:02:39.297Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "4a826c45-dbba-4975-960e-a16349cf42ea"
+  },
+  {
+    "id": "a34d167f-9f51-4a49-bdf6-f846e3cfc44d",
+    "at": "2026-02-25T06:02:32.198Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "4a826c45-dbba-4975-960e-a16349cf42ea",
+    "detail": "OpenClaw联调模板"
+  },
+  {
+    "id": "f6086fb3-5395-496a-9749-cc7625ce57c9",
+    "at": "2026-02-25T06:02:12.677Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.spawned",
+    "projectId": "default",
+    "resourceId": "68a6fac6-9f36-4abd-aad3-c497176897a4",
+    "detail": "run=1f4b8cf3-4b40-49e5-b7e1-566d31efa9bd"
+  },
+  {
+    "id": "89ea4a05-600a-4da0-a6ae-e3248e2123d6",
+    "at": "2026-02-25T04:43:59.894Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "test-dispatch-fix",
+    "resourceId": "375aa3fa-7a3c-44b3-9fc5-888571130221",
+    "detail": "run=d0a122fb-6966-4437-a5a6-6e7908f3727c"
+  },
+  {
+    "id": "8f7e4acf-6d1f-4fad-b36a-c9206afe3114",
+    "at": "2026-02-25T04:43:57.380Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "test-dispatch-fix",
+    "resourceId": "375aa3fa-7a3c-44b3-9fc5-888571130221"
+  },
+  {
+    "id": "58d25a7c-f560-468e-80bb-b7a6794c8269",
+    "at": "2026-02-25T04:43:57.362Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "test-dispatch-fix",
+    "resourceId": "375aa3fa-7a3c-44b3-9fc5-888571130221",
+    "detail": "领取后调度测试"
+  },
+  {
+    "id": "019681da-1a32-41d7-80b6-c5f6be7579e4",
+    "at": "2026-02-25T04:43:39.981Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "default",
+    "resourceId": "53486748-6194-4048-97d0-3e5546762ab7",
+    "detail": "run=732d8b9a-67c6-4ae5-a732-dec1dde733e5"
+  },
+  {
+    "id": "d5721d35-953e-4962-ae34-e08a37a561db",
+    "at": "2026-02-25T04:43:37.452Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "68a6fac6-9f36-4abd-aad3-c497176897a4"
+  },
+  {
+    "id": "39630b14-578d-4f42-a321-537194b0ef20",
+    "at": "2026-02-25T04:43:37.437Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "68a6fac6-9f36-4abd-aad3-c497176897a4",
+    "detail": "领取后调度测试"
+  },
+  {
+    "id": "0743970c-1feb-47cb-9b30-08d15bb3b87c",
+    "at": "2026-02-25T04:35:04.753Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "53486748-6194-4048-97d0-3e5546762ab7"
+  },
+  {
+    "id": "9b617a45-d27c-4617-b801-4bd40794f048",
+    "at": "2026-02-25T04:34:53.730Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "run.finalize",
+    "projectId": "default",
+    "resourceId": "26a4b10f-463e-441d-852f-9641e03a1b74",
+    "detail": "done"
+  },
+  {
+    "id": "92322d08-3bbf-4836-9bdd-ef1140ed7bbc",
+    "at": "2026-02-25T04:34:51.704Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "run.finalize",
+    "projectId": "default",
+    "resourceId": "b91c7740-262f-48c9-9fec-840dc6f0ac13",
+    "detail": "done"
+  },
+  {
+    "id": "3761c065-8009-4126-b66b-8707afe38778",
+    "at": "2026-02-25T04:34:35.866Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "53486748-6194-4048-97d0-3e5546762ab7",
+    "detail": "Retry #1: 移动端手动标记失败"
+  },
+  {
+    "id": "0cfb8dab-3436-40cb-b281-aec1c86ba76a",
+    "at": "2026-02-25T04:32:51.687Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "53486748-6194-4048-97d0-3e5546762ab7"
+  },
+  {
+    "id": "19d056e3-88f6-4f45-9abf-b7c5ce780d9e",
+    "at": "2026-02-25T04:32:48.342Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "53486748-6194-4048-97d0-3e5546762ab7",
+    "detail": "重启后验证模板"
+  },
+  {
+    "id": "ada8cd2e-3649-4079-8d1b-d8b0781df1ce",
+    "at": "2026-02-25T04:32:39.496Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "04fba951-a4b9-495a-911e-569684afff6b",
+    "detail": "移动端手动标记失败"
+  },
+  {
+    "id": "df10df7b-1fc5-4b71-bc17-0a84200bb834",
+    "at": "2026-02-25T04:32:36.246Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "04fba951-a4b9-495a-911e-569684afff6b",
+    "detail": "Retry #2: 移动端手动标记失败"
+  },
+  {
+    "id": "177f809b-bd9b-46f3-ae4c-23bd84eeb858",
+    "at": "2026-02-25T04:32:33.978Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "04fba951-a4b9-495a-911e-569684afff6b",
+    "detail": "Retry #1: 移动端手动标记失败"
+  },
+  {
+    "id": "87b8693e-7bbc-4db7-aab5-baa4aba5d2f9",
+    "at": "2026-02-25T04:32:31.963Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "5b191aa5-568c-42f2-993d-2464165c8ef4",
+    "detail": "移动端手动标记失败"
+  },
+  {
+    "id": "37dce8bc-6e65-4069-9bc6-e2a32264493b",
+    "at": "2026-02-25T04:32:29.263Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "5b191aa5-568c-42f2-993d-2464165c8ef4",
+    "detail": "Retry #2: 移动端手动标记失败"
+  },
+  {
+    "id": "b4b57d85-d74a-4906-84f7-19737ac1557c",
+    "at": "2026-02-25T04:32:22.473Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "5b191aa5-568c-42f2-993d-2464165c8ef4"
+  },
+  {
+    "id": "8f9baeeb-5bba-4319-97e1-892a2b10d902",
+    "at": "2026-02-25T04:32:16.676Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "5b191aa5-568c-42f2-993d-2464165c8ef4",
+    "detail": "Retry #1: 移动端手动标记失败"
+  },
+  {
+    "id": "d6f17f4d-fac5-48b0-9142-f841afa67474",
+    "at": "2026-02-25T04:29:07.977Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.spawned",
+    "projectId": "default",
+    "resourceId": "5b191aa5-568c-42f2-993d-2464165c8ef4",
+    "detail": "run=b91c7740-262f-48c9-9fec-840dc6f0ac13"
+  },
+  {
+    "id": "2ec1c7e7-a8a9-471a-859b-886400c05226",
+    "at": "2026-02-25T04:29:07.892Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "5b191aa5-568c-42f2-993d-2464165c8ef4",
+    "detail": "重启后验证模板"
+  },
+  {
+    "id": "655d838d-bb8b-41a1-bda1-d5e21a63c1b8",
+    "at": "2026-02-25T04:29:07.865Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "template.create",
+    "projectId": "default",
+    "resourceId": "bf1f58e2-f05e-4f44-91f8-73268e6e399d",
+    "detail": "重启后验证模板"
+  },
+  {
+    "id": "9049a219-c081-4ce0-a65e-766673d8b85c",
+    "at": "2026-02-25T04:28:34.348Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "0f52aa0f-29f3-414b-b064-bf53c915b641",
+    "detail": "移动端手动标记失败"
+  },
+  {
+    "id": "8132e2ae-03d6-457c-8870-5937d2323345",
+    "at": "2026-02-25T04:28:22.667Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "0f52aa0f-29f3-414b-b064-bf53c915b641",
+    "detail": "Retry #2: 移动端手动标记失败"
+  },
+  {
+    "id": "75105828-46a2-488d-8a81-fed5923d9d34",
+    "at": "2026-02-25T04:28:02.737Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.complete",
+    "projectId": "default",
+    "resourceId": "6d5e9a81-f331-40d4-a2ce-5fd9cbc698cf"
+  },
+  {
+    "id": "0a076477-8590-4777-beb9-cfaf11032913",
+    "at": "2026-02-25T04:27:45.160Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "04fba951-a4b9-495a-911e-569684afff6b"
+  },
+  {
+    "id": "5ff0382f-d5c2-4ab4-8956-af5f57958d3b",
+    "at": "2026-02-25T04:27:41.156Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "04fba951-a4b9-495a-911e-569684afff6b",
+    "detail": "OpenClaw联调模板"
+  },
+  {
+    "id": "c729cd1b-f260-4141-9b2b-487cadc258e6",
+    "at": "2026-02-25T04:25:58.067Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.spawned",
+    "projectId": "default",
+    "resourceId": "6d5e9a81-f331-40d4-a2ce-5fd9cbc698cf",
+    "detail": "run=26a4b10f-463e-441d-852f-9641e03a1b74"
+  },
+  {
+    "id": "b9da3801-96c0-44c8-9197-7ee552b59373",
+    "at": "2026-02-25T04:25:57.970Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "6d5e9a81-f331-40d4-a2ce-5fd9cbc698cf",
+    "detail": "OpenClaw联调模板"
+  },
+  {
+    "id": "e5d75b61-ff0b-4112-b1c7-f0b1072288b7",
+    "at": "2026-02-25T04:25:57.923Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "template.create",
+    "projectId": "default",
+    "resourceId": "d57cc397-a44c-46c9-a7c3-8ef7e046cc66",
+    "detail": "OpenClaw联调模板"
+  },
+  {
+    "id": "26f7eedd-710c-4d0a-9dd0-22c3601b5ec5",
+    "at": "2026-02-25T04:17:58.604Z",
+    "actor": "worker",
+    "role": "operator",
+    "action": "task.dispatch.success",
+    "projectId": "default",
+    "resourceId": "96902fc7-fb9d-473d-8c0c-3d40a864f7de",
+    "detail": "run=2b5dc05d-dc85-4168-bb7c-0e1f90173765"
+  },
+  {
+    "id": "981d38b5-3e9b-4e9b-9e3b-915bdb7b39c1",
+    "at": "2026-02-25T04:17:56.036Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "96902fc7-fb9d-473d-8c0c-3d40a864f7de",
+    "detail": "联调模板"
+  },
+  {
+    "id": "4694dc33-bb21-416b-b4ab-7d2e9971d131",
+    "at": "2026-02-25T04:17:55.818Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "template.create",
+    "projectId": "default",
+    "resourceId": "7c242e01-7c13-4140-b812-0174ebe9fcf3",
+    "detail": "联调模板"
+  },
+  {
+    "id": "8b660c87-679f-4e8c-9bda-801286b07bc4",
+    "at": "2026-02-25T04:14:24.447Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "0f52aa0f-29f3-414b-b064-bf53c915b641"
+  },
+  {
+    "id": "a7ff2c41-4eec-4676-876d-bc6407c2967c",
+    "at": "2026-02-25T04:14:21.062Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.fail",
+    "projectId": "default",
+    "resourceId": "0f52aa0f-29f3-414b-b064-bf53c915b641",
+    "detail": "Retry #1: 移动端手动标记失败"
+  },
+  {
+    "id": "d8b2ff55-7878-4408-8bd4-53c907689042",
+    "at": "2026-02-25T04:13:26.499Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.pickup",
+    "projectId": "default",
+    "resourceId": "0f52aa0f-29f3-414b-b064-bf53c915b641"
+  },
+  {
+    "id": "370fed13-400b-4458-9da6-be43fb18ecd5",
+    "at": "2026-02-25T04:13:23.704Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "task.create",
+    "projectId": "default",
+    "resourceId": "0f52aa0f-29f3-414b-b064-bf53c915b641",
+    "detail": "给我一个吻"
+  },
+  {
+    "id": "6b17ba31-4be8-4109-87b8-90ef9452a3f2",
+    "at": "2026-02-25T04:13:22.171Z",
+    "actor": "system",
+    "role": "admin",
+    "action": "template.create",
+    "projectId": "default",
+    "resourceId": "c5ee8c40-7130-4806-8c23-17bfd98be2b2",
+    "detail": "给我一个吻"
+  }
+]
