@@ -13,8 +13,8 @@
 - [ ] **AI 确认交互（选项卡片）**
   当 AI 返回需要用户确认的问题时，渲染可点击的选项按钮供用户快速选择（如 Yes/No、多选方案等），点击后自动作为用户消息发送，减少手动输入
 
-- [ ] **"/" 快捷指令**
-  输入框输入 "/" 时弹出指令面板，支持 OpenClaw 内置指令（如 /model、/status、/restart 等）和自定义指令，指令列表可搜索过滤，选中后自动填入或直接执行
+- [x] **"/" 快捷指令**
+  输入 "/" 时弹出指令面板，按 OpenClaw / Custom 分类展示，支持实时搜索过滤，immediate 指令点击直接发送，非 immediate 指令填入输入框继续编辑，输入框边框高亮提示指令模式
 
 - [x] **流式文本渲染**
   assistant 回复逐字/逐段流式显示，Server 通过 SSE 流式请求 OpenClaw `/v1/responses`，解析 `response.output_text.delta` 事件并通过 WebSocket 推送 `message_start`/`message_delta`/`message_done` 事件，Mobile 端增量拼接文本并实时渲染，带闪烁光标指示生成中
