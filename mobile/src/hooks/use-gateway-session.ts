@@ -5,6 +5,7 @@ import type {
   ExecutionLog,
   GatewayEvent,
   SessionInfo,
+  StreamItem,
 } from "../types/gateway";
 
 const DEFAULT_WS_URL = process.env.EXPO_PUBLIC_GATEWAY_WS_URL ?? "ws://127.0.0.1:3000";
@@ -22,8 +23,7 @@ type WsIncoming =
 
 export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionId }: Options) => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [logs, setLogs] = useState<ExecutionLog[]>([]);
+  const [stream, setStream] = useState<StreamItem[]>([]);
   const [sending, setSending] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessionId ?? "");
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
@@ -35,25 +35,26 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
   const seenRef = useRef<Set<string>>(new Set());
   const currentSessionRef = useRef(currentSessionId);
   const agentIdRef = useRef(agentId);
+  const typingIdRef = useRef<string | null>(null);
 
   currentSessionRef.current = currentSessionId;
   agentIdRef.current = agentId;
 
-  const bufferRef = useRef<{ messages: ChatMessage[]; logs: ExecutionLog[] }>({
-    messages: [],
-    logs: [],
-  });
+  const bufferRef = useRef<StreamItem[]>([]);
 
   const flush = useCallback(() => {
-    const { messages: bm, logs: bl } = bufferRef.current;
-    if (bm.length > 0) {
-      setMessages((prev) => [...prev, ...bm].slice(-300));
-      bufferRef.current.messages = [];
-    }
-    if (bl.length > 0) {
-      setLogs((prev) => [...prev, ...bl].slice(-500));
-      bufferRef.current.logs = [];
-    }
+    const buf = bufferRef.current;
+    if (buf.length === 0) return;
+    bufferRef.current = [];
+    setStream((prev) => {
+      const typingIdx = prev.findIndex((item) => item.kind === "typing");
+      if (typingIdx === -1) {
+        return [...prev, ...buf].slice(-500);
+      }
+      const before = prev.slice(0, typingIdx);
+      const typing = prev[typingIdx];
+      return [...before, ...buf, typing].slice(-500);
+    });
   }, []);
 
   useEffect(() => {
@@ -64,11 +65,18 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
   const appendMessage = useCallback((msg: ChatMessage) => {
     if (seenRef.current.has(msg.id)) return;
     seenRef.current.add(msg.id);
-    bufferRef.current.messages.push(msg);
+    bufferRef.current.push({ kind: "message", data: msg });
   }, []);
 
   const appendLog = useCallback((log: ExecutionLog) => {
-    bufferRef.current.logs.push(log);
+    bufferRef.current.push({ kind: "log", data: log });
+  }, []);
+
+  const removeTyping = useCallback(() => {
+    if (!typingIdRef.current) return;
+    const tid = typingIdRef.current;
+    typingIdRef.current = null;
+    setStream((prev) => prev.filter((item) => !(item.kind === "typing" && item.id === tid)));
   }, []);
 
   const parseEvent = useCallback(
@@ -79,6 +87,8 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
         const role = p.role === "assistant" ? "assistant" : "user";
         const content = String(p.content ?? "");
         if (!content) return;
+
+        if (role === "assistant") removeTyping();
 
         let cleanContent = content;
         if (role === "assistant") {
@@ -172,6 +182,7 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       }
 
       if (event.type === "done") {
+        removeTyping();
         appendLog({
           id: `log-${event.seq}`,
           level: "done",
@@ -180,7 +191,7 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
         });
       }
     },
-    [appendMessage, appendLog]
+    [appendMessage, appendLog, removeTyping]
   );
 
   const wsSend = useCallback((data: Record<string, unknown>) => {
@@ -309,7 +320,16 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
       const messageId = `local-${Date.now()}`;
-      appendMessage({ id: messageId, role: "user", content: text, createdAt: Date.now() });
+      const msg: ChatMessage = { id: messageId, role: "user", content: text, createdAt: Date.now() };
+      seenRef.current.add(messageId);
+
+      const typingId = `typing-${Date.now()}`;
+      typingIdRef.current = typingId;
+      setStream((prev) => [
+        ...prev,
+        { kind: "message" as const, data: msg },
+        { kind: "typing" as const, id: typingId },
+      ]);
 
       setSending(true);
       wsRef.current.send(
@@ -333,10 +353,9 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
         unsubscribeFromSession(oldSessionId);
       }
 
-      setMessages([]);
-      setLogs([]);
+      setStream([]);
       seenRef.current.clear();
-      bufferRef.current = { messages: [], logs: [] };
+      bufferRef.current = [];
       setCurrentSessionId(newSessionId);
       subscribeToSession(newSessionId);
     },
@@ -348,13 +367,12 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       connectionStatus,
       currentSessionId,
       sessions,
-      messages,
-      logs,
+      stream,
       sending,
       sendMessage,
       switchSession,
       gatewayHttpUrl: DEFAULT_HTTP_URL,
     }),
-    [connectionStatus, currentSessionId, sessions, messages, logs, sending, sendMessage, switchSession]
+    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, switchSession]
   );
 };

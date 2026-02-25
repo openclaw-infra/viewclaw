@@ -2,13 +2,19 @@
 
 ## P0 — 核心体验
 
-- [ ] **去掉 Console，改为实时卡片**
+- [x] **去掉 Console，改为实时卡片**
   将 ExecutionPanel 终端面板移除，Thought/Action/Observation 改为内联在聊天流中的实时卡片，每种类型有独立视觉样式，跟随对话流自然滚动
 
-- [ ] **消息 Markdown 渲染**
-  引入 react-native-markdown-display 或类似库，支持代码高亮、表格、链接、列表等富文本渲染，替换当前纯 Text 组件
+- [x] **消息 Markdown 渲染**
+  引入 @ronradtke/react-native-markdown-display，支持代码高亮、表格、链接、列表等富文本渲染，替换当前纯 Text 组件
 
 ## P1 — 功能完善
+
+- [ ] **AI 确认交互（选项卡片）**
+  当 AI 返回需要用户确认的问题时，渲染可点击的选项按钮供用户快速选择（如 Yes/No、多选方案等），点击后自动作为用户消息发送，减少手动输入
+
+- [ ] **"/" 快捷指令**
+  输入框输入 "/" 时弹出指令面板，支持 OpenClaw 内置指令（如 /model、/status、/restart 等）和自定义指令，指令列表可搜索过滤，选中后自动填入或直接执行
 
 - [ ] **流式文本渲染**
   assistant 回复逐字/逐段流式显示，而非等 JSONL 完整写入后一次性出现，提升实时感

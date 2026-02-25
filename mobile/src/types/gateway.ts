@@ -38,6 +38,11 @@ export type ExecutionLog = {
   createdAt: number;
 };
 
+export type StreamItem =
+  | { kind: "message"; data: ChatMessage }
+  | { kind: "log"; data: ExecutionLog }
+  | { kind: "typing"; id: string };
+
 export type SessionInfo = {
   id: string;
   agentId: string;

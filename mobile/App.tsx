@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
@@ -6,12 +5,10 @@ import tamaguiConfig from "./tamagui.config";
 import { ChatComposer } from "./src/components/chat-composer";
 import { ChatHeader } from "./src/components/chat-header";
 import { ChatStream } from "./src/components/chat-stream";
-import { ExecutionPanel } from "./src/components/execution-panel";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
 
 export default function App() {
   const session = useGatewaySession({ agentId: "main" });
-  const [panelExpanded, setPanelExpanded] = useState(true);
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
@@ -29,14 +26,8 @@ export default function App() {
               />
 
               <YStack flex={1}>
-                <ChatStream messages={session.messages} />
+                <ChatStream stream={session.stream} />
               </YStack>
-
-              <ExecutionPanel
-                logs={session.logs}
-                expanded={panelExpanded}
-                onToggle={() => setPanelExpanded((p) => !p)}
-              />
 
               <ChatComposer
                 sending={session.sending}
