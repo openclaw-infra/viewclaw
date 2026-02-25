@@ -2,7 +2,7 @@
 
 Stack:
 - Expo
-- Tamagui (UI + Tabs)
+- Tamagui + React Native (custom themed components)
 - Zustand + AsyncStorage (persistent state)
 
 ## Pages
