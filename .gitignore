@@ -1,0 +1,47 @@
+# macOS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# local agent/cache
+.codex/
+
+# env files
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# node
+node_modules/
+**/node_modules/
+
+# build / cache
+dist/
+build/
+coverage/
+.cache/
+tmp/
+temp/
+
+# Expo / React Native
+.expo/
+mobile/.expo/
+mobile/web-build/
+mobile/.expo-shared/
+android/
+ios/
+*.keystore
+
+# Metro / Babel / TypeScript
+.metro-health-check*
+.metro-cache/
+.rpt2_cache/
+*.tsbuildinfo
+
