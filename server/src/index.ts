@@ -4,6 +4,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+function normalizeOptionalEnv(value?: string) {
+  const v = (value || '').trim();
+  if (!v) return '';
+  const lower = v.toLowerCase();
+  if (lower === 'undefined' || lower === 'null') return '';
+  return v;
+}
+
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
 const DATA_DIR = join(process.cwd(), 'data');
@@ -17,6 +25,10 @@ const EXECUTOR_MODE = process.env.EXECUTOR_MODE || 'mock'; // mock | openclaw
 const OPENCLAW_BASE_URL = process.env.OPENCLAW_BASE_URL || '';
 const OPENCLAW_TOKEN = process.env.OPENCLAW_TOKEN || '';
 const OPENCLAW_SPAWN_PATH = process.env.OPENCLAW_SPAWN_PATH || '/sessions_spawn';
+const OPENCLAW_API_STYLE = process.env.OPENCLAW_API_STYLE || 'tools_invoke'; // tools_invoke | direct_spawn
+const OPENCLAW_TOOLS_INVOKE_PATH = process.env.OPENCLAW_TOOLS_INVOKE_PATH || '/tools/invoke';
+const OPENCLAW_SESSION_KEY = process.env.OPENCLAW_SESSION_KEY || '';
+const OPENCLAW_AGENT_ID = process.env.OPENCLAW_AGENT_ID || '';
 
 const MAX_CONCURRENCY = Number(process.env.MAX_CONCURRENCY || 2);
 const RETRY_LIMIT = Number(process.env.RETRY_LIMIT || 2);
@@ -24,8 +36,8 @@ const RETRY_BACKOFF_MS = Number(process.env.RETRY_BACKOFF_MS || 15000);
 const NOTIFY_WEBHOOK_URL = process.env.NOTIFY_WEBHOOK_URL || '';
 
 const AUTH_ENABLED = process.env.AUTH_ENABLED === '1';
-const USER_TOKEN = process.env.USER_TOKEN || '';
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const USER_TOKEN = normalizeOptionalEnv(process.env.USER_TOKEN);
+const ADMIN_TOKEN = normalizeOptionalEnv(process.env.ADMIN_TOKEN);
 
 export type TaskStatus = 'queued' | 'in-progress' | 'done' | 'failed';
 export type RunStatus = 'running' | 'done' | 'failed';
@@ -254,23 +266,68 @@ async function runMockExecutor(task: Task, runId: string) {
 
 async function runOpenClawExecutor(task: Task, runId: string) {
   if (!OPENCLAW_BASE_URL) throw new Error('OPENCLAW_BASE_URL is required for openclaw mode');
-  const url = `${OPENCLAW_BASE_URL.replace(/\/+$/, '')}${OPENCLAW_SPAWN_PATH}`;
   const prompt = [task.title, task.description, task.skill ? `Skill: ${task.skill}` : ''].filter(Boolean).join('\n\n');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(OPENCLAW_TOKEN ? { Authorization: `Bearer ${OPENCLAW_TOKEN}` } : {}),
-    },
-    body: JSON.stringify({ task: prompt, label: `viewclaw-${task.id}`, cleanup: 'keep' }),
-  });
-  if (!res.ok) throw new Error(`openclaw spawn failed: ${res.status} ${await res.text()}`);
+  const base = OPENCLAW_BASE_URL.replace(/\/+$/, '');
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(OPENCLAW_TOKEN ? { Authorization: `Bearer ${OPENCLAW_TOKEN}` } : {}),
+    ...(OPENCLAW_AGENT_ID ? { 'x-openclaw-agent-id': OPENCLAW_AGENT_ID } : {}),
+  };
 
-  const data = (await res.json()) as any;
-  const sessionKey = data?.sessionKey || data?.session?.key || data?.key;
-  const summary = data?.summary || data?.result || data?.message;
+  let data: any = {};
+  let summary: string | undefined;
+  let sessionKey: string | undefined;
+  let logsTag = '';
+
+  if (OPENCLAW_API_STYLE === 'direct_spawn') {
+    const url = `${base}${OPENCLAW_SPAWN_PATH}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ task: prompt, label: `viewclaw-${task.id}`, cleanup: 'keep' }),
+    });
+    if (!res.ok) throw new Error(`openclaw spawn failed: ${res.status} ${await res.text()}`);
+    data = await res.json();
+    summary = data?.summary || data?.result || data?.message;
+    sessionKey = data?.sessionKey || data?.session?.key || data?.key;
+    logsTag = OPENCLAW_SPAWN_PATH;
+  } else {
+    const url = `${base}${OPENCLAW_TOOLS_INVOKE_PATH}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        tool: 'sessions_spawn',
+        sessionKey: OPENCLAW_SESSION_KEY || 'main',
+        args: {
+          task: prompt,
+          label: `viewclaw-${task.id}`,
+          cleanup: 'keep',
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`openclaw tools_invoke failed: ${res.status} ${await res.text()}`);
+    data = await res.json();
+    const result = data?.result || {};
+    const details = result?.details || {};
+    summary = result?.summary || result?.result || result?.message || data?.summary || data?.message;
+    sessionKey =
+      result?.sessionKey ||
+      result?.childSessionKey ||
+      details?.sessionKey ||
+      details?.childSessionKey ||
+      data?.sessionKey ||
+      data?.key;
+    const accepted = result?.status === 'accepted' || details?.status === 'accepted';
+    if (!summary && accepted) {
+      const runId = details?.runId || data?.runId || 'n/a';
+      summary = `OpenClaw 已接收任务，子会话 ${sessionKey || 'n/a'}，运行 ${runId}`;
+    }
+    logsTag = OPENCLAW_TOOLS_INVOKE_PATH;
+  }
+
   const existing = loadRuns().find((x) => x.id === runId);
-  const logs = [...(existing?.logs || []), `Spawned OpenClaw via ${OPENCLAW_SPAWN_PATH}`];
+  const logs = [...(existing?.logs || []), `Spawned OpenClaw via ${logsTag}`];
 
   if (summary) {
     completeTask(task.id, String(summary));
@@ -290,11 +347,52 @@ async function runOpenClawExecutor(task: Task, runId: string) {
 }
 
 function runningCount(projectId?: string) {
-  return loadTasks().filter((x) => x.status === 'in-progress' && (!projectId || x.projectId === projectId)).length;
+  return loadRuns().filter((x) => x.status === 'running' && (!projectId || x.projectId === projectId)).length;
+}
+
+function hasRunningRun(taskId: string) {
+  return loadRuns().some((x) => x.taskId === taskId && x.status === 'running');
 }
 
 function assertSameProject(resourceProjectId: string, requestProjectId: string) {
   return resourceProjectId === requestProjectId;
+}
+
+async function dispatchTask(task: Task) {
+  const run = createRun(task);
+
+  try {
+    if (EXECUTOR_MODE === 'openclaw') await runOpenClawExecutor(task, run.id);
+    else await runMockExecutor(task, run.id);
+
+    const latestTask = getTaskById(task.id);
+    const isDone = latestTask?.status === 'done';
+
+    audit({
+      actor: 'worker',
+      role: 'operator',
+      action: isDone ? 'task.dispatch.success' : 'task.dispatch.spawned',
+      projectId: task.projectId,
+      resourceId: task.id,
+      detail: `run=${run.id}`,
+    });
+
+    await notify(isDone ? 'task.done' : 'task.spawned', {
+      taskId: task.id,
+      projectId: task.projectId,
+      runId: run.id,
+      status: latestTask?.status || 'in-progress',
+    });
+
+    return { ok: true, taskId: task.id, runId: run.id, executor: EXECUTOR_MODE, status: latestTask?.status || 'in-progress' };
+  } catch (e: any) {
+    const failed = failTask(task.id, e?.message ?? 'Unknown worker error');
+    const finalStatus = failed?.status === 'failed' ? 'failed' : 'queued';
+    updateRun(run.id, { status: 'failed', finishedAt: now(), error: e?.message ?? 'Unknown worker error' });
+    audit({ actor: 'worker', role: 'operator', action: 'task.dispatch.fail', projectId: task.projectId, resourceId: task.id, detail: `${finalStatus}: ${e?.message ?? 'Unknown'}` });
+    await notify('task.failed', { taskId: task.id, projectId: task.projectId, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus });
+    return { ok: false, taskId: task.id, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus };
+  }
 }
 
 async function dispatchNextTask(projectId?: string) {
@@ -304,7 +402,13 @@ async function dispatchNextTask(projectId?: string) {
 
   const tasks = loadTasks();
   const current = Date.now();
-  const target = tasks
+  const claimedTarget = tasks
+    .filter((x) => x.status === 'in-progress')
+    .filter((x) => !projectId || x.projectId === projectId)
+    .filter((x) => !hasRunningRun(x.id))
+    .sort((a, b) => (a.pickedAt || a.createdAt).localeCompare(b.pickedAt || b.createdAt))[0];
+
+  const queuedTarget = tasks
     .filter((x) => x.status === 'queued')
     .filter((x) => !projectId || x.projectId === projectId)
     .filter((x) => !x.nextRetryAt || new Date(x.nextRetryAt).getTime() <= current)
@@ -313,43 +417,27 @@ async function dispatchNextTask(projectId?: string) {
       return rank[b.priority] - rank[a.priority] || a.createdAt.localeCompare(b.createdAt);
     })[0];
 
-  if (!target) return { ok: true, message: 'No queued task' };
+  const target = claimedTarget || queuedTarget;
+  if (!target) return { ok: true, message: 'No runnable task' };
 
-  pickupTask(target.id);
-  const run = createRun(target);
+  if (target.status !== 'in-progress') pickupTask(target.id);
+  return dispatchTask(target);
+}
 
-  try {
-    if (EXECUTOR_MODE === 'openclaw') await runOpenClawExecutor(target, run.id);
-    else await runMockExecutor(target, run.id);
-
-    const latestTask = getTaskById(target.id);
-    const isDone = latestTask?.status === 'done';
-
-    audit({
-      actor: 'worker',
-      role: 'operator',
-      action: isDone ? 'task.dispatch.success' : 'task.dispatch.spawned',
-      projectId: target.projectId,
-      resourceId: target.id,
-      detail: `run=${run.id}`,
-    });
-
-    await notify(isDone ? 'task.done' : 'task.spawned', {
-      taskId: target.id,
-      projectId: target.projectId,
-      runId: run.id,
-      status: latestTask?.status || 'in-progress',
-    });
-
-    return { ok: true, taskId: target.id, runId: run.id, executor: EXECUTOR_MODE, status: latestTask?.status || 'in-progress' };
-  } catch (e: any) {
-    const failed = failTask(target.id, e?.message ?? 'Unknown worker error');
-    const finalStatus = failed?.status === 'failed' ? 'failed' : 'queued';
-    updateRun(run.id, { status: 'failed', finishedAt: now(), error: e?.message ?? 'Unknown worker error' });
-    audit({ actor: 'worker', role: 'operator', action: 'task.dispatch.fail', projectId: target.projectId, resourceId: target.id, detail: `${finalStatus}: ${e?.message ?? 'Unknown'}` });
-    await notify('task.failed', { taskId: target.id, projectId: target.projectId, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus });
-    return { ok: false, taskId: target.id, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus };
+async function dispatchTaskById(taskId: string, projectId: string) {
+  if (runningCount(projectId) >= MAX_CONCURRENCY) {
+    return { ok: false, message: 'Concurrency limit reached', maxConcurrency: MAX_CONCURRENCY };
   }
+
+  const task = getTaskById(taskId);
+  if (!task) return { ok: false, message: 'Task not found' };
+  if (!assertSameProject(task.projectId, projectId)) return { ok: false, message: 'Cross-project access denied' };
+  if (task.status === 'done' || task.status === 'failed') return { ok: false, message: `Task already ${task.status}` };
+  if (hasRunningRun(task.id)) return { ok: false, message: 'Task already running' };
+  if (task.nextRetryAt && new Date(task.nextRetryAt).getTime() > Date.now()) return { ok: false, message: 'Task is waiting for retry window' };
+
+  if (task.status !== 'in-progress') pickupTask(task.id);
+  return dispatchTask(task);
 }
 
 const app = new Elysia()
@@ -503,6 +591,18 @@ const app = new Elysia()
     }
     audit({ actor: gate.user.actor, role: gate.user.role, action: 'task.pickup', projectId: task.projectId, resourceId: task.id });
     return task;
+  })
+  .post('/api/tasks/:id/dispatch', async (ctx) => {
+    const gate = requireRole(ctx, 'operator');
+    if (!gate.ok) return gate;
+    const projectId = getProjectId(ctx);
+    const result = await dispatchTaskById(ctx.params.id, projectId);
+    if (!result.ok) {
+      ctx.set.status = 400;
+      return result;
+    }
+    audit({ actor: gate.user.actor, role: gate.user.role, action: 'task.dispatch.manual', projectId, resourceId: ctx.params.id });
+    return result;
   })
   .post('/api/tasks/:id/complete', (ctx) => {
     const gate = requireRole(ctx, 'operator');

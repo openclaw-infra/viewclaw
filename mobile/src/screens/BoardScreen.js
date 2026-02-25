@@ -12,6 +12,28 @@ import { useAppStore } from '../store/useAppStore';
 import { toErrorText } from '../utils/errorText';
 import { usePalette } from '../theme';
 
+const GROUP_META = {
+  queued: { title: '待执行', hint: '等待调度器执行' },
+  'in-progress': { title: '执行中', hint: '任务已提交到执行流程' },
+  done: { title: '已完成', hint: '已返回结果' },
+  failed: { title: '失败', hint: '可查看错误并重试' },
+};
+
+const ACTION_LABEL = {
+  execute: '立即执行',
+  complete: '标记完成',
+  fail: '标记失败',
+  detail: '详情',
+};
+
+function statusText(status) {
+  if (status === 'queued') return '待执行';
+  if (status === 'in-progress') return '执行中';
+  if (status === 'done') return '已完成';
+  if (status === 'failed') return '失败';
+  return status;
+}
+
 export function BoardScreen() {
   const colors = usePalette();
   const styles = getStyles(colors);
@@ -37,12 +59,15 @@ export function BoardScreen() {
 
   usePolling(load, [refreshSeconds], refreshSeconds * 1000);
 
-  const groups = useMemo(() => ({
-    queued: tasks.filter((x) => x.status === 'queued'),
-    'in-progress': tasks.filter((x) => x.status === 'in-progress'),
-    done: tasks.filter((x) => x.status === 'done'),
-    failed: tasks.filter((x) => x.status === 'failed'),
-  }), [tasks]);
+  const groups = useMemo(
+    () => ({
+      queued: tasks.filter((x) => x.status === 'queued'),
+      'in-progress': tasks.filter((x) => x.status === 'in-progress'),
+      done: tasks.filter((x) => x.status === 'done'),
+      failed: tasks.filter((x) => x.status === 'failed'),
+    }),
+    [tasks]
+  );
 
   const refresh = async () => {
     setRefreshing(true);
@@ -50,32 +75,83 @@ export function BoardScreen() {
     setRefreshing(false);
   };
 
-  const act = async (task, type) => {
+  const triggerDispatch = async () => {
     try {
-      if (type === 'pickup') await apiPost(`/api/tasks/${task.id}/pickup`);
+      const res = await apiPost('/api/worker/tick');
+      if (res?.taskId) {
+        showToast(`已调度任务 ${String(res.taskId).slice(0, 8)}`, 'success');
+      } else {
+        showToast(res?.message || '当前无可调度任务', 'info');
+      }
+      await load();
+    } catch (e) {
+      showToast(toErrorText(e, '触发调度失败'), 'error');
+    }
+  };
+
+  const dispatchSelectedTask = async () => {
+    if (!selectedTask?.id) {
+      showToast('请先打开一个任务详情', 'info');
+      return;
+    }
+    await executeTask(selectedTask);
+  };
+
+  const openDispatchMenu = () => {
+    Alert.alert('选择调度方式', '可以全局调度或只调度当前详情任务', [
+      { text: '取消', style: 'cancel' },
+      { text: '全局调度', onPress: triggerDispatch },
+      { text: '当前任务调度', onPress: dispatchSelectedTask },
+    ]);
+  };
+
+  const executeTask = async (task) => {
+    try {
+      const res = await apiPost(`/api/tasks/${task.id}/dispatch`);
+      if (res?.taskId) {
+        showToast(`任务 ${String(res.taskId).slice(0, 8)} 已进入执行流程`, 'success');
+      } else {
+        showToast(res?.message || '任务未被执行', 'info');
+      }
+      await load();
+    } catch (e) {
+      showToast(toErrorText(e, '执行任务失败'), 'error');
+    }
+  };
+
+  const updateTaskStatus = async (task, type) => {
+    try {
       if (type === 'complete') await apiPost(`/api/tasks/${task.id}/complete`, { result: '移动端手动标记完成' });
       if (type === 'fail') await apiPost(`/api/tasks/${task.id}/fail`, { error: '移动端手动标记失败' });
-      showToast(`任务 ${type} 成功`, 'success');
+      showToast(`${ACTION_LABEL[type]}成功`, 'success');
       await load();
+    } catch (e) {
+      showToast(toErrorText(e, `${ACTION_LABEL[type]}失败`), 'error');
+    }
+  };
+
+  const openTaskDetail = async (task) => {
+    try {
+      const detail = await apiGet(`/api/tasks/${task.id}`);
+      setSelectedTask(detail || task);
     } catch {
-      showToast(`任务 ${type} 失败`, 'error');
+      setSelectedTask(task);
     }
   };
 
   return (
     <ScreenShell
-      title="看板"
-      subtitle="任务看板（V1/V2）"
+      title="任务看板"
+      subtitle="创建任务、调度执行、查看状态"
       loading={loading}
       error={error}
-      right={<AppButton small title="触发调度" onPress={() => apiPost('/api/worker/tick').then(() => { showToast('调度已触发', 'success'); load(); }).catch(() => showToast('调度失败', 'error'))} />}
+      right={<AppButton small title="调度方式" onPress={openDispatchMenu} />}
     >
-
       <SurfaceCard style={styles.statsCard} tone="soft">
         <View style={styles.statsWrap}>
-          <StatItem styles={styles} label="总计" value={tasks.length} color="#93c5fd" />
-          <StatItem styles={styles} label="进行中" value={groups['in-progress'].length} color="#5eead4" />
-          <StatItem styles={styles} label="已完成" value={groups.done.length} color="#86efac" />
+          <StatItem styles={styles} label="总任务" value={tasks.length} color="#93c5fd" />
+          <StatItem styles={styles} label="执行中" value={groups['in-progress'].length} color="#5eead4" />
+          <StatItem styles={styles} label="完成" value={groups.done.length} color="#86efac" />
           <StatItem styles={styles} label="失败" value={groups.failed.length} color="#fca5a5" />
         </View>
       </SurfaceCard>
@@ -87,83 +163,107 @@ export function BoardScreen() {
       >
         {tasks.length === 0 ? (
           <EmptyState title="暂无任务" subtitle="先去模板页创建模板，再一键生成任务" />
-        ) : Object.entries(groups).map(([key, list], index) => (
-          <FadeInView key={key} delay={index * 45}>
-            <SurfaceCard style={styles.groupCard}>
-              <View style={styles.groupHeader}>
-                <Text style={styles.groupTitle}>{key.toUpperCase()}</Text>
-                <Text style={styles.groupCount}>{list.length}</Text>
-              </View>
+        ) : (
+          Object.entries(groups).map(([key, list], index) => {
+            const meta = GROUP_META[key];
+            return (
+              <FadeInView key={key} delay={index * 35}>
+                <SurfaceCard style={styles.groupCard}>
+                  <View style={styles.groupHeader}>
+                    <View>
+                      <Text style={styles.groupTitle}>{meta.title}</Text>
+                      <Text style={styles.groupHint}>{meta.hint}</Text>
+                    </View>
+                    <Text style={styles.groupCount}>{list.length}</Text>
+                  </View>
 
-              {list.length === 0 ? (
-                <Text style={styles.mutedText}>暂无任务</Text>
-              ) : (
-                list.map((task, taskIndex) => (
-                  <FadeInView key={task.id} delay={120 + taskIndex * 28}>
-                    <SurfaceCard tone="soft" style={styles.taskCard}>
-                      <View style={styles.taskBody}>
-                        <View style={styles.rowBetween}>
-                          <Text numberOfLines={1} style={styles.taskTitle}>{task.title}</Text>
-                          <AppButton small title="详情" variant="ghost" onPress={() => setSelectedTask(task)} />
-                        </View>
+                  {list.length === 0 ? (
+                    <Text style={styles.emptyHint}>当前分组暂无任务</Text>
+                  ) : (
+                    list.map((task, taskIndex) => (
+                      <FadeInView key={task.id} delay={120 + taskIndex * 24}>
+                        <SurfaceCard tone="soft" style={styles.taskCard}>
+                          <View style={styles.taskBody}>
+                            <View style={styles.rowBetween}>
+                              <Text numberOfLines={1} style={styles.taskTitle}>{task.title}</Text>
+                              <StatusPill value={task.status} />
+                            </View>
 
-                        <View style={styles.rowMeta}>
-                          <StatusPill value={task.status} />
-                          <Text style={styles.mutedText}>{task.priority} · retry {task.retryCount}/{task.maxRetries}</Text>
-                        </View>
+                            <View style={styles.metaLine}>
+                              <Text style={styles.metaLabel}>优先级</Text>
+                              <Text style={styles.metaValue}>{task.priority || '-'}</Text>
+                              <Text style={styles.metaLabel}>重试</Text>
+                              <Text style={styles.metaValue}>{task.retryCount}/{task.maxRetries}</Text>
+                              <Text style={styles.metaLabel}>状态</Text>
+                              <Text style={styles.metaValue}>{statusText(task.status)}</Text>
+                            </View>
 
-                        {!!task.error && <Text style={styles.errorText}>{task.error}</Text>}
-                        {!!task.result && <Text style={styles.successText}>{task.result}</Text>}
+                            {!!task.error && <Text style={styles.errorText}>{task.error}</Text>}
+                            {!!task.result && <Text style={styles.successText}>{task.result}</Text>}
 
-                        <View style={styles.actionsWrap}>
-                          {task.status !== 'in-progress' && task.status !== 'done' && (
-                            <AppButton small title="领取" variant="info" onPress={() => act(task, 'pickup')} />
-                          )}
-                          {task.status !== 'done' && (
-                            <AppButton
-                              small
-                              title="完成"
-                              variant="success"
-                              onPress={() => Alert.alert('确认完成', `确定将任务「${task.title}」标记为完成吗？`, [
-                                { text: '取消', style: 'cancel' },
-                                { text: '确定', onPress: () => act(task, 'complete') },
-                              ])}
-                            />
-                          )}
-                          {task.status !== 'failed' && task.status !== 'done' && (
-                            <AppButton
-                              small
-                              title="失败"
-                              variant="danger"
-                              onPress={() => Alert.alert('确认失败', `确定将任务「${task.title}」标记为失败吗？`, [
-                                { text: '取消', style: 'cancel' },
-                                { text: '确定', style: 'destructive', onPress: () => act(task, 'fail') },
-                              ])}
-                            />
-                          )}
-                        </View>
-                      </View>
-                    </SurfaceCard>
-                  </FadeInView>
-                ))
-              )}
-            </SurfaceCard>
-          </FadeInView>
-        ))}
+                            <View style={styles.actionsWrap}>
+                              {(task.status === 'queued' || task.status === 'in-progress') && (
+                                <AppButton small title="立即执行" variant="info" onPress={() => executeTask(task)} />
+                              )}
+                              {task.status !== 'done' && (
+                                <AppButton
+                                  small
+                                  title="标记完成"
+                                  variant="success"
+                                  onPress={() =>
+                                    Alert.alert('确认完成', `确定将任务「${task.title}」标记为完成吗？`, [
+                                      { text: '取消', style: 'cancel' },
+                                      { text: '确定', onPress: () => updateTaskStatus(task, 'complete') },
+                                    ])
+                                  }
+                                />
+                              )}
+                              {task.status !== 'failed' && task.status !== 'done' && (
+                                <AppButton
+                                  small
+                                  title="标记失败"
+                                  variant="danger"
+                                  onPress={() =>
+                                    Alert.alert('确认失败', `确定将任务「${task.title}」标记为失败吗？`, [
+                                      { text: '取消', style: 'cancel' },
+                                      { text: '确定', style: 'destructive', onPress: () => updateTaskStatus(task, 'fail') },
+                                    ])
+                                  }
+                                />
+                              )}
+                              <AppButton small title="详情" variant="ghost" onPress={() => openTaskDetail(task)} />
+                            </View>
+                          </View>
+                        </SurfaceCard>
+                      </FadeInView>
+                    ))
+                  )}
+                </SurfaceCard>
+              </FadeInView>
+            );
+          })
+        )}
       </ScrollView>
 
       {!!selectedTask && (
         <SurfaceCard style={styles.detailCard}>
           <View style={styles.detailBody}>
             <View style={styles.rowBetween}>
-              <Text style={styles.groupTitle}>任务详情</Text>
+              <Text style={styles.detailTitle}>任务详情</Text>
               <AppButton small title="关闭" variant="ghost" onPress={() => setSelectedTask(null)} />
             </View>
-            <Text style={styles.mutedText}>id: {selectedTask.id}</Text>
-            <Text style={styles.mutedText}>title: {selectedTask.title}</Text>
-            <Text style={styles.mutedText}>status: {selectedTask.status}</Text>
-            <Text style={styles.mutedText}>skill: {selectedTask.skill || '-'}</Text>
-            <Text style={styles.mutedText}>updatedAt: {selectedTask.updatedAt}</Text>
+            <Text style={styles.detailText}>任务ID: {selectedTask.id}</Text>
+            <Text style={styles.detailText}>标题: {selectedTask.title}</Text>
+            <Text style={styles.detailText}>状态: {statusText(selectedTask.status)}</Text>
+            <Text style={styles.detailText}>技能: {selectedTask.skill || '-'}</Text>
+            <Text style={styles.detailText}>更新时间: {selectedTask.updatedAt || '-'}</Text>
+            <Text style={styles.detailText}>运行数: {(selectedTask.runs || []).length}</Text>
+            {(selectedTask.status === 'queued' || selectedTask.status === 'in-progress') && (
+              <AppButton small title="执行此任务" variant="info" onPress={dispatchSelectedTask} />
+            )}
+            {(selectedTask.runs || []).slice(0, 2).map((run) => (
+              <Text key={run.id} style={styles.runHint}>- {run.id.slice(0, 8)} · {run.status} · {run.executor}</Text>
+            ))}
           </View>
         </SurfaceCard>
       )}
@@ -182,63 +282,60 @@ function StatItem({ styles, label, value, color }) {
 
 function getStyles(colors) {
   return StyleSheet.create({
-    statsCard: {
-      marginBottom: 2,
-    },
+    statsCard: { marginBottom: 4 },
     statsWrap: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       paddingHorizontal: 12,
       paddingVertical: 10,
     },
-    statItem: {
-      alignItems: 'center',
-      gap: 2,
-    },
+    statItem: { alignItems: 'center', gap: 2 },
     statLabel: {
       color: '#9fb4c8',
       fontSize: 10,
       fontWeight: '700',
       letterSpacing: 0.9,
     },
-    statValue: {
-      fontSize: 16,
-      fontWeight: '800',
-    },
+    statValue: { fontSize: 16, fontWeight: '800' },
     scrollContent: { paddingBottom: 28, gap: 12 },
-    groupCard: {
-      marginBottom: 12,
-    },
+    groupCard: { marginBottom: 10 },
     groupHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 12,
       paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.cardBorder,
     },
-    groupTitle: { color: colors.text, fontWeight: '700', fontSize: 15, letterSpacing: 0.2 },
-    groupCount: { color: '#7dd3fc', fontWeight: '700', fontSize: 14 },
-    taskCard: {
-      marginHorizontal: 10,
-      marginBottom: 10,
-    },
-    taskBody: {
-      padding: 10,
-      gap: 8,
-    },
+    groupTitle: { color: colors.text, fontWeight: '800', fontSize: 15, letterSpacing: 0.2 },
+    groupHint: { color: colors.muted, fontSize: 12, marginTop: 2 },
+    groupCount: { color: '#7dd3fc', fontWeight: '800', fontSize: 16 },
+    emptyHint: { color: colors.muted, fontSize: 12, paddingHorizontal: 12, paddingVertical: 12 },
+    taskCard: { marginHorizontal: 10, marginBottom: 10 },
+    taskBody: { padding: 10, gap: 8 },
     rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-    rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    taskTitle: { color: colors.text, fontWeight: '700', fontSize: 14, flex: 1 },
-    mutedText: { color: colors.muted, fontSize: 12 },
+    taskTitle: { color: colors.text, fontWeight: '800', fontSize: 14, flex: 1 },
+    metaLine: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      columnGap: 8,
+      rowGap: 4,
+      backgroundColor: colors.panel,
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 6,
+    },
+    metaLabel: { color: colors.subtle, fontSize: 11, fontWeight: '700' },
+    metaValue: { color: colors.text, fontSize: 11, fontWeight: '700' },
     errorText: { color: '#fca5a5', fontSize: 12 },
     successText: { color: '#86efac', fontSize: 12 },
     actionsWrap: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
-    detailCard: {
-      marginTop: 2,
-    },
-    detailBody: {
-      padding: 12,
-      gap: 6,
-    },
+    detailCard: { marginTop: 2 },
+    detailBody: { padding: 12, gap: 6 },
+    detailTitle: { color: colors.text, fontSize: 15, fontWeight: '800' },
+    detailText: { color: colors.muted, fontSize: 12 },
+    runHint: { color: '#93c5fd', fontSize: 12 },
   });
 }

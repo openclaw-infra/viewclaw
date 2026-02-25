@@ -45,3 +45,6 @@ ios/
 .rpt2_cache/
 *.tsbuildinfo
 
+# Server runtime data (keep directory only)
+server/data/*.json
+!server/data/.gitkeep
