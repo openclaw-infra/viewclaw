@@ -11,11 +11,19 @@ const buildAuthHeaders = async (overrideToken?: string): Promise<Record<string, 
   return { authorization: `Bearer ${token}` };
 };
 
+export type StreamCallback = (event: {
+  type: "message_start" | "message_delta" | "message_done";
+  messageId: string;
+  delta?: string;
+  content?: string;
+}) => void;
+
 export const sendMessage = async (body: {
   content: string;
   agentId?: string;
   sessionKey?: string;
   overrideToken?: string;
+  onStream?: StreamCallback;
 }): Promise<{
   ok: boolean;
   status?: number;
@@ -25,11 +33,12 @@ export const sendMessage = async (body: {
   const url = `${OPENCLAW_BASE_URL}/v1/responses`;
   const authHeaders = await buildAuthHeaders(body.overrideToken);
   const agentId = body.agentId ?? "main";
+  const streaming = !!body.onStream;
 
   const requestBody: Record<string, unknown> = {
     model: `openclaw:${agentId}`,
     input: body.content,
-    stream: false,
+    stream: streaming,
   };
 
   try {
@@ -49,8 +58,60 @@ export const sendMessage = async (body: {
       return { ok: false, status: response.status, error: text };
     }
 
-    const data = await response.json() as { id?: string };
-    return { ok: true, status: response.status, responseId: data.id };
+    if (!streaming) {
+      const data = await response.json() as { id?: string };
+      return { ok: true, status: response.status, responseId: data.id };
+    }
+
+    let responseId = "";
+    let currentMsgId = "";
+    let fullText = "";
+
+    const reader = response.body?.getReader();
+    if (!reader) return { ok: false, error: "No response body" };
+
+    const decoder = new TextDecoder();
+    let remainder = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      remainder += decoder.decode(value, { stream: true });
+      const lines = remainder.split("\n");
+      remainder = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (line.startsWith("data: ")) {
+          const raw = line.slice(6).trim();
+          if (raw === "[DONE]") continue;
+
+          try {
+            const evt = JSON.parse(raw);
+
+            if (evt.type === "response.created") {
+              responseId = evt.response?.id ?? "";
+            }
+
+            if (evt.type === "response.output_item.added" && evt.item?.role === "assistant") {
+              currentMsgId = evt.item.id ?? `stream-msg-${Date.now()}`;
+              body.onStream!({ type: "message_start", messageId: currentMsgId });
+            }
+
+            if (evt.type === "response.output_text.delta" && evt.delta) {
+              fullText += evt.delta;
+              body.onStream!({ type: "message_delta", messageId: currentMsgId, delta: evt.delta });
+            }
+
+            if (evt.type === "response.completed") {
+              body.onStream!({ type: "message_done", messageId: currentMsgId, content: fullText });
+            }
+          } catch { /* skip malformed */ }
+        }
+      }
+    }
+
+    return { ok: true, status: response.status, responseId };
   } catch (error) {
     return { ok: false, error: (error as Error).message };
   }

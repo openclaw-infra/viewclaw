@@ -19,7 +19,7 @@ type Options = {
 
 type WsIncoming =
   | GatewayEvent
-  | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed"; [k: string]: unknown };
+  | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed" | "unknown_message"; [k: string]: unknown };
 
 export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionId }: Options) => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
@@ -79,16 +79,110 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
     setStream((prev) => prev.filter((item) => !(item.kind === "typing" && item.id === tid)));
   }, []);
 
+  const streamingMsgRef = useRef<string | null>(null);
+  const streamedDoneRef = useRef(false);
+
+  const updateStreamingMessage = useCallback((messageId: string, delta: string) => {
+    setStream((prev) => {
+      const idx = prev.findIndex(
+        (item) => item.kind === "message" && item.data.id === messageId
+      );
+      if (idx === -1) return prev;
+      const item = prev[idx] as { kind: "message"; data: ChatMessage };
+      const updated: StreamItem = {
+        kind: "message",
+        data: { ...item.data, content: item.data.content + delta },
+      };
+      const next = [...prev];
+      next[idx] = updated;
+      return next;
+    });
+  }, []);
+
+  const finalizeStreamingMessage = useCallback((messageId: string, content?: string) => {
+    streamingMsgRef.current = null;
+    streamedDoneRef.current = true;
+    setStream((prev) =>
+      prev.map((item) => {
+        if (item.kind === "message" && item.data.id === messageId) {
+          const finalContent = content ?? item.data.content;
+          return {
+            kind: "message" as const,
+            data: {
+              ...item.data,
+              content: finalContent.replace(/^\[\[reply_to_current\]\]\s*/i, ""),
+              streaming: false,
+            },
+          };
+        }
+        return item;
+      })
+    );
+  }, []);
+
   const parseEvent = useCallback(
     (event: GatewayEvent) => {
       const p = event.payload;
+
+      if (event.type === "message_start") {
+        const msgId = event.messageId ?? `stream-msg-${event.seq}`;
+        streamingMsgRef.current = msgId;
+        seenRef.current.add(msgId);
+        return;
+      }
+
+      if (event.type === "message_delta") {
+        const delta = typeof p.delta === "string" ? p.delta : "";
+        const msgId = event.messageId ?? streamingMsgRef.current;
+        if (!delta || !msgId) return;
+
+        setStream((prev) => {
+          const exists = prev.some(
+            (item) => item.kind === "message" && item.data.id === msgId
+          );
+          if (exists) {
+            return prev.map((item) => {
+              if (item.kind === "message" && item.data.id === msgId) {
+                return {
+                  kind: "message" as const,
+                  data: { ...item.data, content: item.data.content + delta },
+                };
+              }
+              return item;
+            });
+          }
+
+          removeTyping();
+          const msg: ChatMessage = {
+            id: msgId,
+            role: "assistant",
+            content: delta,
+            streaming: true,
+            createdAt: event.ts,
+          };
+          return [...prev.filter((i) => i.kind !== "typing"), { kind: "message" as const, data: msg }];
+        });
+        return;
+      }
+
+      if (event.type === "message_done") {
+        const msgId = event.messageId ?? streamingMsgRef.current;
+        const content = typeof p.content === "string" ? p.content : undefined;
+        if (msgId) {
+          finalizeStreamingMessage(msgId, content);
+        }
+        return;
+      }
 
       if (event.type === "message") {
         const role = p.role === "assistant" ? "assistant" : "user";
         const content = String(p.content ?? "");
         if (!content) return;
 
-        if (role === "assistant") removeTyping();
+        if (role === "assistant") {
+          if (streamingMsgRef.current || streamedDoneRef.current) return;
+          removeTyping();
+        }
 
         let cleanContent = content;
         if (role === "assistant") {
@@ -191,7 +285,7 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
         });
       }
     },
-    [appendMessage, appendLog, removeTyping]
+    [appendMessage, appendLog, removeTyping, updateStreamingMessage, finalizeStreamingMessage]
   );
 
   const wsSend = useCallback((data: Record<string, unknown>) => {
@@ -323,6 +417,7 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       const msg: ChatMessage = { id: messageId, role: "user", content: text, createdAt: Date.now() };
       seenRef.current.add(messageId);
 
+      streamedDoneRef.current = false;
       const typingId = `typing-${Date.now()}`;
       typingIdRef.current = typingId;
       setStream((prev) => [

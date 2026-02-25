@@ -16,8 +16,8 @@
 - [ ] **"/" 快捷指令**
   输入框输入 "/" 时弹出指令面板，支持 OpenClaw 内置指令（如 /model、/status、/restart 等）和自定义指令，指令列表可搜索过滤，选中后自动填入或直接执行
 
-- [ ] **流式文本渲染**
-  assistant 回复逐字/逐段流式显示，而非等 JSONL 完整写入后一次性出现，提升实时感
+- [x] **流式文本渲染**
+  assistant 回复逐字/逐段流式显示，Server 通过 SSE 流式请求 OpenClaw `/v1/responses`，解析 `response.output_text.delta` 事件并通过 WebSocket 推送 `message_start`/`message_delta`/`message_done` 事件，Mobile 端增量拼接文本并实时渲染，带闪烁光标指示生成中
 
 - [ ] **会话管理**
   会话列表页（显示所有 session + agent 信息），新建/切换/删除会话，会话搜索，完善 ChatHeader 的 session 选择器

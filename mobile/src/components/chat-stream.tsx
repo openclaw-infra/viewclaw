@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, memo } from "react";
 import { FlatList, Animated, Easing } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import type { ChatMessage, StreamItem } from "../types/gateway";
@@ -10,7 +10,35 @@ type Props = {
   stream: StreamItem[];
 };
 
-const Bubble = ({ item }: { item: ChatMessage }) => {
+const StreamingCursor = () => {
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View
+      style={{
+        width: 2,
+        height: 16,
+        backgroundColor: colors.accent.blue,
+        borderRadius: 1,
+        opacity,
+        marginLeft: 1,
+      }}
+    />
+  );
+};
+
+const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const isUser = item.role === "user";
   const time = new Date(item.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -41,21 +69,34 @@ const Bubble = ({ item }: { item: ChatMessage }) => {
           </Text>
         ) : null}
 
-        <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
-          {item.content}
-        </MarkdownBody>
+        {item.content ? (
+          <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
+            {item.content}
+          </MarkdownBody>
+        ) : null}
 
-        <Text
-          color={isUser ? "rgba(255,255,255,0.5)" : colors.text.muted}
-          fontSize={10}
-          alignSelf={isUser ? "flex-end" : "flex-start"}
-        >
-          {time}
-        </Text>
+        {item.streaming ? (
+          <XStack alignItems="center" height={20}>
+            {!item.content && (
+              <Text color={colors.text.muted} fontSize={12} marginRight={4}>
+                Generating
+              </Text>
+            )}
+            <StreamingCursor />
+          </XStack>
+        ) : (
+          <Text
+            color={isUser ? "rgba(255,255,255,0.5)" : colors.text.muted}
+            fontSize={10}
+            alignSelf={isUser ? "flex-end" : "flex-start"}
+          >
+            {time}
+          </Text>
+        )}
       </YStack>
     </XStack>
   );
-};
+});
 
 const TypingIndicator = () => {
   const dot1 = useRef(new Animated.Value(0.3)).current;
@@ -121,6 +162,11 @@ export const ChatStream = ({ stream }: Props) => {
   const listRef = useRef<FlatList>(null);
   const isNearBottomRef = useRef(true);
 
+  const lastStreamingContent = stream.reduce((acc, item) => {
+    if (item.kind === "message" && item.data.streaming) return item.data.content.length;
+    return acc;
+  }, 0);
+
   const onScroll = useCallback((e: any) => {
     const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
     const distanceFromBottom =
@@ -132,12 +178,13 @@ export const ChatStream = ({ stream }: Props) => {
     if (stream.length > 0 && isNearBottomRef.current) {
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
     }
-  }, [stream.length]);
+  }, [stream.length, lastStreamingContent]);
 
   return (
     <FlatList
       ref={listRef}
       data={stream}
+      extraData={lastStreamingContent}
       keyExtractor={getItemId}
       renderItem={renderItem}
       onScroll={onScroll}

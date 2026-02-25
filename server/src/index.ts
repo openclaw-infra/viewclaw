@@ -65,6 +65,17 @@ export const app = new Elysia()
         content: body.content,
         agentId: body.agentId,
         sessionKey,
+        onStream: (evt) => {
+          emitEvent({
+            type: evt.type,
+            sessionId,
+            messageId: evt.messageId,
+            payload: {
+              ...(evt.delta != null ? { delta: evt.delta } : {}),
+              ...(evt.content != null ? { content: evt.content } : {}),
+            },
+          });
+        },
       });
 
       return { ok: true, accepted: true, messageId, forwarded: result };
@@ -93,6 +104,9 @@ export const app = new Elysia()
       body: t.Object({
         type: t.Union([
           t.Literal("message"),
+          t.Literal("message_delta"),
+          t.Literal("message_start"),
+          t.Literal("message_done"),
           t.Literal("thought"),
           t.Literal("action"),
           t.Literal("observation"),
@@ -189,22 +203,25 @@ export const app = new Elysia()
         const messageId = body.messageId ?? crypto.randomUUID();
         const sessionId = body.sessionId ?? "default";
 
+        ws.send(JSON.stringify({ type: "ack", sessionId, messageId, ts: Date.now() }));
+
         const sessionKey = await resolveSessionKey(sessionId);
-        const result = await sendMessage({
+        sendMessage({
           content: body.content,
           agentId: body.agentId,
           sessionKey,
-        });
-
-        ws.send(
-          JSON.stringify({
-            type: "ack",
-            sessionId,
-            messageId,
-            forwarded: result,
-            ts: Date.now(),
-          })
-        );
+          onStream: (evt) => {
+            emitEvent({
+              type: evt.type,
+              sessionId,
+              messageId: evt.messageId,
+              payload: {
+                ...(evt.delta != null ? { delta: evt.delta } : {}),
+                ...(evt.content != null ? { content: evt.content } : {}),
+              },
+            });
+          },
+        }).catch(() => {});
         return;
       }
 

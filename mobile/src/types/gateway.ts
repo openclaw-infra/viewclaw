@@ -3,6 +3,9 @@ export type ConnectionStatus = "connecting" | "connected" | "disconnected";
 export type GatewayEventType =
   | "connected"
   | "message"
+  | "message_start"
+  | "message_delta"
+  | "message_done"
   | "thought"
   | "action"
   | "observation"
@@ -25,6 +28,7 @@ export type ChatMessage = {
   content: string;
   thinking?: string;
   thinkingSummary?: string;
+  streaming?: boolean;
   createdAt: number;
 };
 

@@ -1,6 +1,9 @@
 export type EventType =
   | "connected"
   | "message"
+  | "message_delta"
+  | "message_start"
+  | "message_done"
   | "thought"
   | "action"
   | "observation"
