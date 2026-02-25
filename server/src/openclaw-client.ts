@@ -267,3 +267,50 @@ export const getActiveSessionId = async (agentId: string = "main"): Promise<stri
   const sessions = await listSessions(agentId);
   return sessions.length > 0 ? sessions[0].id : null;
 };
+
+export const createSession = async (body: {
+  agentId?: string;
+  initialMessage?: string;
+  overrideToken?: string;
+}): Promise<{
+  ok: boolean;
+  sessionId?: string;
+  sessionKey?: string;
+  error?: string;
+}> => {
+  const agentId = body.agentId ?? "main";
+  const authHeaders = await buildAuthHeaders(body.overrideToken);
+  const input = body.initialMessage || "hello";
+
+  try {
+    const res = await fetch(`${OPENCLAW_BASE_URL}/v1/responses`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        ...authHeaders,
+        "x-openclaw-agent-id": agentId,
+      },
+      body: JSON.stringify({
+        model: `openclaw:${agentId}`,
+        input,
+        stream: false,
+      }),
+    });
+
+    if (!res.ok) {
+      return { ok: false, error: await res.text() };
+    }
+
+    await res.json();
+
+    const sessions = await listSessions(agentId);
+    if (sessions.length > 0) {
+      const newest = sessions[0];
+      return { ok: true, sessionId: newest.id, sessionKey: newest.sessionKey };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: (error as Error).message };
+  }
+};

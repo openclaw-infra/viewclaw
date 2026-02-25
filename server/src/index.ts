@@ -10,6 +10,7 @@ import {
   getSessionJsonlPath,
   getActiveSessionId,
   resolveSessionKey,
+  createSession,
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 
@@ -50,6 +51,23 @@ export const app = new Elysia()
     {
       query: t.Object({
         agentId: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  .post(
+    "/api/sessions",
+    async ({ body }) => {
+      const result = await createSession({
+        agentId: body.agentId,
+        initialMessage: body.initialMessage,
+      });
+      return result;
+    },
+    {
+      body: t.Object({
+        agentId: t.Optional(t.String()),
+        initialMessage: t.Optional(t.String()),
       }),
     }
   )

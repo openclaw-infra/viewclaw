@@ -1,3 +1,4 @@
+import { useState, useCallback } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
@@ -5,10 +6,15 @@ import tamaguiConfig from "./tamagui.config";
 import { ChatComposer } from "./src/components/chat-composer";
 import { ChatHeader } from "./src/components/chat-header";
 import { ChatStream } from "./src/components/chat-stream";
+import { SessionListSheet } from "./src/components/session-list-sheet";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
 
 export default function App() {
   const session = useGatewaySession({ agentId: "main" });
+  const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
+
+  const openSessionSheet = useCallback(() => setSessionSheetVisible(true), []);
+  const closeSessionSheet = useCallback(() => setSessionSheetVisible(false), []);
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
@@ -23,6 +29,8 @@ export default function App() {
               <ChatHeader
                 sessionId={session.currentSessionId}
                 status={session.connectionStatus}
+                sessionCount={session.sessions.length}
+                onSessionPress={openSessionSheet}
               />
 
               <YStack flex={1}>
@@ -35,6 +43,16 @@ export default function App() {
               />
             </YStack>
           </KeyboardAvoidingView>
+
+          <SessionListSheet
+            visible={sessionSheetVisible}
+            sessions={session.sessions}
+            currentSessionId={session.currentSessionId}
+            onClose={closeSessionSheet}
+            onSelect={session.switchSession}
+            onCreate={session.createNewSession}
+            onRefresh={session.refreshSessions}
+          />
         </SafeAreaView>
         <StatusBar style="light" />
       </Theme>

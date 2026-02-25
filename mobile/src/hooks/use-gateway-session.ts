@@ -451,10 +451,59 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       setStream([]);
       seenRef.current.clear();
       bufferRef.current = [];
+      streamingMsgRef.current = null;
+      streamedDoneRef.current = false;
+      typingIdRef.current = null;
       setCurrentSessionId(newSessionId);
       subscribeToSession(newSessionId);
     },
     [subscribeToSession, unsubscribeFromSession]
+  );
+
+  const refreshSessions = useCallback(async () => {
+    await fetchSessions();
+  }, [fetchSessions]);
+
+  const createNewSession = useCallback(async () => {
+    try {
+      const res = await fetch(`${DEFAULT_HTTP_URL}/api/sessions`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ agentId: agentIdRef.current }),
+      });
+      const data = await res.json();
+      if (data.ok && data.sessionId) {
+        await fetchSessions();
+        switchSession(data.sessionId);
+        return data.sessionId as string;
+      }
+    } catch { /* offline */ }
+    return null;
+  }, [fetchSessions, switchSession]);
+
+  const deleteSession = useCallback(
+    (sessionId: string) => {
+      if (currentSessionRef.current === sessionId) {
+        unsubscribeFromSession(sessionId);
+      }
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+      if (currentSessionRef.current === sessionId) {
+        setSessions((prev) => {
+          const remaining = prev.filter((s) => s.id !== sessionId);
+          if (remaining.length > 0) {
+            switchSession(remaining[0].id);
+          } else {
+            setStream([]);
+            seenRef.current.clear();
+            bufferRef.current = [];
+            setCurrentSessionId("");
+          }
+          return remaining;
+        });
+      }
+    },
+    [switchSession, unsubscribeFromSession]
   );
 
   return useMemo(
@@ -466,8 +515,11 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       sending,
       sendMessage,
       switchSession,
+      createNewSession,
+      deleteSession,
+      refreshSessions,
       gatewayHttpUrl: DEFAULT_HTTP_URL,
     }),
-    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, switchSession]
+    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, switchSession, createNewSession, deleteSession, refreshSessions]
   );
 };

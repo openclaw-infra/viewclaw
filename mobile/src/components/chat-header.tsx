@@ -6,10 +6,11 @@ import { colors } from "../theme/colors";
 type Props = {
   sessionId: string;
   status: ConnectionStatus;
+  sessionCount?: number;
   onSessionPress?: () => void;
 };
 
-export const ChatHeader = ({ sessionId, status, onSessionPress }: Props) => {
+export const ChatHeader = ({ sessionId, status, sessionCount, onSessionPress }: Props) => {
   const statusColor = colors.status[status];
   const shortId = sessionId ? sessionId.slice(0, 8) : "---";
 
@@ -25,9 +26,26 @@ export const ChatHeader = ({ sessionId, status, onSessionPress }: Props) => {
           ViewClaw
         </Text>
         <Pressable onPress={onSessionPress}>
-          <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
-            {shortId}...
-          </Text>
+          <XStack alignItems="center" gap="$1.5">
+            <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
+              {shortId}
+            </Text>
+            {sessionCount != null && sessionCount > 0 && (
+              <YStack
+                backgroundColor={colors.bg.elevated}
+                paddingHorizontal="$1.5"
+                paddingVertical={1}
+                borderRadius={4}
+              >
+                <Text color={colors.text.muted} fontSize={10} fontWeight="600">
+                  {sessionCount}
+                </Text>
+              </YStack>
+            )}
+            <Text color={colors.text.muted} fontSize={10}>
+              ▾
+            </Text>
+          </XStack>
         </Pressable>
       </YStack>
 

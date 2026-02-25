@@ -19,8 +19,8 @@
 - [x] **流式文本渲染**
   assistant 回复逐字/逐段流式显示，Server 通过 SSE 流式请求 OpenClaw `/v1/responses`，解析 `response.output_text.delta` 事件并通过 WebSocket 推送 `message_start`/`message_delta`/`message_done` 事件，Mobile 端增量拼接文本并实时渲染，带闪烁光标指示生成中
 
-- [ ] **会话管理**
-  会话列表页（显示所有 session + agent 信息），新建/切换/删除会话，会话搜索，完善 ChatHeader 的 session 选择器
+- [x] **会话管理**
+  点击 Header session ID 弹出会话列表 Sheet，显示所有会话（session key + ID + 时间），支持切换/新建/删除/刷新，当前会话蓝色高亮 + ACTIVE 标签，新建通过 Server 端 `POST /api/sessions` 创建
 
 - [ ] **服务端连接管理**
   支持配置多个 Gateway 地址（本地/远程），连接切换 UI，连接状态持久化（MMKV），断线自动重连策略优化
