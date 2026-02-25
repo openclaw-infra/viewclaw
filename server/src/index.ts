@@ -358,6 +358,43 @@ function assertSameProject(resourceProjectId: string, requestProjectId: string) 
   return resourceProjectId === requestProjectId;
 }
 
+async function dispatchTask(task: Task) {
+  const run = createRun(task);
+
+  try {
+    if (EXECUTOR_MODE === 'openclaw') await runOpenClawExecutor(task, run.id);
+    else await runMockExecutor(task, run.id);
+
+    const latestTask = getTaskById(task.id);
+    const isDone = latestTask?.status === 'done';
+
+    audit({
+      actor: 'worker',
+      role: 'operator',
+      action: isDone ? 'task.dispatch.success' : 'task.dispatch.spawned',
+      projectId: task.projectId,
+      resourceId: task.id,
+      detail: `run=${run.id}`,
+    });
+
+    await notify(isDone ? 'task.done' : 'task.spawned', {
+      taskId: task.id,
+      projectId: task.projectId,
+      runId: run.id,
+      status: latestTask?.status || 'in-progress',
+    });
+
+    return { ok: true, taskId: task.id, runId: run.id, executor: EXECUTOR_MODE, status: latestTask?.status || 'in-progress' };
+  } catch (e: any) {
+    const failed = failTask(task.id, e?.message ?? 'Unknown worker error');
+    const finalStatus = failed?.status === 'failed' ? 'failed' : 'queued';
+    updateRun(run.id, { status: 'failed', finishedAt: now(), error: e?.message ?? 'Unknown worker error' });
+    audit({ actor: 'worker', role: 'operator', action: 'task.dispatch.fail', projectId: task.projectId, resourceId: task.id, detail: `${finalStatus}: ${e?.message ?? 'Unknown'}` });
+    await notify('task.failed', { taskId: task.id, projectId: task.projectId, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus });
+    return { ok: false, taskId: task.id, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus };
+  }
+}
+
 async function dispatchNextTask(projectId?: string) {
   if (runningCount(projectId) >= MAX_CONCURRENCY) {
     return { ok: true, message: 'Concurrency limit reached', maxConcurrency: MAX_CONCURRENCY };
@@ -384,40 +421,23 @@ async function dispatchNextTask(projectId?: string) {
   if (!target) return { ok: true, message: 'No runnable task' };
 
   if (target.status !== 'in-progress') pickupTask(target.id);
-  const run = createRun(target);
+  return dispatchTask(target);
+}
 
-  try {
-    if (EXECUTOR_MODE === 'openclaw') await runOpenClawExecutor(target, run.id);
-    else await runMockExecutor(target, run.id);
-
-    const latestTask = getTaskById(target.id);
-    const isDone = latestTask?.status === 'done';
-
-    audit({
-      actor: 'worker',
-      role: 'operator',
-      action: isDone ? 'task.dispatch.success' : 'task.dispatch.spawned',
-      projectId: target.projectId,
-      resourceId: target.id,
-      detail: `run=${run.id}`,
-    });
-
-    await notify(isDone ? 'task.done' : 'task.spawned', {
-      taskId: target.id,
-      projectId: target.projectId,
-      runId: run.id,
-      status: latestTask?.status || 'in-progress',
-    });
-
-    return { ok: true, taskId: target.id, runId: run.id, executor: EXECUTOR_MODE, status: latestTask?.status || 'in-progress' };
-  } catch (e: any) {
-    const failed = failTask(target.id, e?.message ?? 'Unknown worker error');
-    const finalStatus = failed?.status === 'failed' ? 'failed' : 'queued';
-    updateRun(run.id, { status: 'failed', finishedAt: now(), error: e?.message ?? 'Unknown worker error' });
-    audit({ actor: 'worker', role: 'operator', action: 'task.dispatch.fail', projectId: target.projectId, resourceId: target.id, detail: `${finalStatus}: ${e?.message ?? 'Unknown'}` });
-    await notify('task.failed', { taskId: target.id, projectId: target.projectId, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus });
-    return { ok: false, taskId: target.id, runId: run.id, error: e?.message ?? 'Unknown worker error', finalStatus };
+async function dispatchTaskById(taskId: string, projectId: string) {
+  if (runningCount(projectId) >= MAX_CONCURRENCY) {
+    return { ok: false, message: 'Concurrency limit reached', maxConcurrency: MAX_CONCURRENCY };
   }
+
+  const task = getTaskById(taskId);
+  if (!task) return { ok: false, message: 'Task not found' };
+  if (!assertSameProject(task.projectId, projectId)) return { ok: false, message: 'Cross-project access denied' };
+  if (task.status === 'done' || task.status === 'failed') return { ok: false, message: `Task already ${task.status}` };
+  if (hasRunningRun(task.id)) return { ok: false, message: 'Task already running' };
+  if (task.nextRetryAt && new Date(task.nextRetryAt).getTime() > Date.now()) return { ok: false, message: 'Task is waiting for retry window' };
+
+  if (task.status !== 'in-progress') pickupTask(task.id);
+  return dispatchTask(task);
 }
 
 const app = new Elysia()
@@ -571,6 +591,18 @@ const app = new Elysia()
     }
     audit({ actor: gate.user.actor, role: gate.user.role, action: 'task.pickup', projectId: task.projectId, resourceId: task.id });
     return task;
+  })
+  .post('/api/tasks/:id/dispatch', async (ctx) => {
+    const gate = requireRole(ctx, 'operator');
+    if (!gate.ok) return gate;
+    const projectId = getProjectId(ctx);
+    const result = await dispatchTaskById(ctx.params.id, projectId);
+    if (!result.ok) {
+      ctx.set.status = 400;
+      return result;
+    }
+    audit({ actor: gate.user.actor, role: gate.user.role, action: 'task.dispatch.manual', projectId, resourceId: ctx.params.id });
+    return result;
   })
   .post('/api/tasks/:id/complete', (ctx) => {
     const gate = requireRole(ctx, 'operator');

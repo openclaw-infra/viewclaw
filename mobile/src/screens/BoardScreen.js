@@ -89,16 +89,29 @@ export function BoardScreen() {
     }
   };
 
+  const dispatchSelectedTask = async () => {
+    if (!selectedTask?.id) {
+      showToast('请先打开一个任务详情', 'info');
+      return;
+    }
+    await executeTask(selectedTask);
+  };
+
+  const openDispatchMenu = () => {
+    Alert.alert('选择调度方式', '可以全局调度或只调度当前详情任务', [
+      { text: '取消', style: 'cancel' },
+      { text: '全局调度', onPress: triggerDispatch },
+      { text: '当前任务调度', onPress: dispatchSelectedTask },
+    ]);
+  };
+
   const executeTask = async (task) => {
     try {
-      if (task.status === 'queued') {
-        await apiPost(`/api/tasks/${task.id}/pickup`);
-      }
-      const res = await apiPost('/api/worker/tick');
+      const res = await apiPost(`/api/tasks/${task.id}/dispatch`);
       if (res?.taskId) {
-        showToast('任务已进入执行流程', 'success');
+        showToast(`任务 ${String(res.taskId).slice(0, 8)} 已进入执行流程`, 'success');
       } else {
-        showToast(res?.message || '执行器暂时未接到任务', 'info');
+        showToast(res?.message || '任务未被执行', 'info');
       }
       await load();
     } catch (e) {
@@ -132,7 +145,7 @@ export function BoardScreen() {
       subtitle="创建任务、调度执行、查看状态"
       loading={loading}
       error={error}
-      right={<AppButton small title="触发调度" onPress={triggerDispatch} />}
+      right={<AppButton small title="调度方式" onPress={openDispatchMenu} />}
     >
       <SurfaceCard style={styles.statsCard} tone="soft">
         <View style={styles.statsWrap}>
@@ -245,6 +258,9 @@ export function BoardScreen() {
             <Text style={styles.detailText}>技能: {selectedTask.skill || '-'}</Text>
             <Text style={styles.detailText}>更新时间: {selectedTask.updatedAt || '-'}</Text>
             <Text style={styles.detailText}>运行数: {(selectedTask.runs || []).length}</Text>
+            {(selectedTask.status === 'queued' || selectedTask.status === 'in-progress') && (
+              <AppButton small title="执行此任务" variant="info" onPress={dispatchSelectedTask} />
+            )}
             {(selectedTask.runs || []).slice(0, 2).map((run) => (
               <Text key={run.id} style={styles.runHint}>- {run.id.slice(0, 8)} · {run.status} · {run.executor}</Text>
             ))}
