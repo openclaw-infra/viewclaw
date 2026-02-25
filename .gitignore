@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Expo
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/ios/
+mobile/android/
+
+# Bun
+*.lockb
+bun.lock
+
+# Build output
+*.tsbuildinfo
+dist/
+build/
+.output/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+
+# Temporary
+*.tmp
+*.temp
+.cache/

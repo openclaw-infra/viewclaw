@@ -1,0 +1,13 @@
+{
+  "name": "viewclaw",
+  "private": true,
+  "workspaces": [
+    "mobile",
+    "server"
+  ],
+  "scripts": {
+    "dev": "bun run dev:server & bun run dev:mobile",
+    "dev:mobile": "bun run --cwd mobile start",
+    "dev:server": "bun run --cwd server dev"
+  }
+}

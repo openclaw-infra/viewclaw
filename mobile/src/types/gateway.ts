@@ -1,0 +1,47 @@
+export type ConnectionStatus = "connecting" | "connected" | "disconnected";
+
+export type GatewayEventType =
+  | "connected"
+  | "message"
+  | "thought"
+  | "action"
+  | "observation"
+  | "error"
+  | "done"
+  | "status";
+
+export type GatewayEvent = {
+  type: GatewayEventType;
+  sessionId: string;
+  messageId?: string;
+  seq: number;
+  ts: number;
+  payload: Record<string, unknown>;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  thinking?: string;
+  thinkingSummary?: string;
+  createdAt: number;
+};
+
+export type ExecutionLog = {
+  id: string;
+  messageId?: string;
+  level: "thought" | "action" | "observation" | "error" | "done" | "status";
+  text: string;
+  detail?: string;
+  toolName?: string;
+  createdAt: number;
+};
+
+export type SessionInfo = {
+  id: string;
+  agentId: string;
+  sessionKey?: string;
+  jsonlPath: string;
+  createdAt: string;
+};
