@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
@@ -101,6 +101,26 @@ export const app = new Elysia()
       body: t.Object({
         agentId: t.Optional(t.String()),
         initialMessage: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  .delete(
+    "/api/sessions/:sessionId",
+    async ({ params, query }) => {
+      const agentId = query.agentId ?? "main";
+      const jsonlPath = await getSessionJsonlPath(agentId, params.sessionId);
+      try {
+        await unlink(jsonlPath);
+        return { ok: true, deleted: params.sessionId };
+      } catch (error) {
+        return { ok: false, error: (error as Error).message };
+      }
+    },
+    {
+      params: t.Object({ sessionId: t.String() }),
+      query: t.Object({
+        agentId: t.Optional(t.String()),
       }),
     }
   )

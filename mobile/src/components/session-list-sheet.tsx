@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { FlatList, Pressable, Modal } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 import type { SessionInfo } from "../types/gateway";
 
 type Props = {
@@ -52,10 +52,11 @@ const SessionRow = memo(
     isCurrent: boolean;
     onSelect: (id: string) => void;
   }) => {
+    const { colors } = useTheme();
     const shortId = item.id.slice(0, 8);
-    const keyLabel = item.sessionKey
-      ? item.sessionKey.replace(/^agent:main:/, "")
-      : shortId;
+    const displayTitle = item.title ?? (item.sessionKey
+      ? item.sessionKey.replace(/^agent:\w+:/, "").replace(/^openresponses:/, "").slice(0, 20)
+      : shortId);
 
     return (
       <Pressable onPress={() => onSelect(item.id)}>
@@ -81,11 +82,10 @@ const SessionRow = memo(
                   color={isCurrent ? colors.accent.blue : colors.text.primary}
                   fontSize={14}
                   fontWeight="600"
-                  fontFamily="$mono"
                   numberOfLines={1}
                   flexShrink={1}
                 >
-                  {keyLabel}
+                  {displayTitle}
                 </Text>
                 {isCurrent && (
                   <YStack
@@ -93,6 +93,7 @@ const SessionRow = memo(
                     paddingHorizontal="$1.5"
                     paddingVertical={1}
                     borderRadius={4}
+                    flexShrink={0}
                   >
                     <Text color="#FFFFFF" fontSize={9} fontWeight="700">
                       ACTIVE
@@ -126,6 +127,7 @@ export const SessionListSheet = memo(
     onCreate,
     onRefresh,
   }: Props) => {
+    const { colors } = useTheme();
     const [creating, setCreating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 

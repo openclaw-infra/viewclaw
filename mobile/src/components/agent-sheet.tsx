@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { FlatList, Pressable, Modal, ActivityIndicator } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 import type { AgentInfo } from "../types/gateway";
 
 type Props = {
@@ -14,29 +14,32 @@ type Props = {
   onRefresh: () => Promise<void>;
 };
 
-const InfoRow = memo(({ label, value }: { label: string; value: string }) => (
-  <XStack gap="$2" alignItems="flex-start">
-    <Text
-      color={colors.text.muted}
-      fontSize={11}
-      fontWeight="600"
-      width={70}
-      textTransform="uppercase"
-      letterSpacing={0.3}
-    >
-      {label}
-    </Text>
-    <Text
-      color={colors.text.secondary}
-      fontSize={12}
-      fontFamily="$mono"
-      flex={1}
-      numberOfLines={3}
-    >
-      {value}
-    </Text>
-  </XStack>
-));
+const InfoRow = memo(({ label, value }: { label: string; value: string }) => {
+  const { colors } = useTheme();
+  return (
+    <XStack gap="$2" alignItems="flex-start">
+      <Text
+        color={colors.text.muted}
+        fontSize={11}
+        fontWeight="600"
+        width={70}
+        textTransform="uppercase"
+        letterSpacing={0.3}
+      >
+        {label}
+      </Text>
+      <Text
+        color={colors.text.secondary}
+        fontSize={12}
+        fontFamily="$mono"
+        flex={1}
+        numberOfLines={3}
+      >
+        {value}
+      </Text>
+    </XStack>
+  );
+});
 
 const AgentRow = memo(
   ({
@@ -48,6 +51,7 @@ const AgentRow = memo(
     isActive: boolean;
     onSelect: (id: string) => void;
   }) => {
+    const { colors } = useTheme();
     const [expanded, setExpanded] = useState(false);
     const hasDetails = !!(item.model || item.workspace || item.instructions);
 
@@ -188,6 +192,7 @@ export const AgentSheet = memo(
     onSelect,
     onRefresh,
   }: Props) => {
+    const { colors } = useTheme();
     const [refreshing, setRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {

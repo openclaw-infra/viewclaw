@@ -222,6 +222,41 @@ export const listAgents = async (): Promise<AgentInfo[]> => {
   }
 };
 
+const extractSessionTitle = async (jsonlPath: string): Promise<string | undefined> => {
+  try {
+    const raw = await readFile(jsonlPath, "utf8");
+    const lines = raw.split("\n");
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const entry = JSON.parse(trimmed);
+        if (entry.type !== "message" || !entry.message) continue;
+        if (entry.message.role !== "user") continue;
+        const contents = entry.message.content ?? [];
+        const text = contents
+          .filter((c: any) => c.type === "text" && c.text)
+          .map((c: any) => c.text)
+          .join(" ")
+          .replace(/\[Attached image:[^\]]*\]/g, "")
+          .trim();
+        if (text) return text.length > 50 ? text.slice(0, 50) + "..." : text;
+      } catch { /* skip malformed */ }
+    }
+  } catch { /* file not readable */ }
+  return undefined;
+};
+
+const populateTitles = async (sessions: SessionInfo[]): Promise<SessionInfo[]> => {
+  const results = await Promise.all(
+    sessions.map(async (s) => {
+      const title = await extractSessionTitle(s.jsonlPath);
+      return title ? { ...s, title } : s;
+    }),
+  );
+  return results;
+};
+
 export const listSessions = async (agentId: string = "main"): Promise<SessionInfo[]> => {
   try {
     const authHeaders = await buildAuthHeaders();
@@ -261,7 +296,7 @@ export const listSessions = async (agentId: string = "main"): Promise<SessionInf
         });
       }
       sessions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      if (sessions.length > 0) return sessions;
+      if (sessions.length > 0) return populateTitles(sessions);
     }
   } catch { /* fallback to filesystem */ }
 
@@ -281,7 +316,7 @@ export const listSessions = async (agentId: string = "main"): Promise<SessionInf
       });
     }
     sessions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return sessions;
+    return populateTitles(sessions);
   } catch {
     return [];
   }

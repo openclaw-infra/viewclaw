@@ -1,7 +1,7 @@
 import { Pressable } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import type { ConnectionStatus } from "../types/gateway";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 
 type Props = {
   sessionId: string;
@@ -12,6 +12,7 @@ type Props = {
   onSessionPress?: () => void;
   onGatewayPress?: () => void;
   onAgentPress?: () => void;
+  onSettingsPress?: () => void;
 };
 
 export const ChatHeader = ({
@@ -23,7 +24,9 @@ export const ChatHeader = ({
   onSessionPress,
   onGatewayPress,
   onAgentPress,
+  onSettingsPress,
 }: Props) => {
+  const { colors } = useTheme();
   const statusColor = colors.status[status];
   const shortId = sessionId ? sessionId.slice(0, 8) : "---";
 
@@ -87,26 +90,38 @@ export const ChatHeader = ({
       </YStack>
 
       <YStack alignItems="flex-end" gap="$1.5">
-        <Pressable onPress={onGatewayPress}>
-          <XStack
-            alignItems="center"
-            gap="$1.5"
-            backgroundColor={colors.bg.elevated}
-            paddingHorizontal="$2.5"
-            paddingVertical="$1.5"
-            borderRadius="$10"
-          >
+        <XStack alignItems="center" gap="$2">
+          <Pressable onPress={onSettingsPress}>
             <YStack
-              width={6}
-              height={6}
-              borderRadius={3}
-              backgroundColor={statusColor}
-            />
-            <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5}>
-              {status}
-            </Text>
-          </XStack>
-        </Pressable>
+              paddingHorizontal="$2"
+              paddingVertical="$1.5"
+              borderRadius="$10"
+              backgroundColor={colors.bg.elevated}
+            >
+              <Text fontSize={14}>⚙</Text>
+            </YStack>
+          </Pressable>
+          <Pressable onPress={onGatewayPress}>
+            <XStack
+              alignItems="center"
+              gap="$1.5"
+              backgroundColor={colors.bg.elevated}
+              paddingHorizontal="$2.5"
+              paddingVertical="$1.5"
+              borderRadius="$10"
+            >
+              <YStack
+                width={6}
+                height={6}
+                borderRadius={3}
+                backgroundColor={statusColor}
+              />
+              <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5}>
+                {status}
+              </Text>
+            </XStack>
+          </Pressable>
+        </XStack>
         {gatewayLabel && (
           <Pressable onPress={onGatewayPress}>
             <Text color={colors.text.muted} fontSize={10}>

@@ -2,16 +2,13 @@ import { useState } from "react";
 import { Pressable } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import type { ExecutionLog } from "../types/gateway";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 
 type Props = {
   log: ExecutionLog;
 };
 
-const META: Record<
-  ExecutionLog["level"],
-  { label: string; icon: string; color: string; bg: string }
-> = {
+const getMeta = (colors: any) => ({
   thought: {
     label: "Thinking",
     icon: "💭",
@@ -48,11 +45,12 @@ const META: Record<
     color: colors.log.status,
     bg: "rgba(100,116,139,0.06)",
   },
-};
+});
 
 export const EventCard = ({ log }: Props) => {
+  const { colors } = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const meta = META[log.level];
+  const meta = getMeta(colors)[log.level];
   const hasDetail = !!log.detail;
 
   return (

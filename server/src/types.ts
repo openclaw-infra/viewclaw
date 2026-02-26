@@ -75,6 +75,7 @@ export type SessionInfo = {
   sessionKey?: string;
   jsonlPath: string;
   createdAt: string;
+  title?: string;
 };
 
 export type AgentInfo = {

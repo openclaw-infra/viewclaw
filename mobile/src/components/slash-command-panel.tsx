@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { FlatList, Pressable } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 import type { SlashCommand } from "../data/slash-commands";
 import { SLASH_COMMANDS } from "../data/slash-commands";
 
@@ -15,13 +15,14 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Custom",
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  openclaw: colors.accent.cyan,
-  custom: colors.accent.purple,
-};
-
 const CommandRow = memo(
-  ({ item, onSelect }: { item: SlashCommand; onSelect: (cmd: SlashCommand) => void }) => (
+  ({ item, onSelect }: { item: SlashCommand; onSelect: (cmd: SlashCommand) => void }) => {
+    const { colors } = useTheme();
+    const CATEGORY_COLORS: Record<string, string> = {
+      openclaw: colors.accent.cyan,
+      custom: colors.accent.purple,
+    };
+    return (
     <Pressable onPress={() => onSelect(item)}>
       {({ pressed }) => (
         <XStack
@@ -62,10 +63,16 @@ const CommandRow = memo(
         </XStack>
       )}
     </Pressable>
-  )
+    );
+  }
 );
 
 export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
+  const { colors } = useTheme();
+  const CATEGORY_COLORS: Record<string, string> = {
+    openclaw: colors.accent.cyan,
+    custom: colors.accent.purple,
+  };
   const filtered = useMemo(() => {
     const q = filter.toLowerCase();
     if (!q) return SLASH_COMMANDS;

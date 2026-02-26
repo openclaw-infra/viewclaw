@@ -1,7 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { FlatList, Pressable, Modal, TextInput, Alert } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 import type { GatewayConfig } from "../types/gateway";
 
 type Props = {
@@ -36,6 +36,7 @@ const GatewayRow = memo(
     onEdit: (item: GatewayConfig) => void;
     onDelete: (id: string) => void;
   }) => {
+    const { colors } = useTheme();
     const isDefault = item.id === "default-local";
 
     return (
@@ -135,6 +136,7 @@ const EditForm = memo(
     onSave: (label: string, url: string) => void;
     onCancel: () => void;
   }) => {
+    const { colors } = useTheme();
     const [label, setLabel] = useState(editing.label);
     const [url, setUrl] = useState(editing.url);
     const canSave = label.trim().length > 0 && url.trim().length > 0;
@@ -241,6 +243,7 @@ export const GatewaySheet = memo(
     onUpdate,
     onRemove,
   }: Props) => {
+    const { colors } = useTheme();
     const [editing, setEditing] = useState<EditingState | null>(null);
 
     const handleSelect = useCallback(

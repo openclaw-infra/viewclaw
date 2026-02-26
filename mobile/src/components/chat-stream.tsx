@@ -4,13 +4,14 @@ import { Text, XStack, YStack } from "tamagui";
 import type { ChatMessage, ImageAttachment, StreamItem } from "../types/gateway";
 import { EventCard } from "./event-card";
 import { MarkdownBody } from "./markdown-body";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 
 type Props = {
   stream: StreamItem[];
 };
 
 const StreamingCursor = () => {
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -91,6 +92,7 @@ const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
 });
 
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
+  const { colors } = useTheme();
   const isUser = item.role === "user";
   const time = new Date(item.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -153,6 +155,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
 });
 
 const TypingIndicator = () => {
+  const { colors } = useTheme();
   const dot1 = useRef(new Animated.Value(0.3)).current;
   const dot2 = useRef(new Animated.Value(0.3)).current;
   const dot3 = useRef(new Animated.Value(0.3)).current;
@@ -213,6 +216,7 @@ const renderItem = ({ item }: { item: StreamItem }) => {
 };
 
 export const ChatStream = ({ stream }: Props) => {
+  const { colors } = useTheme();
   const reversed = useMemo(() => [...stream].reverse(), [stream]);
 
   return (

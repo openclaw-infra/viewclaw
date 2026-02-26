@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { Pressable, Alert, View, StyleSheet, Image, ScrollView } from "react-native";
 import { Input, Text, XStack, YStack } from "tamagui";
 import * as ImagePicker from "expo-image-picker";
-import { colors } from "../theme/colors";
+import { useTheme } from "../theme/theme-context";
 import { SlashCommandPanel } from "./slash-command-panel";
 import { useVoiceRecorder } from "../hooks/use-voice-recorder";
 import type { SlashCommand } from "../data/slash-commands";
@@ -82,6 +82,7 @@ const micStyles = StyleSheet.create({
 });
 
 export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
+  const { colors } = useTheme();
   const [value, setValue] = useState("");
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const canSend = (value.trim().length > 0 || attachedImages.length > 0) && !sending;
