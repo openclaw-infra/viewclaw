@@ -1,5 +1,5 @@
 import "./src/i18n";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
@@ -9,14 +9,12 @@ import { ChatHeader } from "./src/components/chat-header";
 import { ChatStream } from "./src/components/chat-stream";
 import { SessionListSheet } from "./src/components/session-list-sheet";
 import { GatewaySheet } from "./src/components/gateway-sheet";
-import { AgentSheet } from "./src/components/agent-sheet";
 import { SettingsScreen } from "./src/components/settings-screen";
 import { SplashScreen } from "./src/components/splash-screen";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
 import { useGatewayManager } from "./src/hooks/use-gateway-manager";
 import { useSessionContext } from "./src/hooks/use-session-context";
 import { AppThemeProvider, useTheme } from "./src/theme/theme-context";
-import type { AgentInfo } from "./src/types/gateway";
 
 type Page = "chat" | "settings";
 
@@ -26,14 +24,9 @@ function Main() {
   const onSplashFinish = useCallback(() => setSplashDone(true), []);
   const gateway = useGatewayManager();
 
-  const [activeAgentId, setActiveAgentId] = useState("main");
-  const [agents, setAgents] = useState<AgentInfo[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(false);
-
   const contextRefreshRef = useRef(() => {});
 
   const session = useGatewaySession({
-    agentId: activeAgentId,
     wsUrl: gateway.wsUrl,
     httpUrl: gateway.httpUrl,
     onMessageDone: () => setTimeout(() => contextRefreshRef.current(), 600),
@@ -42,7 +35,6 @@ function Main() {
   const sessionContext = useSessionContext({
     sessionId: session.currentSessionId,
     httpUrl: gateway.httpUrl,
-    agentId: activeAgentId,
   });
 
   contextRefreshRef.current = sessionContext.refresh;
@@ -50,39 +42,13 @@ function Main() {
   const [currentPage, setCurrentPage] = useState<Page>("chat");
   const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
   const [gatewaySheetVisible, setGatewaySheetVisible] = useState(false);
-  const [agentSheetVisible, setAgentSheetVisible] = useState(false);
 
   const openSessionSheet = useCallback(() => setSessionSheetVisible(true), []);
   const closeSessionSheet = useCallback(() => setSessionSheetVisible(false), []);
   const openGatewaySheet = useCallback(() => setGatewaySheetVisible(true), []);
   const closeGatewaySheet = useCallback(() => setGatewaySheetVisible(false), []);
-  const openAgentSheet = useCallback(() => setAgentSheetVisible(true), []);
-  const closeAgentSheet = useCallback(() => setAgentSheetVisible(false), []);
   const openSettings = useCallback(() => setCurrentPage("settings"), []);
   const closeSettings = useCallback(() => setCurrentPage("chat"), []);
-
-  const fetchAgents = useCallback(async () => {
-    setAgentsLoading(true);
-    try {
-      const res = await fetch(`${gateway.httpUrl}/api/agents`);
-      const data = await res.json();
-      if (data.ok && Array.isArray(data.agents)) {
-        setAgents(data.agents);
-      }
-    } catch { /* offline */ } finally {
-      setAgentsLoading(false);
-    }
-  }, [gateway.httpUrl]);
-
-  useEffect(() => {
-    if (session.connectionStatus === "connected") {
-      fetchAgents();
-    }
-  }, [session.connectionStatus, fetchAgents]);
-
-  const handleAgentSwitch = useCallback((agentId: string) => {
-    setActiveAgentId(agentId);
-  }, []);
 
   const themeName = isDark ? "dark" : "light";
 
@@ -111,11 +77,9 @@ function Main() {
                   status={session.connectionStatus}
                   sessionCount={session.sessions.length}
                   gatewayLabel={gateway.activeGateway?.label}
-                  agentId={activeAgentId}
                   context={sessionContext.context}
                   onSessionPress={openSessionSheet}
                   onGatewayPress={openGatewaySheet}
-                  onAgentPress={openAgentSheet}
                   onSettingsPress={openSettings}
                 />
 
@@ -150,16 +114,6 @@ function Main() {
               onAdd={gateway.addGateway}
               onUpdate={gateway.updateGateway}
               onRemove={gateway.removeGateway}
-            />
-
-            <AgentSheet
-              visible={agentSheetVisible}
-              agents={agents}
-              activeAgentId={activeAgentId}
-              loading={agentsLoading}
-              onClose={closeAgentSheet}
-              onSelect={handleAgentSwitch}
-              onRefresh={fetchAgents}
             />
           </>
         )}

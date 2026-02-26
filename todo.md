@@ -39,7 +39,7 @@
 - [x] **图片支持**
   ChatComposer 增加图片选择（expo-image-picker），支持发送图片给 OpenClaw（base64/input_image）；ChatStream 渲染 assistant 返回的图片内容
 
-- [x] **Agent 管理**
+- [ ] **Agent 管理**
   Agent 列表展示（从 /api/agents 获取），切换不同 Agent，显示 Agent 配置信息（model、workspace 等）
 
 - [x] ~~**本地数据持久化**~~

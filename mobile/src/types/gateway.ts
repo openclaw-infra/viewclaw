@@ -70,15 +70,6 @@ export type GatewayConfig = {
   createdAt: number;
 };
 
-export type AgentInfo = {
-  id: string;
-  sessionsDir: string;
-  sessionCount: number;
-  model?: string;
-  workspace?: string;
-  instructions?: string;
-};
-
 export type SessionContext = {
   usedTokens: number;
   maxTokens: number;

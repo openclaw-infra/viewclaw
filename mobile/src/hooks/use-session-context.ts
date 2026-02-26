@@ -4,10 +4,11 @@ import type { SessionContext } from "../types/gateway";
 type Options = {
   sessionId: string;
   httpUrl: string;
-  agentId?: string;
 };
 
-export const useSessionContext = ({ sessionId, httpUrl, agentId = "main" }: Options) => {
+const AGENT_ID = "main";
+
+export const useSessionContext = ({ sessionId, httpUrl }: Options) => {
   const [context, setContext] = useState<SessionContext | null>(null);
   const [loading, setLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
@@ -22,7 +23,7 @@ export const useSessionContext = ({ sessionId, httpUrl, agentId = "main" }: Opti
     setLoading(true);
     try {
       const res = await fetch(
-        `${httpUrl}/api/sessions/${sessionId}/context?agentId=${agentId}`,
+        `${httpUrl}/api/sessions/${sessionId}/context?agentId=${AGENT_ID}`,
         { signal: controller.signal },
       );
       const data = await res.json();
@@ -34,7 +35,7 @@ export const useSessionContext = ({ sessionId, httpUrl, agentId = "main" }: Opti
     } finally {
       setLoading(false);
     }
-  }, [sessionId, httpUrl, agentId]);
+  }, [sessionId, httpUrl]);
 
   useEffect(() => {
     fetchContext();

@@ -1,6 +1,6 @@
 import { Pressable, View, StyleSheet, Image } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import { Settings, Bot, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
+import { Settings, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
 import type { ConnectionStatus, SessionContext } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
 
@@ -11,11 +11,9 @@ type Props = {
   status: ConnectionStatus;
   sessionCount?: number;
   gatewayLabel?: string;
-  agentId?: string;
   context?: SessionContext | null;
   onSessionPress?: () => void;
   onGatewayPress?: () => void;
-  onAgentPress?: () => void;
   onSettingsPress?: () => void;
 };
 
@@ -35,11 +33,9 @@ export const ChatHeader = ({
   status,
   sessionCount,
   gatewayLabel,
-  agentId,
   context,
   onSessionPress,
   onGatewayPress,
-  onAgentPress,
   onSettingsPress,
 }: Props) => {
   const { colors } = useTheme();
@@ -64,26 +60,6 @@ export const ChatHeader = ({
           <Text color={colors.brand.purple} fontSize={20} fontWeight="800" letterSpacing={-0.5} marginLeft={-6}>
             Flow
           </Text>
-          {agentId && (
-            <Pressable onPress={onAgentPress}>
-              <XStack
-                alignItems="center"
-                gap={4}
-                backgroundColor={colors.brand.purple + "14"}
-                paddingHorizontal={8}
-                paddingVertical={4}
-                borderRadius={6}
-                borderWidth={1}
-                borderColor={colors.brand.purple + "28"}
-              >
-                <Bot size={12} color={colors.brand.purple} />
-                <Text color={colors.brand.purple} fontSize={11} fontWeight="600">
-                  {agentId}
-                </Text>
-                <ChevronDownIcon size={12} color={colors.brand.purple} />
-              </XStack>
-            </Pressable>
-          )}
         </XStack>
         <XStack alignItems="center" gap={6}>
           <Pressable onPress={onSessionPress}>

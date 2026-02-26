@@ -15,7 +15,6 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 
 type Options = {
-  agentId?: string;
   sessionId?: string;
   wsUrl?: string;
   httpUrl?: string;
@@ -26,8 +25,9 @@ type WsIncoming =
   | GatewayEvent
   | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed" | "unknown_message"; [k: string]: unknown };
 
+const AGENT_ID = "main";
+
 export const useGatewaySession = ({
-  agentId = "main",
   sessionId: initialSessionId,
   wsUrl: externalWsUrl,
   onMessageDone,
@@ -48,7 +48,6 @@ export const useGatewaySession = ({
   const isUnmountedRef = useRef(false);
   const seenRef = useRef<Set<string>>(new Set());
   const currentSessionRef = useRef(currentSessionId);
-  const agentIdRef = useRef(agentId);
   const typingIdRef = useRef<string | null>(null);
   const reconnectAttemptRef = useRef(0);
   const wsUrlRef = useRef(wsUrl);
@@ -56,7 +55,6 @@ export const useGatewaySession = ({
   const onMessageDoneRef = useRef(onMessageDone);
 
   currentSessionRef.current = currentSessionId;
-  agentIdRef.current = agentId;
   wsUrlRef.current = wsUrl;
   httpUrlRef.current = httpUrl;
   onMessageDoneRef.current = onMessageDone;
@@ -316,7 +314,7 @@ export const useGatewaySession = ({
   const subscribeToSession = useCallback(
     (sessionId: string) => {
       if (!sessionId) return;
-      wsSend({ type: "subscribe_session", sessionId, agentId: agentIdRef.current });
+      wsSend({ type: "subscribe_session", sessionId, agentId: AGENT_ID });
     },
     [wsSend]
   );
@@ -367,7 +365,7 @@ export const useGatewaySession = ({
           JSON.stringify({
             type: "subscribe_session",
             sessionId: sid,
-            agentId: agentIdRef.current,
+            agentId: AGENT_ID,
           })
         );
       }
@@ -409,7 +407,7 @@ export const useGatewaySession = ({
     try {
       const baseUrl = httpUrlRef.current;
       const res = await fetch(
-        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${agentIdRef.current}&limit=100`
+        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${AGENT_ID}&limit=100`
       );
       const data = await res.json();
       if (!data.ok || !Array.isArray(data.messages)) return;
@@ -477,7 +475,7 @@ export const useGatewaySession = ({
 
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await fetch(`${httpUrlRef.current}/api/sessions?agentId=${agentId}`);
+      const res = await fetch(`${httpUrlRef.current}/api/sessions?agentId=${AGENT_ID}`);
       const data = await res.json();
       if (data.ok && Array.isArray(data.sessions)) {
         setSessions(data.sessions);
@@ -491,7 +489,7 @@ export const useGatewaySession = ({
         }
       }
     } catch { /* offline */ }
-  }, [agentId, subscribeToSession, loadHistory]);
+  }, [subscribeToSession, loadHistory]);
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -571,7 +569,7 @@ export const useGatewaySession = ({
         sessionId: currentSessionRef.current,
         messageId,
         content: text,
-        agentId,
+        agentId: AGENT_ID,
       };
       if (imagePaths?.length) {
         wsPayload.imagePaths = imagePaths;
@@ -580,7 +578,7 @@ export const useGatewaySession = ({
       wsRef.current.send(JSON.stringify(wsPayload));
       setTimeout(() => setSending(false), 80);
     },
-    [agentId, uploadImage],
+    [uploadImage],
   );
 
   const switchSession = useCallback(
@@ -612,7 +610,7 @@ export const useGatewaySession = ({
       const res = await fetch(`${httpUrlRef.current}/api/sessions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ agentId: agentIdRef.current }),
+        body: JSON.stringify({ agentId: AGENT_ID }),
       });
       const data = await res.json();
       if (data.ok && data.sessionId) {
