@@ -354,7 +354,9 @@ export const app = new Elysia()
   });
 
 if (import.meta.main) {
+  const { startUploadCleaner } = await import("./upload-cleaner");
   app.listen(PORT);
+  startUploadCleaner();
   console.log(`ViewClaw Gateway running on http://${app.server?.hostname}:${app.server?.port}`);
   console.log(`  OpenClaw home: ${OPENCLAW_HOME}`);
   console.log(`  OpenClaw upstream: ${OPENCLAW_BASE_URL}`);

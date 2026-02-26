@@ -14,6 +14,12 @@ export const WHISPER_API_URL =
 export const WHISPER_API_KEY = process.env.OPENAI_API_KEY ?? "";
 export const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "whisper-1";
 
+/** How often to run the upload cleanup (minutes). 0 = disabled. Default: 30 */
+export const UPLOAD_CLEANUP_INTERVAL_MIN = Number(process.env.UPLOAD_CLEANUP_INTERVAL_MIN ?? 30);
+
+/** Max age of uploaded images before deletion (minutes). Default: 60 */
+export const UPLOAD_MAX_AGE_MIN = Number(process.env.UPLOAD_MAX_AGE_MIN ?? 60);
+
 export const normalizeToken = (token?: string | null): string => {
   if (!token) return "";
   return token.trim();
