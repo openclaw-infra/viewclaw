@@ -86,6 +86,8 @@ export const useGatewaySession = ({
   }, []);
 
   const appendLog = useCallback((log: ExecutionLog) => {
+    if (seenRef.current.has(log.id)) return;
+    seenRef.current.add(log.id);
     bufferRef.current.push({ kind: "log", data: log });
   }, []);
 
@@ -221,7 +223,7 @@ export const useGatewaySession = ({
         const summary = typeof p.thinkingSummary === "string" ? p.thinkingSummary : "";
         const thinking = typeof p.thinking === "string" ? p.thinking : "";
         appendLog({
-          id: `log-${event.seq}`,
+          id: `log-${event.sessionId}-${event.seq}`,
           messageId: event.messageId,
           level: "thought",
           text: summary || thinking || "Thinking...",
@@ -236,7 +238,7 @@ export const useGatewaySession = ({
           for (const tc of toolCalls) {
             const args = tc.arguments ? JSON.stringify(tc.arguments) : "";
             appendLog({
-              id: `log-${event.seq}-${tc.name}`,
+              id: `log-${event.sessionId}-${event.seq}-${tc.name}`,
               messageId: event.messageId,
               level: "action",
               text: tc.name ?? "tool_call",
@@ -247,7 +249,7 @@ export const useGatewaySession = ({
           }
         } else {
           appendLog({
-            id: `log-${event.seq}`,
+            id: `log-${event.sessionId}-${event.seq}`,
             messageId: event.messageId,
             level: "action",
             text: typeof p.text === "string" ? p.text : "Action",
@@ -261,7 +263,7 @@ export const useGatewaySession = ({
         const content = typeof p.content === "string" ? p.content : "";
         const toolName = typeof p.toolName === "string" ? p.toolName : "";
         appendLog({
-          id: `log-${event.seq}`,
+          id: `log-${event.sessionId}-${event.seq}`,
           messageId: event.messageId,
           level: "observation",
           text: toolName ? `${toolName} returned` : content.slice(0, 200) || "Observation",
@@ -274,7 +276,7 @@ export const useGatewaySession = ({
 
       if (event.type === "error") {
         appendLog({
-          id: `log-${event.seq}`,
+          id: `log-${event.sessionId}-${event.seq}`,
           level: "error",
           text: typeof p.message === "string" ? p.message : "Error",
           createdAt: event.ts,
@@ -284,7 +286,7 @@ export const useGatewaySession = ({
 
       if (event.type === "status") {
         appendLog({
-          id: `log-${event.seq}`,
+          id: `log-${event.sessionId}-${event.seq}`,
           level: "status",
           text: typeof p.subtype === "string" ? p.subtype : "status",
           createdAt: event.ts,
@@ -295,7 +297,7 @@ export const useGatewaySession = ({
       if (event.type === "done") {
         removeTyping();
         appendLog({
-          id: `log-${event.seq}`,
+          id: `log-${event.sessionId}-${event.seq}`,
           level: "done",
           text: "Done",
           createdAt: event.ts,
@@ -394,7 +396,11 @@ export const useGatewaySession = ({
 
       if (parsed.type === "connected") return;
 
-      parseEvent(parsed as GatewayEvent);
+      const evt = parsed as GatewayEvent;
+      if (evt.sessionId && currentSessionRef.current && evt.sessionId !== currentSessionRef.current) {
+        return;
+      }
+      parseEvent(evt);
     };
 
     ws.onclose = () => {
@@ -442,6 +448,30 @@ export const useGatewaySession = ({
       fetchSessions();
     }
   }, [connectionStatus, fetchSessions]);
+
+  const prevAgentIdRef = useRef(agentId);
+  useEffect(() => {
+    if (prevAgentIdRef.current === agentId) return;
+    prevAgentIdRef.current = agentId;
+
+    const oldSid = currentSessionRef.current;
+    if (oldSid) {
+      wsSend({ type: "unsubscribe_session", sessionId: oldSid });
+    }
+
+    setStream([]);
+    seenRef.current.clear();
+    bufferRef.current = [];
+    streamingMsgRef.current = null;
+    streamedDoneRef.current = false;
+    typingIdRef.current = null;
+    setCurrentSessionId("");
+    setSessions([]);
+
+    if (connectionStatus === "connected") {
+      fetchSessions();
+    }
+  }, [agentId, connectionStatus, fetchSessions, wsSend]);
 
   const uploadImage = useCallback(
     async (img: ImageAttachment): Promise<string | null> => {

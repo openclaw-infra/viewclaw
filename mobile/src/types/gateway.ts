@@ -68,3 +68,12 @@ export type GatewayConfig = {
   url: string;
   createdAt: number;
 };
+
+export type AgentInfo = {
+  id: string;
+  sessionsDir: string;
+  sessionCount: number;
+  model?: string;
+  workspace?: string;
+  instructions?: string;
+};

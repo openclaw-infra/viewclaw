@@ -81,4 +81,7 @@ export type AgentInfo = {
   id: string;
   sessionsDir: string;
   sessionCount: number;
+  model?: string;
+  workspace?: string;
+  instructions?: string;
 };

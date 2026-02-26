@@ -1,4 +1,4 @@
-import { readdir, stat, readFile } from "node:fs/promises";
+import { readdir, stat, readFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { OPENCLAW_BASE_URL, OPENCLAW_HOME, getGatewayToken, normalizeToken } from "./config";
 import type { SessionInfo, AgentInfo } from "./types";
@@ -156,6 +156,40 @@ export const checkHealth = async (): Promise<{
   }
 };
 
+const readAgentConfig = async (agentDir: string): Promise<{
+  model?: string;
+  workspace?: string;
+  instructions?: string;
+}> => {
+  const candidates = ["agent.json", "config.json", "openclaw-agent.json"];
+  for (const filename of candidates) {
+    try {
+      const configPath = join(agentDir, filename);
+      await access(configPath);
+      const raw = await readFile(configPath, "utf8");
+      const config = JSON.parse(raw);
+      return {
+        model: config.model ?? config.defaultModel ?? undefined,
+        workspace: config.workspace ?? config.cwd ?? undefined,
+        instructions: typeof config.instructions === "string"
+          ? config.instructions.slice(0, 500)
+          : typeof config.systemPrompt === "string"
+            ? config.systemPrompt.slice(0, 500)
+            : undefined,
+      };
+    } catch { /* try next */ }
+  }
+
+  try {
+    const mdPath = join(agentDir, "AGENTS.md");
+    await access(mdPath);
+    const raw = await readFile(mdPath, "utf8");
+    return { instructions: raw.slice(0, 500) };
+  } catch { /* no config */ }
+
+  return {};
+};
+
 export const listAgents = async (): Promise<AgentInfo[]> => {
   const agentsDir = join(OPENCLAW_HOME, "agents");
   try {
@@ -164,17 +198,21 @@ export const listAgents = async (): Promise<AgentInfo[]> => {
 
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const sessionsDir = join(agentsDir, entry.name, "sessions");
+      const agentDir = join(agentsDir, entry.name);
+      const sessionsDir = join(agentDir, "sessions");
       let sessionCount = 0;
       try {
         const sessionFiles = await readdir(sessionsDir);
         sessionCount = sessionFiles.filter((f) => f.endsWith(".jsonl")).length;
       } catch { /* no sessions dir */ }
 
+      const config = await readAgentConfig(agentDir);
+
       agents.push({
         id: entry.name,
         sessionsDir,
         sessionCount,
+        ...config,
       });
     }
 

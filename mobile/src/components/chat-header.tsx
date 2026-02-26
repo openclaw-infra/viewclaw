@@ -8,8 +8,10 @@ type Props = {
   status: ConnectionStatus;
   sessionCount?: number;
   gatewayLabel?: string;
+  agentId?: string;
   onSessionPress?: () => void;
   onGatewayPress?: () => void;
+  onAgentPress?: () => void;
 };
 
 export const ChatHeader = ({
@@ -17,8 +19,10 @@ export const ChatHeader = ({
   status,
   sessionCount,
   gatewayLabel,
+  agentId,
   onSessionPress,
   onGatewayPress,
+  onAgentPress,
 }: Props) => {
   const statusColor = colors.status[status];
   const shortId = sessionId ? sessionId.slice(0, 8) : "---";
@@ -31,9 +35,33 @@ export const ChatHeader = ({
       paddingVertical="$3"
     >
       <YStack gap="$1">
-        <Text color={colors.text.primary} fontSize={20} fontWeight="700" letterSpacing={-0.5}>
-          ViewClaw
-        </Text>
+        <XStack alignItems="center" gap="$2">
+          <Text color={colors.text.primary} fontSize={20} fontWeight="700" letterSpacing={-0.5}>
+            ViewClaw
+          </Text>
+          {agentId && (
+            <Pressable onPress={onAgentPress}>
+              <XStack
+                alignItems="center"
+                gap="$1"
+                backgroundColor={colors.accent.purple + "18"}
+                paddingHorizontal="$2"
+                paddingVertical="$1"
+                borderRadius={6}
+                borderWidth={1}
+                borderColor={colors.accent.purple + "30"}
+              >
+                <Text fontSize={11}>🤖</Text>
+                <Text color={colors.accent.purple} fontSize={11} fontWeight="600">
+                  {agentId}
+                </Text>
+                <Text color={colors.accent.purple} fontSize={9} opacity={0.6}>
+                  ▾
+                </Text>
+              </XStack>
+            </Pressable>
+          )}
+        </XStack>
         <Pressable onPress={onSessionPress}>
           <XStack alignItems="center" gap="$1.5">
             <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">

@@ -36,7 +36,7 @@
 - [x] **图片支持**
   ChatComposer 增加图片选择（expo-image-picker），支持发送图片给 OpenClaw（base64/input_image）；ChatStream 渲染 assistant 返回的图片内容
 
-- [ ] **Agent 管理**
+- [x] **Agent 管理**
   Agent 列表展示（从 /api/agents 获取），切换不同 Agent，显示 Agent 配置信息（model、workspace 等）
 
 - [ ] **本地数据持久化**
@@ -57,4 +57,4 @@
   支持按会话/按时间范围清理本地缓存的聊天记录和执行日志，设置自动清理策略（如保留最近 N 天），显示本地存储占用大小
 
 - [ ] **设置页面**
-  Gateway 地址配置、主题切换、通知偏好、日志保留策略、关于页面
+  主题切换、通知偏好、日志保留策略、关于页面
