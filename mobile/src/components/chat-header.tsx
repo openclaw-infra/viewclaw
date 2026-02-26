@@ -1,5 +1,6 @@
 import { Pressable, View, StyleSheet, Image } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { Settings, Bot, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
 import type { ConnectionStatus, SessionContext } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
 
@@ -18,71 +19,9 @@ type Props = {
   onSettingsPress?: () => void;
 };
 
-const SettingsIcon = ({ color, size = 16 }: { color: string; size?: number }) => {
-  const toothW = 2.4;
-  const toothH = 3.2;
-  const cx = size / 2;
-  const cy = size / 2;
-  const dist = 5.2;
-  const teeth = [0, 45, 90, 135, 180, 225, 270, 315];
-  return (
-    <View style={{ width: size, height: size }}>
-      {teeth.map((deg) => {
-        const rad = (deg * Math.PI) / 180;
-        return (
-          <View
-            key={deg}
-            style={{
-              position: "absolute",
-              width: toothW,
-              height: toothH,
-              borderRadius: 1,
-              backgroundColor: color,
-              left: cx - toothW / 2 + Math.cos(rad) * dist,
-              top: cy - toothH / 2 + Math.sin(rad) * dist,
-              transform: [{ rotate: `${deg}deg` }],
-            }}
-          />
-        );
-      })}
-      <View
-        style={{
-          position: "absolute",
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-          borderWidth: 1.6,
-          borderColor: color,
-          left: cx - 4,
-          top: cy - 4,
-        }}
-      />
-    </View>
-  );
-};
-
-const AgentIcon = ({ color, size = 12 }: { color: string; size?: number }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-    <View style={[iconStyles.agentHead, { backgroundColor: color }]} />
-    <View style={[iconStyles.agentBody, { backgroundColor: color }]} />
-  </View>
-);
-
-const ChevronDown = ({ color, size = 8 }: { color: string; size?: number }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-    <View style={[iconStyles.chevron, { borderBottomColor: color, borderRightColor: color }]} />
-  </View>
-);
-
 const ctxStyles = StyleSheet.create({
   bar: { width: 32, height: 3, borderRadius: 1.5, overflow: "hidden" },
   barFill: { height: 3, borderRadius: 1.5 },
-});
-
-const iconStyles = StyleSheet.create({
-  agentHead: { width: 6, height: 6, borderRadius: 3, marginBottom: 1 },
-  agentBody: { width: 10, height: 4, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
-  chevron: { width: 5, height: 5, borderBottomWidth: 1.5, borderRightWidth: 1.5, transform: [{ rotate: "45deg" }], marginTop: -2 },
 });
 
 const formatTokens = (n: number): string => {
@@ -137,11 +76,11 @@ export const ChatHeader = ({
                 borderWidth={1}
                 borderColor={colors.brand.purple + "28"}
               >
-                <AgentIcon color={colors.brand.purple} />
+                <Bot size={12} color={colors.brand.purple} />
                 <Text color={colors.brand.purple} fontSize={11} fontWeight="600">
                   {agentId}
                 </Text>
-                <ChevronDown color={colors.brand.purple} />
+                <ChevronDownIcon size={12} color={colors.brand.purple} />
               </XStack>
             </Pressable>
           )}
@@ -164,7 +103,7 @@ export const ChatHeader = ({
                   </Text>
                 </YStack>
               )}
-              <ChevronDown color={colors.text.muted} />
+              <ChevronDownIcon size={10} color={colors.text.muted} />
             </XStack>
           </Pressable>
           {context && (
@@ -217,7 +156,7 @@ export const ChatHeader = ({
             alignItems="center"
             justifyContent="center"
           >
-            <SettingsIcon color={colors.text.secondary} />
+            <Settings size={16} color={colors.text.secondary} />
           </YStack>
         </Pressable>
       </XStack>

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Alert, View, Image, Animated, Easing, Dimensions } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import { ArrowLeft, Sun, Moon, Monitor, Globe } from "@tamagui/lucide-icons";
 import { useTheme } from "../theme/theme-context";
 import type { ThemeMode } from "../theme/colors";
 import type { SessionInfo } from "../types/gateway";
@@ -20,81 +21,20 @@ type Props = {
   onRefreshSessions: () => Promise<void>;
 };
 
-const BackArrow = ({ color }: { color: string }) => (
-  <View style={{ width: 20, height: 20, alignItems: "center", justifyContent: "center" }}>
-    <View style={{ width: 10, height: 10, borderLeftWidth: 2, borderBottomWidth: 2, borderColor: color, transform: [{ rotate: "45deg" }], marginLeft: 4 }} />
-  </View>
-);
+type IconComponent = React.FC<{ color: string; size?: number }>;
 
-const SunIcon = ({ color, size = 22, bgColor }: { color: string; size?: number; bgColor?: string }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
-    {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
-      const rad = (deg * Math.PI) / 180;
-      const cx = size / 2;
-      return (
-        <View
-          key={deg}
-          style={{
-            position: "absolute",
-            width: 3.5,
-            height: 1.5,
-            borderRadius: 0.75,
-            backgroundColor: color,
-            left: cx - 1.75 + Math.cos(rad) * 7,
-            top: cx - 0.75 + Math.sin(rad) * 7,
-            transform: [{ rotate: `${deg}deg` }],
-          }}
-        />
-      );
-    })}
-  </View>
-);
-
-const MoonIcon = ({ color, size = 22, bgColor }: { color: string; size?: number; bgColor?: string }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: color }} />
-    <View
-      style={{
-        position: "absolute",
-        width: 11,
-        height: 11,
-        borderRadius: 5.5,
-        backgroundColor: bgColor || "#272A30",
-        top: 1,
-        right: 2,
-      }}
-    />
-  </View>
-);
-
-const MonitorIcon = ({ color, size = 22 }: { color: string; size?: number; bgColor?: string }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-    <View style={{ width: 14, height: 10, borderWidth: 1.5, borderColor: color, borderRadius: 2.5 }} />
-    <View style={{ width: 7, height: 1.5, backgroundColor: color, borderRadius: 1, marginTop: 1.5 }} />
-  </View>
-);
-
-type ThemeOptionType = { mode: ThemeMode; labelKey: string; Icon: React.FC<{ color: string; size?: number; bgColor?: string }> };
+type ThemeOptionType = { mode: ThemeMode; labelKey: string; Icon: IconComponent };
 const THEME_OPTIONS: ThemeOptionType[] = [
-  { mode: "light", labelKey: "settings.light", Icon: SunIcon },
-  { mode: "dark", labelKey: "settings.dark", Icon: MoonIcon },
-  { mode: "system", labelKey: "settings.system", Icon: MonitorIcon },
+  { mode: "light", labelKey: "settings.light", Icon: Sun },
+  { mode: "dark", labelKey: "settings.dark", Icon: Moon },
+  { mode: "system", labelKey: "settings.system", Icon: Monitor },
 ];
 
-const GlobeIcon = ({ color, size = 22 }: { color: string; size?: number; bgColor?: string }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-    <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: color }} />
-    <View style={{ position: "absolute", width: 14, height: 1.2, backgroundColor: color, borderRadius: 0.6 }} />
-    <View style={{ position: "absolute", width: 1.2, height: 14, backgroundColor: color, borderRadius: 0.6 }} />
-  </View>
-);
-
-type LangOptionType = { lang: AppLanguage; labelKey: string; Icon: React.FC<{ color: string; size?: number; bgColor?: string }> };
+type LangOptionType = { lang: AppLanguage; labelKey: string; Icon: IconComponent };
 const LANG_OPTIONS: LangOptionType[] = [
-  { lang: "en", labelKey: "settings.english", Icon: GlobeIcon },
-  { lang: "zh", labelKey: "settings.chinese", Icon: GlobeIcon },
-  { lang: "system", labelKey: "settings.system", Icon: MonitorIcon },
+  { lang: "en", labelKey: "settings.english", Icon: Globe },
+  { lang: "zh", labelKey: "settings.chinese", Icon: Globe },
+  { lang: "system", labelKey: "settings.system", Icon: Monitor },
 ];
 
 const SectionHeader = memo(({ title }: { title: string }) => {
@@ -279,7 +219,7 @@ export const SettingsScreen = memo(
                 alignItems="center"
                 justifyContent="center"
               >
-                <BackArrow color={colors.text.primary} />
+                <ArrowLeft size={20} color={colors.text.primary} />
               </YStack>
             </Pressable>
             <Text
@@ -314,7 +254,7 @@ export const SettingsScreen = memo(
                       backgroundColor={cardBg}
                       gap={6}
                     >
-                      <opt.Icon color={active ? colors.brand.blue : colors.text.muted} size={22} bgColor={cardBg} />
+                      <opt.Icon color={active ? colors.brand.blue : colors.text.muted} size={22} />
                       <Text
                         color={active ? colors.brand.blue : colors.text.secondary}
                         fontSize={13}
@@ -352,7 +292,7 @@ export const SettingsScreen = memo(
                       backgroundColor={cardBg}
                       gap={6}
                     >
-                      <opt.Icon color={active ? colors.brand.purple : colors.text.muted} size={22} bgColor={cardBg} />
+                      <opt.Icon color={active ? colors.brand.purple : colors.text.muted} size={22} />
                       <Text
                         color={active ? colors.brand.purple : colors.text.secondary}
                         fontSize={13}

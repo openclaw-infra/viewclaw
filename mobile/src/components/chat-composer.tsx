@@ -3,6 +3,7 @@ import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing
 import { LinearGradient } from "expo-linear-gradient";
 import { Input, Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import { ImagePlus, Mic, Send, Square } from "@tamagui/lucide-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../theme/theme-context";
 import { SlashCommandPanel } from "./slash-command-panel";
@@ -23,27 +24,6 @@ const formatDuration = (ms: number): string => {
   return `${min}:${sec.toString().padStart(2, "0")}`;
 };
 
-const ImageIcon = ({ color }: { color: string }) => (
-  <View style={imgIconStyles.container}>
-    <View style={[imgIconStyles.frame, { borderColor: color }]}>
-      <View style={[imgIconStyles.sun, { backgroundColor: color }]} />
-      <View style={[imgIconStyles.mountain, { borderBottomColor: color }]} />
-    </View>
-  </View>
-);
-
-const imgIconStyles = StyleSheet.create({
-  container: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
-  frame: { width: 16, height: 14, borderWidth: 1.5, borderRadius: 2.5, position: "relative", overflow: "hidden" },
-  sun: { width: 4, height: 4, borderRadius: 2, position: "absolute", top: 2, left: 2 },
-  mountain: {
-    width: 0, height: 0,
-    borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 6,
-    borderLeftColor: "transparent", borderRightColor: "transparent",
-    position: "absolute", bottom: 0, right: 1,
-  },
-});
-
 const imgPreviewStyles = StyleSheet.create({
   wrapper: { width: 64, height: 64, borderRadius: 10, overflow: "hidden", position: "relative" },
   thumb: { width: 64, height: 64, borderRadius: 10 },
@@ -54,41 +34,6 @@ const imgPreviewStyles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
 });
-
-const MicIcon = ({ color }: { color: string }) => (
-  <View style={micStyles.container}>
-    {/* Mic head (rounded rect) */}
-    <View style={[micStyles.head, { backgroundColor: color }]} />
-    {/* Mic arc */}
-    <View style={[micStyles.arc, { borderColor: color }]} />
-    {/* Mic stem */}
-    <View style={[micStyles.stem, { backgroundColor: color }]} />
-  </View>
-);
-
-const micStyles = StyleSheet.create({
-  container: { width: 16, height: 20, alignItems: "center" },
-  head: { width: 8, height: 11, borderRadius: 4 },
-  arc: {
-    width: 12,
-    height: 8,
-    borderWidth: 1.5,
-    borderTopWidth: 0,
-    borderBottomLeftRadius: 6,
-    borderBottomRightRadius: 6,
-    backgroundColor: "transparent",
-    marginTop: -2,
-  },
-  stem: { width: 1.5, height: 4, marginTop: -1 },
-  stopIcon: { width: 10, height: 10, borderRadius: 2 },
-});
-
-const SendArrow = ({ color }: { color: string }) => (
-  <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
-    <View style={{ width: 8, height: 8, borderTopWidth: 2, borderLeftWidth: 2, borderColor: color, transform: [{ rotate: "45deg" }], marginTop: 3 }} />
-    <View style={{ width: 2, height: 10, backgroundColor: color, borderRadius: 1, marginTop: -4 }} />
-  </View>
-);
 
 export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
   const { colors } = useTheme();
@@ -290,7 +235,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
           alignItems="center"
           gap={6}
           backgroundColor={colors.bg.tertiary}
-          borderRadius={24}
+          borderRadius={14}
           borderWidth={1}
           borderColor={
             isRecording
@@ -313,7 +258,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
               justifyContent="center"
               opacity={attachedImages.length >= 4 ? 0.4 : 1}
             >
-              <ImageIcon color={colors.text.muted} />
+              <ImagePlus size={18} color={colors.text.muted} />
             </YStack>
           </Pressable>
 
@@ -354,9 +299,9 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
               opacity={isTranscribing ? 0.5 : 1}
             >
               {isRecording ? (
-                <View style={[micStyles.stopIcon, { backgroundColor: "#FFFFFF" }]} />
+                <Square size={10} color="#FFFFFF" fill="#FFFFFF" />
               ) : (
-                <MicIcon color={colors.text.muted} />
+                <Mic size={18} color={colors.text.muted} />
               )}
             </YStack>
           </Pressable>
@@ -372,12 +317,12 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
                 {sending ? (
                   <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
                 ) : (
-                  <SendArrow color="#FFFFFF" />
+                  <Send size={16} color="#FFFFFF" />
                 )}
               </LinearGradient>
             ) : (
               <View style={[sendBtnStyles.inactive, { backgroundColor: colors.bg.elevated }]}>
-                <SendArrow color={colors.text.muted} />
+                <Send size={16} color={colors.text.muted} />
               </View>
             )}
           </Pressable>

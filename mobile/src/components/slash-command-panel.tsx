@@ -2,6 +2,7 @@ import { memo, useMemo } from "react";
 import { FlatList, Pressable, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import { CornerDownLeft } from "@tamagui/lucide-icons";
 import { useTheme } from "../theme/theme-context";
 import type { SlashCommand } from "../data/slash-commands";
 import { getSlashCommands } from "../data/slash-commands";
@@ -14,19 +15,6 @@ type Props = {
 const getCategoryLabels = (t: (key: string) => string): Record<string, string> => ({
   openclaw: t("slashCommand.openclaw"),
   custom: t("slashCommand.custom"),
-});
-
-const ReturnIcon = ({ color }: { color: string }) => (
-  <View style={iconStyles.returnWrap}>
-    <View style={[iconStyles.returnArm, { borderColor: color }]} />
-    <View style={[iconStyles.returnHead, { borderColor: color }]} />
-  </View>
-);
-
-const iconStyles = StyleSheet.create({
-  returnWrap: { width: 14, height: 14, alignItems: "center", justifyContent: "center" },
-  returnArm: { width: 9, height: 6, borderBottomWidth: 1.5, borderLeftWidth: 1.5, borderBottomLeftRadius: 2.5 },
-  returnHead: { width: 5, height: 5, borderTopWidth: 1.5, borderLeftWidth: 1.5, transform: [{ rotate: "-45deg" }], position: "absolute", left: 0, bottom: 1.5 },
 });
 
 const CommandRow = memo(
@@ -64,7 +52,7 @@ const CommandRow = memo(
             </Text>
             {item.immediate && (
               <View style={[rowStyles.badge, { backgroundColor: catColor + "18" }]}>
-                <ReturnIcon color={catColor} />
+                <CornerDownLeft size={14} color={catColor} />
               </View>
             )}
           </XStack>

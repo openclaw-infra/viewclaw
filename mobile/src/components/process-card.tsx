@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { Pressable, View, StyleSheet, Animated, Easing, LayoutAnimation, Platform, UIManager } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import { MessageCircle, Zap, ClipboardList, X, Check, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
 import type { ExecutionLog } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
 import type { ColorPalette } from "../theme/colors";
@@ -14,61 +15,16 @@ type Props = {
   logs: ExecutionLog[];
 };
 
-const ThoughtIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-  <View style={[iconStyles.wrap, { width: size, height: size }]}>
-    <View style={[iconStyles.bubble, { borderColor: color }]} />
-    <View style={[iconStyles.bubbleDot, { backgroundColor: color, bottom: 0, left: 2 }]} />
-  </View>
-);
-
-const BoltIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-  <View style={[iconStyles.wrap, { width: size, height: size }]}>
-    <View style={[iconStyles.bolt, { borderLeftColor: color }]} />
-    <View style={[iconStyles.boltLower, { borderLeftColor: color }]} />
-  </View>
-);
-
-const ClipboardIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-  <View style={[iconStyles.wrap, { width: size, height: size }]}>
-    <View style={[iconStyles.clipboard, { borderColor: color }]} />
-    <View style={[iconStyles.clipTop, { backgroundColor: color }]} />
-  </View>
-);
-
-const CrossIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-  <View style={[iconStyles.wrap, { width: size, height: size, alignItems: "center", justifyContent: "center" }]}>
-    <View style={[iconStyles.crossLine1, { backgroundColor: color }]} />
-    <View style={[iconStyles.crossLine2, { backgroundColor: color }]} />
-  </View>
-);
-
-const CheckIcon = ({ color, size = 14 }: { color: string; size?: number }) => (
-  <View style={[iconStyles.wrap, { width: size, height: size, alignItems: "center", justifyContent: "center" }]}>
-    <View style={[iconStyles.check, { borderBottomColor: color, borderLeftColor: color }]} />
-  </View>
-);
-
-const iconStyles = StyleSheet.create({
-  wrap: { width: 14, height: 14, position: "relative" },
-  bubble: { width: 10, height: 8, borderWidth: 1.5, borderRadius: 4, position: "absolute", top: 1, left: 2 },
-  bubbleDot: { width: 2.5, height: 2.5, borderRadius: 1.25, position: "absolute" },
-  bolt: { width: 0, height: 0, borderLeftWidth: 5, borderTopWidth: 0, borderBottomWidth: 7, borderLeftColor: "transparent", borderTopColor: "transparent", borderBottomColor: "transparent", position: "absolute", top: 0, left: 5 },
-  boltLower: { width: 0, height: 0, borderLeftWidth: 5, borderTopWidth: 7, borderBottomWidth: 0, borderLeftColor: "transparent", borderTopColor: "transparent", position: "absolute", top: 6, left: 3 },
-  clipboard: { width: 9, height: 11, borderWidth: 1.5, borderRadius: 2, position: "absolute", bottom: 0, left: 2.5 },
-  clipTop: { width: 5, height: 2, borderRadius: 1, position: "absolute", top: 1, left: 4.5 },
-  crossLine1: { width: 10, height: 1.5, borderRadius: 1, position: "absolute", transform: [{ rotate: "45deg" }] },
-  crossLine2: { width: 10, height: 1.5, borderRadius: 1, position: "absolute", transform: [{ rotate: "-45deg" }] },
-  check: { width: 7, height: 4, borderBottomWidth: 1.8, borderLeftWidth: 1.8, borderBottomColor: "transparent", borderLeftColor: "transparent", transform: [{ rotate: "-45deg" }], marginTop: -2 },
-});
+const NODE_ICON_SIZE = 12;
 
 const NodeIcon = ({ level, color }: { level: string; color: string }) => {
   switch (level) {
-    case "thought": return <ThoughtIcon color={color} />;
-    case "action": return <BoltIcon color={color} />;
-    case "observation": return <ClipboardIcon color={color} />;
-    case "error": return <CrossIcon color={color} />;
-    case "done": return <CheckIcon color={color} />;
-    default: return <CheckIcon color={color} />;
+    case "thought": return <MessageCircle size={NODE_ICON_SIZE} color={color} />;
+    case "action": return <Zap size={NODE_ICON_SIZE} color={color} />;
+    case "observation": return <ClipboardList size={NODE_ICON_SIZE} color={color} />;
+    case "error": return <X size={NODE_ICON_SIZE} color={color} />;
+    case "done": return <Check size={NODE_ICON_SIZE} color={color} />;
+    default: return <Check size={NODE_ICON_SIZE} color={color} />;
   }
 };
 
@@ -120,19 +76,9 @@ const getHeaderInfo = (logs: ExecutionLog[], colors: ColorPalette, t: (key: stri
   return { label: t("process.executing"), color: colors.state.running };
 };
 
-const ChevronDown = ({ color, expanded }: { color: string; expanded: boolean }) => (
-  <View style={{ width: 12, height: 12, alignItems: "center", justifyContent: "center" }}>
-    <View
-      style={{
-        width: 6,
-        height: 6,
-        borderBottomWidth: 1.5,
-        borderRightWidth: 1.5,
-        borderColor: color,
-        transform: [{ rotate: expanded ? "225deg" : "45deg" }],
-        marginTop: expanded ? 2 : -2,
-      }}
-    />
+const ExpandChevron = ({ color, expanded }: { color: string; expanded: boolean }) => (
+  <View style={{ transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}>
+    <ChevronDownIcon size={12} color={color} />
   </View>
 );
 
@@ -208,7 +154,7 @@ const TimelineNode = ({
             )}
             {hasDetail && (
               <XStack marginLeft="auto">
-                <ChevronDown color={colors.text.muted} expanded={detailExpanded} />
+                <ExpandChevron color={colors.text.muted} expanded={detailExpanded} />
               </XStack>
             )}
           </XStack>
@@ -317,9 +263,9 @@ export const ProcessCard = ({ logs }: Props) => {
               <SpinnerDot color={headerIconColor} />
             </XStack>
           ) : overallStatus === "error" ? (
-            <CrossIcon color={headerIconColor} />
+            <X size={14} color={headerIconColor} />
           ) : (
-            <CheckIcon color={headerIconColor} />
+            <Check size={14} color={headerIconColor} />
           )}
 
           <Text
@@ -338,7 +284,7 @@ export const ProcessCard = ({ logs }: Props) => {
             </Text>
           )}
 
-          <ChevronDown color={colors.text.muted} expanded={!collapsed} />
+          <ExpandChevron color={colors.text.muted} expanded={!collapsed} />
         </XStack>
       </Pressable>
 

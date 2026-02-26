@@ -1,33 +1,10 @@
 import { memo, useCallback, useState } from "react";
-import { FlatList, Pressable, Modal, ActivityIndicator, View, StyleSheet } from "react-native";
+import { FlatList, Pressable, Modal, ActivityIndicator } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import { Bot, Wrench } from "@tamagui/lucide-icons";
 import { useTheme } from "../theme/theme-context";
 import type { AgentInfo } from "../types/gateway";
-
-const AgentNodeIcon = ({ color, isMain }: { color: string; isMain: boolean }) => (
-  <View style={agentIconStyles.wrap}>
-    {isMain ? (
-      <>
-        <View style={[agentIconStyles.head, { backgroundColor: color }]} />
-        <View style={[agentIconStyles.body, { backgroundColor: color }]} />
-      </>
-    ) : (
-      <>
-        <View style={[agentIconStyles.wrench1, { backgroundColor: color }]} />
-        <View style={[agentIconStyles.wrench2, { backgroundColor: color }]} />
-      </>
-    )}
-  </View>
-);
-
-const agentIconStyles = StyleSheet.create({
-  wrap: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
-  head: { width: 7, height: 7, borderRadius: 3.5, marginBottom: 1 },
-  body: { width: 11, height: 5, borderTopLeftRadius: 5.5, borderTopRightRadius: 5.5 },
-  wrench1: { width: 10, height: 2, borderRadius: 1, position: "absolute", transform: [{ rotate: "45deg" }] },
-  wrench2: { width: 10, height: 2, borderRadius: 1, position: "absolute", transform: [{ rotate: "-45deg" }] },
-});
 
 type Props = {
   visible: boolean;
@@ -108,7 +85,11 @@ const AgentRow = memo(
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <AgentNodeIcon color={isActive ? colors.accent.purple : colors.text.muted} isMain={item.id === "main"} />
+                  {item.id === "main" ? (
+                    <Bot size={16} color={isActive ? colors.accent.purple : colors.text.muted} />
+                  ) : (
+                    <Wrench size={16} color={isActive ? colors.accent.purple : colors.text.muted} />
+                  )}
                 </YStack>
                 <YStack flex={1} gap="$0.5">
                   <XStack alignItems="center" gap="$2">
