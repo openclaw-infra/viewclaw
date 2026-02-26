@@ -1,9 +1,11 @@
 import { memo, useCallback, useState } from "react";
-import { Pressable, Modal, ScrollView, Alert } from "react-native";
+import { Pressable, Modal, ScrollView, Alert, View, StyleSheet, Image } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTheme } from "../theme/theme-context";
 import type { ThemeMode } from "../theme/colors";
 import type { SessionInfo } from "../types/gateway";
+
+const logoIcon = require("../../assets/logo-icon.png");
 
 type Props = {
   visible: boolean;
@@ -15,10 +17,60 @@ type Props = {
   onRefreshSessions: () => Promise<void>;
 };
 
-const THEME_OPTIONS: { mode: ThemeMode; label: string; icon: string }[] = [
-  { mode: "light", label: "Light", icon: "☀️" },
-  { mode: "dark", label: "Dark", icon: "🌙" },
-  { mode: "system", label: "System", icon: "⚙️" },
+const SunIcon = ({ color, size = 22, bgColor }: { color: string; size?: number; bgColor?: string }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+    {[0, 45, 90, 135, 180, 225, 270, 315].map((deg) => {
+      const rad = (deg * Math.PI) / 180;
+      const cx = size / 2;
+      return (
+        <View
+          key={deg}
+          style={{
+            position: "absolute",
+            width: 3.5,
+            height: 1.5,
+            borderRadius: 0.75,
+            backgroundColor: color,
+            left: cx - 1.75 + Math.cos(rad) * 7,
+            top: cx - 0.75 + Math.sin(rad) * 7,
+            transform: [{ rotate: `${deg}deg` }],
+          }}
+        />
+      );
+    })}
+  </View>
+);
+
+const MoonIcon = ({ color, size = 22, bgColor }: { color: string; size?: number; bgColor?: string }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+    <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: color }} />
+    <View
+      style={{
+        position: "absolute",
+        width: 11,
+        height: 11,
+        borderRadius: 5.5,
+        backgroundColor: bgColor || "#272A30",
+        top: 1,
+        right: 2,
+      }}
+    />
+  </View>
+);
+
+const MonitorIcon = ({ color, size = 22 }: { color: string; size?: number; bgColor?: string }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: 14, height: 10, borderWidth: 1.5, borderColor: color, borderRadius: 2.5 }} />
+    <View style={{ width: 7, height: 1.5, backgroundColor: color, borderRadius: 1, marginTop: 1.5 }} />
+  </View>
+);
+
+type ThemeOptionType = { mode: ThemeMode; label: string; Icon: React.FC<{ color: string; size?: number; bgColor?: string }> };
+const THEME_OPTIONS: ThemeOptionType[] = [
+  { mode: "light", label: "Light", Icon: SunIcon },
+  { mode: "dark", label: "Dark", Icon: MoonIcon },
+  { mode: "system", label: "System", Icon: MonitorIcon },
 ];
 
 const SectionHeader = memo(({ title }: { title: string }) => {
@@ -170,7 +222,7 @@ export const SettingsSheet = memo(
         onRequestClose={onClose}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
           onPress={onClose}
         >
           <Pressable
@@ -180,26 +232,25 @@ export const SettingsSheet = memo(
             <YStack
               flex={1}
               backgroundColor={colors.bg.secondary}
-              borderTopLeftRadius={20}
-              borderTopRightRadius={20}
+              borderTopLeftRadius={24}
+              borderTopRightRadius={24}
               overflow="hidden"
             >
-              {/* Handle bar */}
-              <YStack alignItems="center" paddingVertical="$2">
+              <YStack alignItems="center" paddingVertical={10}>
                 <YStack
-                  width={36}
+                  width={40}
                   height={4}
                   borderRadius={2}
                   backgroundColor={colors.border.medium}
+                  opacity={0.6}
                 />
               </YStack>
 
-              {/* Header */}
               <XStack
                 alignItems="center"
                 justifyContent="space-between"
-                paddingHorizontal="$4"
-                paddingVertical="$2.5"
+                paddingHorizontal={16}
+                paddingVertical={10}
               >
                 <Text
                   color={colors.text.primary}
@@ -210,10 +261,12 @@ export const SettingsSheet = memo(
                 </Text>
                 <Pressable onPress={onClose}>
                   <YStack
-                    paddingHorizontal="$2.5"
-                    paddingVertical="$1.5"
-                    borderRadius={8}
-                    backgroundColor={colors.bg.elevated}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={12}
+                    backgroundColor={colors.bg.tertiary}
+                    borderWidth={1}
+                    borderColor={colors.border.subtle}
                   >
                     <Text color={colors.text.secondary} fontSize={12} fontWeight="600">
                       Done
@@ -225,9 +278,10 @@ export const SettingsSheet = memo(
               <ScrollView showsVerticalScrollIndicator={false}>
                 {/* Theme */}
                 <SectionHeader title="Appearance" />
-                <XStack paddingHorizontal="$4" gap="$2">
+                <XStack paddingHorizontal={16} gap={8}>
                   {THEME_OPTIONS.map((opt) => {
                     const active = mode === opt.mode;
+                    const cardBg = active ? colors.brand.blue + "12" : colors.bg.tertiary;
                     return (
                       <Pressable
                         key={opt.mode}
@@ -236,16 +290,16 @@ export const SettingsSheet = memo(
                       >
                         <YStack
                           alignItems="center"
-                          paddingVertical="$3"
+                          paddingVertical={12}
                           borderRadius={12}
                           borderWidth={2}
-                          borderColor={active ? colors.accent.blue : colors.border.subtle}
-                          backgroundColor={active ? colors.accent.blue + "12" : colors.bg.tertiary}
-                          gap="$1.5"
+                          borderColor={active ? colors.brand.blue : colors.border.subtle}
+                          backgroundColor={cardBg}
+                          gap={6}
                         >
-                          <Text fontSize={22}>{opt.icon}</Text>
+                          <opt.Icon color={active ? colors.brand.blue : colors.text.muted} size={22} bgColor={cardBg} />
                           <Text
-                            color={active ? colors.accent.blue : colors.text.secondary}
+                            color={active ? colors.brand.blue : colors.text.secondary}
                             fontSize={13}
                             fontWeight={active ? "700" : "500"}
                           >
@@ -290,19 +344,19 @@ export const SettingsSheet = memo(
                               <XStack alignItems="center" gap="$1.5">
                                 {isCurrent && (
                                   <YStack
-                                    backgroundColor={colors.accent.blue}
-                                    paddingHorizontal={5}
-                                    paddingVertical={1}
-                                    borderRadius={3}
+                                    backgroundColor={colors.brand.blue}
+                                    paddingHorizontal={6}
+                                    paddingVertical={2}
+                                    borderRadius={6}
                                     flexShrink={0}
                                   >
-                                    <Text color="#FFF" fontSize={8} fontWeight="700">
+                                    <Text color="#FFF" fontSize={8} fontWeight="700" letterSpacing={0.5}>
                                       ACTIVE
                                     </Text>
                                   </YStack>
                                 )}
                                 <Text
-                                  color={isCurrent ? colors.accent.blue : colors.text.primary}
+                                  color={isCurrent ? colors.brand.blue : colors.text.primary}
                                   fontSize={13}
                                   numberOfLines={1}
                                   flexShrink={1}
@@ -366,8 +420,15 @@ export const SettingsSheet = memo(
 
                 {/* About */}
                 <SectionHeader title="About" />
-                <SettingRow label="App" value="ViewClaw" />
-                <SettingRow label="Version" value="2.0.0" />
+                <YStack alignItems="center" paddingVertical={16} gap={8}>
+                  <Image source={logoIcon} style={{ width: 48, height: 48 }} resizeMode="contain" />
+                  <Text color={colors.text.primary} fontSize={16} fontWeight="700">
+                    ClawFlow
+                  </Text>
+                  <Text color={colors.text.muted} fontSize={12}>
+                    Version 2.0.0
+                  </Text>
+                </YStack>
 
                 <YStack height={60} />
               </ScrollView>

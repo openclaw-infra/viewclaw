@@ -14,7 +14,7 @@ const onLinkPress = (url: string) => {
   return false;
 };
 
-const mdStyles = (textColor: string, c: ColorPalette) =>
+const mdStyles = (textColor: string, c: ColorPalette, isDark: boolean) =>
   StyleSheet.create({
     body: {
       color: textColor,
@@ -26,21 +26,21 @@ const mdStyles = (textColor: string, c: ColorPalette) =>
       marginBottom: 6,
     },
     heading1: {
-      color: c.text.primary,
-      fontSize: 22,
+      color: textColor,
+      fontSize: 20,
       fontWeight: "700",
       marginTop: 12,
       marginBottom: 6,
     },
     heading2: {
-      color: c.text.primary,
-      fontSize: 19,
+      color: textColor,
+      fontSize: 18,
       fontWeight: "700",
       marginTop: 10,
       marginBottom: 4,
     },
     heading3: {
-      color: c.text.primary,
+      color: textColor,
       fontSize: 16,
       fontWeight: "600",
       marginTop: 8,
@@ -53,20 +53,20 @@ const mdStyles = (textColor: string, c: ColorPalette) =>
       fontStyle: "italic",
     },
     link: {
-      color: c.accent.blue,
+      color: c.brand.blue,
       textDecorationLine: "underline" as const,
     },
     code_inline: {
-      backgroundColor: "rgba(255,255,255,0.08)",
+      backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)",
       color: c.accent.cyan,
       fontFamily: "Menlo",
       fontSize: 13,
       paddingHorizontal: 5,
       paddingVertical: 1,
-      borderRadius: 4,
+      borderRadius: 6,
     },
     fence: {
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: c.bg.codeBlock,
       borderColor: c.border.subtle,
       borderWidth: 1,
       borderRadius: 8,
@@ -74,23 +74,24 @@ const mdStyles = (textColor: string, c: ColorPalette) =>
       marginVertical: 6,
     },
     code_block: {
-      backgroundColor: "rgba(0,0,0,0.4)",
+      backgroundColor: c.bg.codeBlock,
       borderColor: c.border.subtle,
       borderWidth: 1,
       borderRadius: 8,
       padding: 12,
       marginVertical: 6,
       fontFamily: "Menlo",
-      fontSize: 13,
+      fontSize: 12,
       color: c.text.secondary,
     },
     blockquote: {
-      backgroundColor: "rgba(255,255,255,0.03)",
+      backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)",
       borderLeftWidth: 3,
-      borderLeftColor: c.accent.blue,
+      borderLeftColor: c.brand.blue,
       paddingLeft: 12,
       paddingVertical: 4,
       marginVertical: 6,
+      borderRadius: 4,
     },
     bullet_list: {
       marginVertical: 4,
@@ -118,7 +119,7 @@ const mdStyles = (textColor: string, c: ColorPalette) =>
       marginVertical: 6,
     },
     thead: {
-      backgroundColor: "rgba(255,255,255,0.05)",
+      backgroundColor: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
     },
     th: {
       padding: 8,
@@ -153,9 +154,9 @@ const mdStyles = (textColor: string, c: ColorPalette) =>
   });
 
 export const MarkdownBody = memo(({ children, color }: Props) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const isUserBubble = color === "#FFFFFF";
-  const styles = mdStyles(isUserBubble ? "#FFFFFF" : colors.text.primary, colors);
+  const styles = mdStyles(isUserBubble ? "#FFFFFF" : colors.text.primary, colors, isDark);
   return (
     <Markdown style={styles} onLinkPress={onLinkPress}>
       {children}

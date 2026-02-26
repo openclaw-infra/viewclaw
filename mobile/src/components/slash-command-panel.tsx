@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { FlatList, Pressable } from "react-native";
+import { FlatList, Pressable, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTheme } from "../theme/theme-context";
 import type { SlashCommand } from "../data/slash-commands";
@@ -15,20 +15,27 @@ const CATEGORY_LABELS: Record<string, string> = {
   custom: "Custom",
 };
 
+const ReturnIcon = ({ color }: { color: string }) => (
+  <View style={{ width: 12, height: 12, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: 8, height: 5, borderBottomWidth: 1.5, borderLeftWidth: 1.5, borderColor: color, borderBottomLeftRadius: 2 }} />
+    <View style={{ width: 4, height: 4, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderColor: color, transform: [{ rotate: "-45deg" }], position: "absolute", left: 0, bottom: 1 }} />
+  </View>
+);
+
 const CommandRow = memo(
   ({ item, onSelect }: { item: SlashCommand; onSelect: (cmd: SlashCommand) => void }) => {
     const { colors } = useTheme();
     const CATEGORY_COLORS: Record<string, string> = {
-      openclaw: colors.accent.cyan,
+      openclaw: colors.brand.blue,
       custom: colors.accent.purple,
     };
     return (
     <Pressable onPress={() => onSelect(item)}>
       {({ pressed }) => (
         <XStack
-          paddingHorizontal="$3.5"
-          paddingVertical="$2.5"
-          gap="$2.5"
+          paddingHorizontal={14}
+          paddingVertical={10}
+          gap={10}
           alignItems="center"
           backgroundColor={pressed ? colors.bg.elevated : "transparent"}
         >
@@ -39,7 +46,7 @@ const CommandRow = memo(
             backgroundColor={CATEGORY_COLORS[item.category] ?? colors.text.muted}
           />
           <Text
-            color={colors.accent.blue}
+            color={colors.brand.blue}
             fontSize={14}
             fontWeight="600"
             fontFamily="$mono"
@@ -56,9 +63,7 @@ const CommandRow = memo(
             {item.description}
           </Text>
           {item.immediate && (
-            <Text color={colors.text.muted} fontSize={10}>
-              ⏎
-            </Text>
+            <ReturnIcon color={colors.text.muted} />
           )}
         </XStack>
       )}
@@ -70,7 +75,7 @@ const CommandRow = memo(
 export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
   const { colors } = useTheme();
   const CATEGORY_COLORS: Record<string, string> = {
-    openclaw: colors.accent.cyan,
+    openclaw: colors.brand.blue,
     custom: colors.accent.purple,
   };
   const filtered = useMemo(() => {
@@ -113,7 +118,7 @@ export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
         keyboardShouldPersistTaps="handled"
         renderItem={({ item: group }) => (
           <YStack>
-            <XStack paddingHorizontal="$3.5" paddingVertical="$1.5">
+            <XStack paddingHorizontal={14} paddingVertical={6}>
               <Text
                 color={CATEGORY_COLORS[group.category] ?? colors.text.muted}
                 fontSize={11}

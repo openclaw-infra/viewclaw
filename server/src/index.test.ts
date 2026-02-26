@@ -8,7 +8,7 @@ describe("gateway http interfaces", () => {
     expect(res.status).toBe(200);
     const data = (await res.json()) as { name: string; ok: boolean };
     expect(data.ok).toBe(true);
-    expect(data.name).toBe("ViewClaw Gateway");
+    expect(data.name).toBe("ClawFlow Gateway");
   });
 
   it("GET /healthz", async () => {

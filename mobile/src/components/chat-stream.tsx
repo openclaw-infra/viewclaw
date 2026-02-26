@@ -1,10 +1,12 @@
 import { useRef, useEffect, useMemo, memo, useState } from "react";
-import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions } from "react-native";
+import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import type { ChatMessage, ImageAttachment, StreamItem } from "../types/gateway";
 import { EventCard } from "./event-card";
 import { MarkdownBody } from "./markdown-body";
 import { useTheme } from "../theme/theme-context";
+
+const logoIcon = require("../../assets/logo-icon.png");
 
 type Props = {
   stream: StreamItem[];
@@ -17,8 +19,8 @@ const StreamingCursor = () => {
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, { toValue: 0, duration: 500, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.2, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ])
     );
     anim.start();
@@ -30,7 +32,7 @@ const StreamingCursor = () => {
       style={{
         width: 2,
         height: 16,
-        backgroundColor: colors.accent.blue,
+        backgroundColor: colors.brand.blue,
         borderRadius: 1,
         opacity,
         marginLeft: 1,
@@ -55,7 +57,7 @@ const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
                 style={{
                   width: size,
                   height: size,
-                  borderRadius: 10,
+                  borderRadius: 12,
                 }}
                 resizeMode="cover"
               />
@@ -68,7 +70,7 @@ const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
         <Pressable
           style={{
             flex: 1,
-            backgroundColor: "rgba(0,0,0,0.9)",
+            backgroundColor: "rgba(0,0,0,0.92)",
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -92,7 +94,7 @@ const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
 });
 
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const isUser = item.role === "user";
   const time = new Date(item.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -102,27 +104,36 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
   return (
     <XStack
       justifyContent={isUser ? "flex-end" : "flex-start"}
-      paddingHorizontal="$3"
-      marginBottom="$2.5"
+      paddingHorizontal={12}
+      marginBottom={8}
     >
       <YStack
         maxWidth="82%"
-        paddingHorizontal="$3.5"
-        paddingVertical="$2.5"
+        paddingHorizontal={14}
+        paddingVertical={10}
         backgroundColor={isUser ? colors.bubble.user : colors.bubble.assistant}
         borderRadius={18}
         borderBottomRightRadius={isUser ? 4 : 18}
         borderBottomLeftRadius={isUser ? 18 : 4}
-        borderWidth={isUser ? 0 : 1}
-        borderColor={colors.bubble.assistantBorder}
-        gap="$1"
+        borderWidth={isUser ? 1 : 1}
+        borderColor={isUser ? colors.bubble.userBorder + "40" : colors.bubble.assistantBorder}
+        gap={4}
+        {...(!isUser && isDark && {
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.15,
+          shadowRadius: 3,
+        })}
       >
         {item.images?.length ? <ImageGrid images={item.images} /> : null}
 
         {item.thinkingSummary ? (
-          <Text color={colors.accent.yellow} fontSize={11} opacity={0.8}>
-            {item.thinkingSummary}
-          </Text>
+          <XStack alignItems="center" gap={4} marginBottom={2}>
+            <View style={[emptyStyles.thinkDot, { backgroundColor: colors.accent.yellow }]} />
+            <Text color={colors.accent.yellow} fontSize={11} opacity={0.85} fontWeight="500">
+              {item.thinkingSummary}
+            </Text>
+          </XStack>
         ) : null}
 
         {item.content ? (
@@ -134,7 +145,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
         {item.streaming ? (
           <XStack alignItems="center" height={20}>
             {!item.content && (
-              <Text color={colors.text.muted} fontSize={12} marginRight={4}>
+              <Text color={colors.text.muted} fontSize={12} marginRight={4} fontStyle="italic">
                 Generating
               </Text>
             )}
@@ -142,7 +153,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
           </XStack>
         ) : (
           <Text
-            color={isUser ? "rgba(255,255,255,0.5)" : colors.text.muted}
+            color={isUser ? "rgba(255,255,255,0.45)" : colors.text.muted}
             fontSize={10}
             alignSelf={isUser ? "flex-end" : "flex-start"}
           >
@@ -165,8 +176,8 @@ const TypingIndicator = () => {
       Animated.loop(
         Animated.sequence([
           Animated.delay(delay),
-          Animated.timing(dot, { toValue: 1, duration: 350, easing: Easing.ease, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0.3, duration: 350, easing: Easing.ease, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.3, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
       );
     const a1 = animate(dot1, 0);
@@ -177,26 +188,26 @@ const TypingIndicator = () => {
   }, [dot1, dot2, dot3]);
 
   return (
-    <XStack justifyContent="flex-start" paddingHorizontal="$3" marginBottom="$2.5">
+    <XStack justifyContent="flex-start" paddingHorizontal={12} marginBottom={8}>
       <XStack
-        paddingHorizontal="$3.5"
-        paddingVertical="$3"
+        paddingHorizontal={14}
+        paddingVertical={12}
         backgroundColor={colors.bubble.assistant}
         borderRadius={18}
         borderBottomLeftRadius={4}
         borderWidth={1}
         borderColor={colors.bubble.assistantBorder}
-        gap={6}
+        gap={5}
         alignItems="center"
       >
         {[dot1, dot2, dot3].map((dot, i) => (
           <Animated.View
             key={i}
             style={{
-              width: 7,
-              height: 7,
-              borderRadius: 3.5,
-              backgroundColor: colors.text.muted,
+              width: 6,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: colors.brand.blue,
               opacity: dot,
             }}
           />
@@ -205,6 +216,10 @@ const TypingIndicator = () => {
     </XStack>
   );
 };
+
+const emptyStyles = StyleSheet.create({
+  thinkDot: { width: 4, height: 4, borderRadius: 2 },
+});
 
 const getItemId = (item: StreamItem): string =>
   item.kind === "typing" ? item.id : item.data.id;
@@ -234,14 +249,15 @@ export const ChatStream = ({ stream }: Props) => {
           alignItems="center"
           justifyContent="center"
           paddingVertical="$10"
-          gap="$3"
+          gap={12}
           transform={[{ scaleY: -1 }]}
         >
-          <Text color={colors.text.muted} fontSize={32}>
-            {"{ }"}
+          <Image source={logoIcon} style={{ width: 56, height: 56, opacity: 0.6 }} resizeMode="contain" />
+          <Text color={colors.text.muted} fontSize={14} fontWeight="500">
+            Send a task to ClawFlow
           </Text>
-          <Text color={colors.text.muted} fontSize={14}>
-            Send a task to OpenClaw
+          <Text color={colors.text.muted} fontSize={12} opacity={0.6}>
+            Type "/" for quick commands
           </Text>
         </YStack>
       }

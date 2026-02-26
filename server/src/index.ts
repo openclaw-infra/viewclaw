@@ -20,7 +20,7 @@ import type { ClientMessage } from "./types";
 
 export const app = new Elysia()
   .get("/", () => ({
-    name: "ViewClaw Gateway",
+    name: "ClawFlow Gateway",
     version: "2.0.0",
     ok: true,
   }))
@@ -345,7 +345,7 @@ export const app = new Elysia()
 
       try {
         const workspace = await getWorkspaceDir();
-        const uploadDir = join(workspace, ".viewclaw-uploads");
+        const uploadDir = join(workspace, ".clawflow-uploads");
         await mkdir(uploadDir, { recursive: true });
 
         const origName = (file as File).name ?? "image";
@@ -430,7 +430,7 @@ export const app = new Elysia()
         JSON.stringify({
           type: "connected",
           ts: Date.now(),
-          payload: { message: "ViewClaw Gateway connected" },
+          payload: { message: "ClawFlow Gateway connected" },
         })
       );
     },
@@ -524,7 +524,7 @@ export const app = new Elysia()
 
 if (import.meta.main) {
   app.listen(PORT);
-  console.log(`ViewClaw Gateway running on http://${app.server?.hostname}:${app.server?.port}`);
+  console.log(`ClawFlow Gateway running on http://${app.server?.hostname}:${app.server?.port}`);
   console.log(`  OpenClaw home: ${OPENCLAW_HOME}`);
   console.log(`  OpenClaw upstream: ${OPENCLAW_BASE_URL}`);
 }

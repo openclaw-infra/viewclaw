@@ -1,8 +1,32 @@
 import { memo, useCallback, useState } from "react";
-import { FlatList, Pressable, Modal, ActivityIndicator } from "react-native";
+import { FlatList, Pressable, Modal, ActivityIndicator, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTheme } from "../theme/theme-context";
 import type { AgentInfo } from "../types/gateway";
+
+const AgentNodeIcon = ({ color, isMain }: { color: string; isMain: boolean }) => (
+  <View style={agentIconStyles.wrap}>
+    {isMain ? (
+      <>
+        <View style={[agentIconStyles.head, { backgroundColor: color }]} />
+        <View style={[agentIconStyles.body, { backgroundColor: color }]} />
+      </>
+    ) : (
+      <>
+        <View style={[agentIconStyles.wrench1, { backgroundColor: color }]} />
+        <View style={[agentIconStyles.wrench2, { backgroundColor: color }]} />
+      </>
+    )}
+  </View>
+);
+
+const agentIconStyles = StyleSheet.create({
+  wrap: { width: 16, height: 16, alignItems: "center", justifyContent: "center" },
+  head: { width: 7, height: 7, borderRadius: 3.5, marginBottom: 1 },
+  body: { width: 11, height: 5, borderTopLeftRadius: 5.5, borderTopRightRadius: 5.5 },
+  wrench1: { width: 10, height: 2, borderRadius: 1, position: "absolute", transform: [{ rotate: "45deg" }] },
+  wrench2: { width: 10, height: 2, borderRadius: 1, position: "absolute", transform: [{ rotate: "-45deg" }] },
+});
 
 type Props = {
   visible: boolean;
@@ -82,9 +106,7 @@ const AgentRow = memo(
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <Text fontSize={14}>
-                    {item.id === "main" ? "🤖" : "🔧"}
-                  </Text>
+                  <AgentNodeIcon color={isActive ? colors.accent.purple : colors.text.muted} isMain={item.id === "main"} />
                 </YStack>
                 <YStack flex={1} gap="$0.5">
                   <XStack alignItems="center" gap="$2">
@@ -220,7 +242,7 @@ export const AgentSheet = memo(
         onRequestClose={onClose}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
           onPress={onClose}
         >
           <Pressable
@@ -230,40 +252,41 @@ export const AgentSheet = memo(
             <YStack
               flex={1}
               backgroundColor={colors.bg.secondary}
-              borderTopLeftRadius={20}
-              borderTopRightRadius={20}
+              borderTopLeftRadius={24}
+              borderTopRightRadius={24}
               overflow="hidden"
             >
-              {/* Handle bar */}
-              <YStack alignItems="center" paddingVertical="$2">
+              <YStack alignItems="center" paddingVertical={10}>
                 <YStack
-                  width={36}
+                  width={40}
                   height={4}
                   borderRadius={2}
                   backgroundColor={colors.border.medium}
+                  opacity={0.6}
                 />
               </YStack>
 
-              {/* Header */}
               <XStack
                 alignItems="center"
                 justifyContent="space-between"
-                paddingHorizontal="$4"
-                paddingVertical="$2.5"
+                paddingHorizontal={16}
+                paddingVertical={10}
               >
                 <Text
                   color={colors.text.primary}
-                  fontSize={18}
+                  fontSize={20}
                   fontWeight="700"
                 >
                   Agents
                 </Text>
                 <Pressable onPress={handleRefresh} disabled={refreshing}>
                   <YStack
-                    paddingHorizontal="$2.5"
-                    paddingVertical="$1.5"
-                    borderRadius={8}
-                    backgroundColor={colors.bg.elevated}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={12}
+                    backgroundColor={colors.bg.tertiary}
+                    borderWidth={1}
+                    borderColor={colors.border.subtle}
                   >
                     <Text
                       color={refreshing ? colors.text.muted : colors.text.secondary}
@@ -276,8 +299,7 @@ export const AgentSheet = memo(
                 </Pressable>
               </XStack>
 
-              {/* Count */}
-              <XStack paddingHorizontal="$4" paddingBottom="$2">
+              <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
                   {agents.length} agent{agents.length !== 1 ? "s" : ""} available
                 </Text>

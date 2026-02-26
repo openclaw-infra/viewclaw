@@ -299,7 +299,7 @@ export const GatewaySheet = memo(
         onRequestClose={onClose}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
           onPress={onClose}
         >
           <Pressable
@@ -309,40 +309,39 @@ export const GatewaySheet = memo(
             <YStack
               flex={1}
               backgroundColor={colors.bg.secondary}
-              borderTopLeftRadius={20}
-              borderTopRightRadius={20}
+              borderTopLeftRadius={24}
+              borderTopRightRadius={24}
               overflow="hidden"
             >
-              {/* Handle bar */}
-              <YStack alignItems="center" paddingVertical="$2">
+              <YStack alignItems="center" paddingVertical={10}>
                 <YStack
-                  width={36}
+                  width={40}
                   height={4}
                   borderRadius={2}
                   backgroundColor={colors.border.medium}
+                  opacity={0.6}
                 />
               </YStack>
 
-              {/* Header */}
               <XStack
                 alignItems="center"
                 justifyContent="space-between"
-                paddingHorizontal="$4"
-                paddingVertical="$2.5"
+                paddingHorizontal={16}
+                paddingVertical={10}
               >
                 <Text
                   color={colors.text.primary}
-                  fontSize={18}
+                  fontSize={20}
                   fontWeight="700"
                 >
                   Gateways
                 </Text>
                 <Pressable onPress={openAddForm}>
                   <YStack
-                    paddingHorizontal="$2.5"
-                    paddingVertical="$1.5"
-                    borderRadius={8}
-                    backgroundColor={colors.accent.blue}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={12}
+                    backgroundColor={colors.brand.blue}
                   >
                     <Text color="#FFFFFF" fontSize={12} fontWeight="600">
                       + Add
@@ -351,8 +350,7 @@ export const GatewaySheet = memo(
                 </Pressable>
               </XStack>
 
-              {/* Count */}
-              <XStack paddingHorizontal="$4" paddingBottom="$2">
+              <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
                   {gateways.length} gateway{gateways.length !== 1 ? "s" : ""} configured
                 </Text>

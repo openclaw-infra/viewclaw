@@ -2,8 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { GatewayConfig } from "../types/gateway";
 
 const KEYS = {
-  gateways: "@viewclaw/gateways",
-  activeId: "@viewclaw/active-gateway-id",
+  gateways: "@clawflow/gateways",
+  activeId: "@clawflow/active-gateway-id",
+  legacyGateways: "@viewclaw/gateways",
+  legacyActiveId: "@viewclaw/active-gateway-id",
 } as const;
 
 const DEFAULT_GATEWAY: GatewayConfig = {
@@ -18,10 +20,27 @@ let cachedActiveId: string | null = null;
 
 export const gatewayStorage = {
   async load() {
-    const [rawGateways, rawActiveId] = await Promise.all([
+    let [rawGateways, rawActiveId] = await Promise.all([
       AsyncStorage.getItem(KEYS.gateways),
       AsyncStorage.getItem(KEYS.activeId),
     ]);
+
+    if (!rawGateways) {
+      const [legacyGw, legacyId] = await Promise.all([
+        AsyncStorage.getItem(KEYS.legacyGateways),
+        AsyncStorage.getItem(KEYS.legacyActiveId),
+      ]);
+      if (legacyGw) {
+        rawGateways = legacyGw;
+        rawActiveId = legacyId;
+        await Promise.all([
+          AsyncStorage.setItem(KEYS.gateways, legacyGw),
+          legacyId ? AsyncStorage.setItem(KEYS.activeId, legacyId) : Promise.resolve(),
+          AsyncStorage.removeItem(KEYS.legacyGateways),
+          AsyncStorage.removeItem(KEYS.legacyActiveId),
+        ]);
+      }
+    }
 
     if (rawGateways) {
       try {

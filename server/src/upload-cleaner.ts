@@ -5,7 +5,7 @@ import { getWorkspaceDir } from "./openclaw-client";
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
-const UPLOAD_SUBDIR = ".viewclaw-uploads";
+const UPLOAD_SUBDIR = ".clawflow-uploads";
 
 async function cleanStaleUploads(): Promise<number> {
   const workspace = await getWorkspaceDir();

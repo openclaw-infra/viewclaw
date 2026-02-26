@@ -81,6 +81,13 @@ const micStyles = StyleSheet.create({
   stopIcon: { width: 10, height: 10, borderRadius: 2 },
 });
 
+const SendArrow = ({ color }: { color: string }) => (
+  <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: 8, height: 8, borderTopWidth: 2, borderLeftWidth: 2, borderColor: color, transform: [{ rotate: "45deg" }], marginTop: 3 }} />
+    <View style={{ width: 2, height: 10, backgroundColor: color, borderRadius: 1, marginTop: -4 }} />
+  </View>
+);
+
 export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
   const { colors } = useTheme();
   const [value, setValue] = useState("");
@@ -172,18 +179,18 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
       {isRecording && (
         <XStack
           backgroundColor={colors.bg.secondary}
-          paddingHorizontal="$4"
-          paddingVertical="$2"
+          paddingHorizontal={16}
+          paddingVertical={8}
           alignItems="center"
           justifyContent="center"
-          gap="$2"
+          gap={8}
         >
           <YStack width={8} height={8} borderRadius={4} backgroundColor={colors.accent.red} />
           <Text color={colors.accent.red} fontSize={13} fontWeight="600" fontFamily="$mono">
             {formatDuration(voice.durationMs)}
           </Text>
           <Text color={colors.text.muted} fontSize={12}>
-            Tap mic to finish · Long press to cancel
+            Tap mic to finish
           </Text>
         </XStack>
       )}
@@ -191,13 +198,13 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
       {isTranscribing && (
         <XStack
           backgroundColor={colors.bg.secondary}
-          paddingHorizontal="$4"
-          paddingVertical="$2"
+          paddingHorizontal={16}
+          paddingVertical={8}
           alignItems="center"
           justifyContent="center"
-          gap="$2"
+          gap={8}
         >
-          <Text color={colors.accent.cyan} fontSize={13} fontWeight="600">
+          <Text color={colors.brand.blue} fontSize={13} fontWeight="600">
             Transcribing...
           </Text>
         </XStack>
@@ -207,9 +214,9 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
         backgroundColor={colors.bg.secondary}
         borderTopWidth={1}
         borderColor={colors.border.subtle}
-        paddingHorizontal="$3"
-        paddingVertical="$2.5"
-        gap="$2"
+        paddingHorizontal={12}
+        paddingVertical={10}
+        gap={8}
       >
         {attachedImages.length > 0 && (
           <ScrollView
@@ -241,7 +248,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
 
         <XStack
           alignItems="center"
-          gap="$2"
+          gap={8}
           backgroundColor={colors.bg.tertiary}
           borderRadius={24}
           borderWidth={1}
@@ -249,18 +256,18 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             isRecording
               ? colors.accent.red
               : slashState?.active
-                ? colors.accent.blue
+                ? colors.brand.blue
                 : colors.border.subtle
           }
-          paddingLeft="$1.5"
-          paddingRight="$1.5"
-          paddingVertical="$1"
+          paddingLeft={6}
+          paddingRight={6}
+          paddingVertical={4}
         >
           <Pressable onPress={pickImage} disabled={isVoiceBusy || sending || attachedImages.length >= 4}>
             <YStack
-              width={36}
-              height={36}
-              borderRadius={18}
+              width={34}
+              height={34}
+              borderRadius={17}
               backgroundColor={colors.bg.elevated}
               alignItems="center"
               justifyContent="center"
@@ -275,13 +282,13 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             value={value}
             onChangeText={setValue}
             onSubmitEditing={submit}
-            placeholder='Message OpenClaw... (type "/" for commands)'
+            placeholder='Message ClawFlow... (type "/" for commands)'
             placeholderTextColor={colors.text.muted as any}
             backgroundColor="transparent"
             borderWidth={0}
             color={colors.text.primary}
             fontSize={15}
-            paddingVertical="$2"
+            paddingVertical={8}
             returnKeyType="send"
             autoCorrect={false}
             editable={!isVoiceBusy}
@@ -293,15 +300,13 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             disabled={isTranscribing || sending}
           >
             <YStack
-              width={36}
-              height={36}
-              borderRadius={18}
+              width={34}
+              height={34}
+              borderRadius={17}
               backgroundColor={
                 isRecording
                   ? colors.accent.red
-                  : isTranscribing
-                    ? colors.bg.elevated
-                    : colors.bg.elevated
+                  : colors.bg.elevated
               }
               alignItems="center"
               justifyContent="center"
@@ -317,20 +322,18 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
 
           <Pressable onPress={submit} disabled={!canSend}>
             <YStack
-              width={36}
-              height={36}
-              borderRadius={18}
-              backgroundColor={canSend ? colors.accent.blue : colors.bg.elevated}
+              width={34}
+              height={34}
+              borderRadius={17}
+              backgroundColor={canSend ? colors.brand.blue : colors.bg.elevated}
               alignItems="center"
               justifyContent="center"
             >
-              <Text
-                color={canSend ? "#FFFFFF" : colors.text.muted}
-                fontSize={16}
-                fontWeight="700"
-              >
-                {sending ? "..." : "↑"}
-              </Text>
+              {sending ? (
+                <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
+              ) : (
+                <SendArrow color={canSend ? "#FFFFFF" : colors.text.muted} />
+              )}
             </YStack>
           </Pressable>
         </XStack>

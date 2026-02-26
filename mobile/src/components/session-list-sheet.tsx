@@ -74,12 +74,12 @@ const SessionRow = memo(
                   : "transparent"
             }
             borderLeftWidth={isCurrent ? 3 : 0}
-            borderLeftColor={isCurrent ? colors.accent.blue : "transparent"}
+            borderLeftColor={isCurrent ? colors.brand.blue : "transparent"}
           >
             <YStack flex={1} gap="$1">
               <XStack alignItems="center" gap="$2">
                 <Text
-                  color={isCurrent ? colors.accent.blue : colors.text.primary}
+                  color={isCurrent ? colors.brand.blue : colors.text.primary}
                   fontSize={14}
                   fontWeight="600"
                   numberOfLines={1}
@@ -89,13 +89,13 @@ const SessionRow = memo(
                 </Text>
                 {isCurrent && (
                   <YStack
-                    backgroundColor={colors.accent.blue}
-                    paddingHorizontal="$1.5"
-                    paddingVertical={1}
-                    borderRadius={4}
+                    backgroundColor={colors.brand.blue}
+                    paddingHorizontal={6}
+                    paddingVertical={2}
+                    borderRadius={6}
                     flexShrink={0}
                   >
-                    <Text color="#FFFFFF" fontSize={9} fontWeight="700">
+                    <Text color="#FFFFFF" fontSize={9} fontWeight="700" letterSpacing={0.5}>
                       ACTIVE
                     </Text>
                   </YStack>
@@ -166,7 +166,7 @@ export const SessionListSheet = memo(
         onRequestClose={onClose}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
           onPress={onClose}
         >
           <Pressable
@@ -176,41 +176,42 @@ export const SessionListSheet = memo(
             <YStack
               flex={1}
               backgroundColor={colors.bg.secondary}
-              borderTopLeftRadius={20}
-              borderTopRightRadius={20}
+              borderTopLeftRadius={24}
+              borderTopRightRadius={24}
               overflow="hidden"
             >
-              {/* Handle bar */}
-              <YStack alignItems="center" paddingVertical="$2">
+              <YStack alignItems="center" paddingVertical={10}>
                 <YStack
-                  width={36}
+                  width={40}
                   height={4}
                   borderRadius={2}
                   backgroundColor={colors.border.medium}
+                  opacity={0.6}
                 />
               </YStack>
 
-              {/* Header */}
               <XStack
                 alignItems="center"
                 justifyContent="space-between"
-                paddingHorizontal="$4"
-                paddingVertical="$2.5"
+                paddingHorizontal={16}
+                paddingVertical={10}
               >
                 <Text
                   color={colors.text.primary}
-                  fontSize={18}
+                  fontSize={20}
                   fontWeight="700"
                 >
                   Sessions
                 </Text>
-                <XStack gap="$2">
+                <XStack gap={8}>
                   <Pressable onPress={handleRefresh} disabled={refreshing}>
                     <YStack
-                      paddingHorizontal="$2.5"
-                      paddingVertical="$1.5"
-                      borderRadius={8}
-                      backgroundColor={colors.bg.elevated}
+                      paddingHorizontal={12}
+                      paddingVertical={6}
+                      borderRadius={12}
+                      backgroundColor={colors.bg.tertiary}
+                      borderWidth={1}
+                      borderColor={colors.border.subtle}
                     >
                       <Text
                         color={refreshing ? colors.text.muted : colors.text.secondary}
@@ -223,10 +224,10 @@ export const SessionListSheet = memo(
                   </Pressable>
                   <Pressable onPress={handleCreate} disabled={creating}>
                     <YStack
-                      paddingHorizontal="$2.5"
-                      paddingVertical="$1.5"
-                      borderRadius={8}
-                      backgroundColor={colors.accent.blue}
+                      paddingHorizontal={12}
+                      paddingVertical={6}
+                      borderRadius={12}
+                      backgroundColor={colors.brand.blue}
                     >
                       <Text
                         color={creating ? "rgba(255,255,255,0.5)" : "#FFFFFF"}
@@ -240,14 +241,12 @@ export const SessionListSheet = memo(
                 </XStack>
               </XStack>
 
-              {/* Count */}
-              <XStack paddingHorizontal="$4" paddingBottom="$2">
+              <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
                   {sessions.length} session{sessions.length !== 1 ? "s" : ""}
                 </Text>
               </XStack>
 
-              {/* List */}
               <FlatList
                 data={sessions}
                 keyExtractor={(s) => s.id}
@@ -265,12 +264,12 @@ export const SessionListSheet = memo(
                     alignItems="center"
                     justifyContent="center"
                     paddingVertical="$10"
-                    gap="$2"
+                    gap={8}
                   >
                     <Text color={colors.text.muted} fontSize={14}>
                       No sessions found
                     </Text>
-                    <Text color={colors.text.muted} fontSize={12}>
+                    <Text color={colors.text.muted} fontSize={12} opacity={0.7}>
                       Create a new session to get started
                     </Text>
                   </YStack>

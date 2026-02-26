@@ -1,7 +1,9 @@
-import { Pressable } from "react-native";
+import { Pressable, View, StyleSheet, Image } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import type { ConnectionStatus } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
+
+const logoIcon = require("../../assets/logo-icon.png");
 
 type Props = {
   sessionId: string;
@@ -14,6 +16,35 @@ type Props = {
   onAgentPress?: () => void;
   onSettingsPress?: () => void;
 };
+
+const SettingsIcon = ({ color, size = 16 }: { color: string; size?: number }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={[iconStyles.gear, { borderColor: color }]}>
+      <View style={[iconStyles.gearCenter, { backgroundColor: color }]} />
+    </View>
+  </View>
+);
+
+const AgentIcon = ({ color, size = 12 }: { color: string; size?: number }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={[iconStyles.agentHead, { backgroundColor: color }]} />
+    <View style={[iconStyles.agentBody, { backgroundColor: color }]} />
+  </View>
+);
+
+const ChevronDown = ({ color, size = 8 }: { color: string; size?: number }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={[iconStyles.chevron, { borderBottomColor: color, borderRightColor: color }]} />
+  </View>
+);
+
+const iconStyles = StyleSheet.create({
+  gear: { width: 13, height: 13, borderWidth: 1.8, borderRadius: 6.5, alignItems: "center", justifyContent: "center" },
+  gearCenter: { width: 4, height: 4, borderRadius: 2 },
+  agentHead: { width: 6, height: 6, borderRadius: 3, marginBottom: 1 },
+  agentBody: { width: 10, height: 4, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
+  chevron: { width: 5, height: 5, borderBottomWidth: 1.5, borderRightWidth: 1.5, transform: [{ rotate: "45deg" }], marginTop: -2 },
+});
 
 export const ChatHeader = ({
   sessionId,
@@ -34,46 +65,50 @@ export const ChatHeader = ({
     <XStack
       alignItems="center"
       justifyContent="space-between"
-      paddingHorizontal="$4"
-      paddingVertical="$3"
+      paddingHorizontal={16}
+      paddingVertical={12}
+      borderBottomWidth={1}
+      borderColor={colors.border.subtle}
     >
-      <YStack gap="$1">
-        <XStack alignItems="center" gap="$2">
-          <Text color={colors.text.primary} fontSize={20} fontWeight="700" letterSpacing={-0.5}>
-            ViewClaw
+      <YStack gap={4}>
+        <XStack alignItems="center" gap={6}>
+          <Image source={logoIcon} style={{ width: 26, height: 26 }} resizeMode="contain" />
+          <Text color={colors.brand.blue} fontSize={20} fontWeight="800" letterSpacing={-0.5}>
+            Claw
+          </Text>
+          <Text color={colors.brand.purple} fontSize={20} fontWeight="800" letterSpacing={-0.5} marginLeft={-6}>
+            Flow
           </Text>
           {agentId && (
             <Pressable onPress={onAgentPress}>
               <XStack
                 alignItems="center"
-                gap="$1"
-                backgroundColor={colors.accent.purple + "18"}
-                paddingHorizontal="$2"
-                paddingVertical="$1"
+                gap={4}
+                backgroundColor={colors.brand.purple + "14"}
+                paddingHorizontal={8}
+                paddingVertical={4}
                 borderRadius={6}
                 borderWidth={1}
-                borderColor={colors.accent.purple + "30"}
+                borderColor={colors.brand.purple + "28"}
               >
-                <Text fontSize={11}>🤖</Text>
-                <Text color={colors.accent.purple} fontSize={11} fontWeight="600">
+                <AgentIcon color={colors.brand.purple} />
+                <Text color={colors.brand.purple} fontSize={11} fontWeight="600">
                   {agentId}
                 </Text>
-                <Text color={colors.accent.purple} fontSize={9} opacity={0.6}>
-                  ▾
-                </Text>
+                <ChevronDown color={colors.brand.purple} />
               </XStack>
             </Pressable>
           )}
         </XStack>
         <Pressable onPress={onSessionPress}>
-          <XStack alignItems="center" gap="$1.5">
+          <XStack alignItems="center" gap={6}>
             <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
               {shortId}
             </Text>
             {sessionCount != null && sessionCount > 0 && (
               <YStack
                 backgroundColor={colors.bg.elevated}
-                paddingHorizontal="$1.5"
+                paddingHorizontal={6}
                 paddingVertical={1}
                 borderRadius={4}
               >
@@ -82,41 +117,41 @@ export const ChatHeader = ({
                 </Text>
               </YStack>
             )}
-            <Text color={colors.text.muted} fontSize={10}>
-              ▾
-            </Text>
+            <ChevronDown color={colors.text.muted} />
           </XStack>
         </Pressable>
       </YStack>
 
-      <YStack alignItems="flex-end" gap="$1.5">
-        <XStack alignItems="center" gap="$2">
+      <YStack alignItems="flex-end" gap={6}>
+        <XStack alignItems="center" gap={8}>
           <Pressable onPress={onSettingsPress}>
             <YStack
-              paddingHorizontal="$2"
-              paddingVertical="$1.5"
-              borderRadius="$10"
-              backgroundColor={colors.bg.elevated}
+              width={32}
+              height={32}
+              borderRadius={16}
+              backgroundColor={colors.bg.tertiary}
+              alignItems="center"
+              justifyContent="center"
             >
-              <Text fontSize={14}>⚙</Text>
+              <SettingsIcon color={colors.text.secondary} />
             </YStack>
           </Pressable>
           <Pressable onPress={onGatewayPress}>
             <XStack
               alignItems="center"
-              gap="$1.5"
-              backgroundColor={colors.bg.elevated}
-              paddingHorizontal="$2.5"
-              paddingVertical="$1.5"
-              borderRadius="$10"
+              gap={6}
+              backgroundColor={colors.bg.tertiary}
+              paddingHorizontal={10}
+              height={32}
+              borderRadius={16}
             >
               <YStack
-                width={6}
-                height={6}
-                borderRadius={3}
+                width={7}
+                height={7}
+                borderRadius={3.5}
                 backgroundColor={statusColor}
               />
-              <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5}>
+              <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5} fontWeight="500">
                 {status}
               </Text>
             </XStack>
@@ -124,9 +159,12 @@ export const ChatHeader = ({
         </XStack>
         {gatewayLabel && (
           <Pressable onPress={onGatewayPress}>
-            <Text color={colors.text.muted} fontSize={10}>
-              {gatewayLabel} ▾
-            </Text>
+            <XStack alignItems="center" gap={4}>
+              <Text color={colors.text.muted} fontSize={10}>
+                {gatewayLabel}
+              </Text>
+              <ChevronDown color={colors.text.muted} size={6} />
+            </XStack>
           </Pressable>
         )}
       </YStack>
