@@ -25,8 +25,8 @@
 - [x] **服务端连接管理**
   支持配置多个 Gateway 地址（本地/远程），连接切换 UI，连接状态持久化（AsyncStorage），断线自动重连策略优化（指数退避）
 
-- [ ] **对话追加**
-  支持用户在 AI 回复生成过程中继续输入并发送新消息，新消息追加到对话流中排队等待处理，AI 完成当前回复后自动处理追加的消息，确保对话流不被阻塞、用户无需等待即可连续提问
+- [x] **对话追加（steer 模式）**
+  基于 OpenClaw Gateway 的命令队列机制（[文档](https://docs.openclaw.ai/zh-CN/concepts/queue)），采用 `steer` 模式：用户在 AI 回复生成过程中发送新消息时，立即注入当前运行（在下一个工具边界取消待处理的工具调用），引导 AI 回复方向；若当前未在流式传输则回退为 followup。Mobile 端在 AI 流式回复期间保持输入框可用，发送的消息立即显示在对话流中，实现即时打断引导的交互体验
 
 - [ ] **Gateway 远程鉴权**
   GatewayConfig 增加可选 token 字段，WebSocket 连接和 HTTP 请求时携带 Bearer Token，支持远程部署的 Elysia 服务端鉴权场景

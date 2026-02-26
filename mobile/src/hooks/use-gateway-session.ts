@@ -187,6 +187,13 @@ export const useGatewaySession = ({
       }
 
       if (event.type === "message_done") {
+        const steered = p.steered === true;
+        if (steered) {
+          // Server aborted the previous run; Mobile sendMessage already finalized
+          // the streaming message, so just reset refs to avoid stale state.
+          streamingMsgRef.current = null;
+          return;
+        }
         const msgId = event.messageId ?? streamingMsgRef.current;
         const content = typeof p.content === "string" ? p.content : undefined;
         if (msgId) {
@@ -537,6 +544,11 @@ export const useGatewaySession = ({
       const text = content.trim();
       if ((!text && !images?.length) || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
+      if (streamingMsgRef.current) {
+        finalizeStreamingMessage(streamingMsgRef.current);
+      }
+      removeTyping();
+
       const messageId = `local-${Date.now()}`;
       const msg: ChatMessage = {
         id: messageId,
@@ -578,7 +590,7 @@ export const useGatewaySession = ({
       wsRef.current.send(JSON.stringify(wsPayload));
       setTimeout(() => setSending(false), 80);
     },
-    [uploadImage],
+    [uploadImage, finalizeStreamingMessage, removeTyping],
   );
 
   const switchSession = useCallback(

@@ -36,11 +36,13 @@ export const sendMessage = async (body: {
   sessionKey?: string;
   overrideToken?: string;
   onStream?: StreamCallback;
+  signal?: AbortSignal;
 }): Promise<{
   ok: boolean;
   status?: number;
   responseId?: string;
   error?: string;
+  aborted?: boolean;
 }> => {
   const url = `${OPENCLAW_BASE_URL}/v1/responses`;
   const authHeaders = await buildAuthHeaders(body.overrideToken);
@@ -73,6 +75,7 @@ export const sendMessage = async (body: {
         ...(body.sessionKey ? { "x-openclaw-session-key": body.sessionKey } : {}),
       },
       body: JSON.stringify(requestBody),
+      signal: body.signal,
     });
 
     if (!response.ok) {
@@ -95,46 +98,54 @@ export const sendMessage = async (body: {
     const decoder = new TextDecoder();
     let remainder = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      remainder += decoder.decode(value, { stream: true });
-      const lines = remainder.split("\n");
-      remainder = lines.pop() ?? "";
+        remainder += decoder.decode(value, { stream: true });
+        const lines = remainder.split("\n");
+        remainder = lines.pop() ?? "";
 
-      for (const line of lines) {
-        if (line.startsWith("data: ")) {
-          const raw = line.slice(6).trim();
-          if (raw === "[DONE]") continue;
+        for (const line of lines) {
+          if (line.startsWith("data: ")) {
+            const raw = line.slice(6).trim();
+            if (raw === "[DONE]") continue;
 
-          try {
-            const evt = JSON.parse(raw);
+            try {
+              const evt = JSON.parse(raw);
 
-            if (evt.type === "response.created") {
-              responseId = evt.response?.id ?? "";
-            }
+              if (evt.type === "response.created") {
+                responseId = evt.response?.id ?? "";
+              }
 
-            if (evt.type === "response.output_item.added" && evt.item?.role === "assistant") {
-              currentMsgId = evt.item.id ?? `stream-msg-${Date.now()}`;
-              body.onStream!({ type: "message_start", messageId: currentMsgId });
-            }
+              if (evt.type === "response.output_item.added" && evt.item?.role === "assistant") {
+                currentMsgId = evt.item.id ?? `stream-msg-${Date.now()}`;
+                body.onStream!({ type: "message_start", messageId: currentMsgId });
+              }
 
-            if (evt.type === "response.output_text.delta" && evt.delta) {
-              fullText += evt.delta;
-              body.onStream!({ type: "message_delta", messageId: currentMsgId, delta: evt.delta });
-            }
+              if (evt.type === "response.output_text.delta" && evt.delta) {
+                fullText += evt.delta;
+                body.onStream!({ type: "message_delta", messageId: currentMsgId, delta: evt.delta });
+              }
 
-            if (evt.type === "response.completed") {
-              body.onStream!({ type: "message_done", messageId: currentMsgId, content: fullText });
-            }
-          } catch { /* skip malformed */ }
+              if (evt.type === "response.completed") {
+                body.onStream!({ type: "message_done", messageId: currentMsgId, content: fullText });
+              }
+            } catch { /* skip malformed */ }
+          }
         }
       }
+    } finally {
+      reader.releaseLock();
     }
 
     return { ok: true, status: response.status, responseId };
   } catch (error) {
+    const name = (error as { name?: string })?.name;
+    if (name === "AbortError" || body.signal?.aborted) {
+      return { ok: true, aborted: true };
+    }
     return { ok: false, error: (error as Error).message };
   }
 };

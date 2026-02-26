@@ -18,6 +18,8 @@ import {
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 
+const activeRuns = new Map<string, AbortController>();
+
 const CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-5.3-codex": 200_000,
   "gpt-4.1": 1_000_000,
@@ -351,11 +353,26 @@ export const app = new Elysia()
       const messageId = crypto.randomUUID();
       const sessionId = body.sessionId ?? "default";
 
+      const prevController = activeRuns.get(sessionId);
+      if (prevController) {
+        prevController.abort();
+        activeRuns.delete(sessionId);
+        emitEvent({
+          type: "message_done",
+          sessionId,
+          payload: { steered: true },
+        });
+      }
+
+      const abortController = new AbortController();
+      activeRuns.set(sessionId, abortController);
+
       const sessionKey = await resolveSessionKey(sessionId);
       const result = await sendMessage({
         content: body.content,
         agentId: body.agentId,
         sessionKey,
+        signal: abortController.signal,
         onStream: (evt) => {
           emitEvent({
             type: evt.type,
@@ -368,6 +385,10 @@ export const app = new Elysia()
           });
         },
       });
+
+      if (activeRuns.get(sessionId) === abortController) {
+        activeRuns.delete(sessionId);
+      }
 
       return { ok: true, accepted: true, messageId, forwarded: result };
     },
@@ -587,7 +608,21 @@ export const app = new Elysia()
         const messageId = body.messageId ?? crypto.randomUUID();
         const sessionId = body.sessionId ?? "default";
 
+        const prevController = activeRuns.get(sessionId);
+        if (prevController) {
+          prevController.abort();
+          activeRuns.delete(sessionId);
+          emitEvent({
+            type: "message_done",
+            sessionId,
+            payload: { steered: true },
+          });
+        }
+
         ws.send(JSON.stringify({ type: "ack", sessionId, messageId, ts: Date.now() }));
+
+        const abortController = new AbortController();
+        activeRuns.set(sessionId, abortController);
 
         const sessionKey = await resolveSessionKey(sessionId);
         sendMessage({
@@ -595,6 +630,7 @@ export const app = new Elysia()
           imagePaths: body.imagePaths,
           agentId: body.agentId,
           sessionKey,
+          signal: abortController.signal,
           onStream: (evt) => {
             emitEvent({
               type: evt.type,
@@ -606,7 +642,13 @@ export const app = new Elysia()
               },
             });
           },
-        }).catch(() => {});
+        })
+          .catch(() => {})
+          .finally(() => {
+            if (activeRuns.get(sessionId) === abortController) {
+              activeRuns.delete(sessionId);
+            }
+          });
         return;
       }
 

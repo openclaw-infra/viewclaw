@@ -263,8 +263,8 @@ const groupStreamItems = (stream: StreamItem[]): DisplayItem[] => {
     if (item.kind === "log") {
       currentLogs.push(item.data);
     } else {
-      const isMessage = item.kind === "message" && item.data.role === "assistant";
-      flushLogs(isMessage);
+      const closesProcess = item.kind === "message";
+      flushLogs(closesProcess);
       if (item.kind === "message") {
         result.push({ kind: "message", id: item.data.id, data: item.data });
       } else {
