@@ -1,5 +1,6 @@
 import { memo, useCallback, useState } from "react";
-import { FlatList, Pressable, Modal } from "react-native";
+import { FlatList, Pressable, Modal, StyleSheet } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
@@ -226,11 +227,11 @@ export const SessionListSheet = memo(
                     </YStack>
                   </Pressable>
                   <Pressable onPress={handleCreate} disabled={creating}>
-                    <YStack
-                      paddingHorizontal={12}
-                      paddingVertical={6}
-                      borderRadius={12}
-                      backgroundColor={colors.brand.blue}
+                    <LinearGradient
+                      colors={["#2CB5E8", "#8E2DE2"]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={btnStyles.newBtn}
                     >
                       <Text
                         color={creating ? "rgba(255,255,255,0.5)" : "#FFFFFF"}
@@ -239,7 +240,7 @@ export const SessionListSheet = memo(
                       >
                         {creating ? t("common.creating") : t("common.new")}
                       </Text>
-                    </YStack>
+                    </LinearGradient>
                   </Pressable>
                 </XStack>
               </XStack>
@@ -285,3 +286,13 @@ export const SessionListSheet = memo(
     );
   }
 );
+
+const btnStyles = StyleSheet.create({
+  newBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

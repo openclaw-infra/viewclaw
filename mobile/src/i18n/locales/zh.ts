@@ -19,7 +19,7 @@ export default {
     version: "版本 {{version}}",
   },
   chat: {
-    placeholder: '给 ClawFlow 发消息... (输入 "/" 使用指令)',
+    placeholder: "向 ClawFlow 提问...",
     generating: "生成中",
     emptyTitle: "向 ClawFlow 发送任务",
     emptyHint: '输入 "/" 使用快捷指令',

@@ -19,7 +19,7 @@ export default {
     version: "Version {{version}}",
   },
   chat: {
-    placeholder: 'Message ClawFlow... (type "/" for commands)',
+    placeholder: "Ask ClawFlow...",
     generating: "Generating",
     emptyTitle: "Send a task to ClawFlow",
     emptyHint: 'Type "/" for quick commands',

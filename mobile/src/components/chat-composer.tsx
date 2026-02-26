@@ -1,5 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Input, Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
@@ -287,7 +288,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
 
         <XStack
           alignItems="center"
-          gap={8}
+          gap={6}
           backgroundColor={colors.bg.tertiary}
           borderRadius={24}
           borderWidth={1}
@@ -298,8 +299,8 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
                 ? colors.brand.blue
                 : colors.border.subtle
           }
-          paddingLeft={6}
-          paddingRight={6}
+          paddingLeft={5}
+          paddingRight={5}
           paddingVertical={4}
         >
           <Pressable onPress={pickImage} disabled={isVoiceBusy || sending || attachedImages.length >= 4}>
@@ -327,6 +328,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             borderWidth={0}
             color={colors.text.primary}
             fontSize={15}
+            paddingHorizontal={2}
             paddingVertical={8}
             returnKeyType="send"
             autoCorrect={false}
@@ -360,23 +362,44 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
           </Pressable>
 
           <Pressable onPress={submit} disabled={!canSend}>
-            <YStack
-              width={34}
-              height={34}
-              borderRadius={17}
-              backgroundColor={canSend ? colors.brand.blue : colors.bg.elevated}
-              alignItems="center"
-              justifyContent="center"
-            >
-              {sending ? (
-                <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
-              ) : (
-                <SendArrow color={canSend ? "#FFFFFF" : colors.text.muted} />
-              )}
-            </YStack>
+            {canSend ? (
+              <LinearGradient
+                colors={["#2CB5E8", "#8E2DE2"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={sendBtnStyles.gradient}
+              >
+                {sending ? (
+                  <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
+                ) : (
+                  <SendArrow color="#FFFFFF" />
+                )}
+              </LinearGradient>
+            ) : (
+              <View style={[sendBtnStyles.inactive, { backgroundColor: colors.bg.elevated }]}>
+                <SendArrow color={colors.text.muted} />
+              </View>
+            )}
           </Pressable>
         </XStack>
       </YStack>
     </YStack>
   );
 };
+
+const sendBtnStyles = StyleSheet.create({
+  gradient: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inactive: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
