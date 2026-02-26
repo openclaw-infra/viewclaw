@@ -16,68 +16,77 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const ReturnIcon = ({ color }: { color: string }) => (
-  <View style={{ width: 12, height: 12, alignItems: "center", justifyContent: "center" }}>
-    <View style={{ width: 8, height: 5, borderBottomWidth: 1.5, borderLeftWidth: 1.5, borderColor: color, borderBottomLeftRadius: 2 }} />
-    <View style={{ width: 4, height: 4, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderColor: color, transform: [{ rotate: "-45deg" }], position: "absolute", left: 0, bottom: 1 }} />
+  <View style={iconStyles.returnWrap}>
+    <View style={[iconStyles.returnArm, { borderColor: color }]} />
+    <View style={[iconStyles.returnHead, { borderColor: color }]} />
   </View>
 );
+
+const iconStyles = StyleSheet.create({
+  returnWrap: { width: 14, height: 14, alignItems: "center", justifyContent: "center" },
+  returnArm: { width: 9, height: 6, borderBottomWidth: 1.5, borderLeftWidth: 1.5, borderBottomLeftRadius: 2.5 },
+  returnHead: { width: 5, height: 5, borderTopWidth: 1.5, borderLeftWidth: 1.5, transform: [{ rotate: "-45deg" }], position: "absolute", left: 0, bottom: 1.5 },
+});
 
 const CommandRow = memo(
   ({ item, onSelect }: { item: SlashCommand; onSelect: (cmd: SlashCommand) => void }) => {
     const { colors } = useTheme();
-    const CATEGORY_COLORS: Record<string, string> = {
-      openclaw: colors.brand.blue,
-      custom: colors.accent.purple,
-    };
+    const catColor = item.category === "openclaw" ? colors.brand.blue : colors.accent.purple;
+
     return (
-    <Pressable onPress={() => onSelect(item)}>
-      {({ pressed }) => (
-        <XStack
-          paddingHorizontal={14}
-          paddingVertical={10}
-          gap={10}
-          alignItems="center"
-          backgroundColor={pressed ? colors.bg.elevated : "transparent"}
-        >
-          <YStack
-            width={6}
-            height={6}
-            borderRadius={3}
-            backgroundColor={CATEGORY_COLORS[item.category] ?? colors.text.muted}
-          />
-          <Text
-            color={colors.brand.blue}
-            fontSize={14}
-            fontWeight="600"
-            fontFamily="$mono"
-            flexShrink={0}
+      <Pressable onPress={() => onSelect(item)}>
+        {({ pressed }) => (
+          <XStack
+            paddingHorizontal={16}
+            paddingVertical={10}
+            gap={8}
+            alignItems="center"
+            backgroundColor={pressed ? colors.bg.elevated : "transparent"}
           >
-            {item.command}
-          </Text>
-          <Text
-            color={colors.text.secondary}
-            fontSize={13}
-            numberOfLines={1}
-            flex={1}
-          >
-            {item.description}
-          </Text>
-          {item.immediate && (
-            <ReturnIcon color={colors.text.muted} />
-          )}
-        </XStack>
-      )}
-    </Pressable>
+            <View style={[rowStyles.dot, { backgroundColor: catColor }]} />
+            <Text
+              color={colors.text.primary}
+              fontSize={14}
+              fontWeight="600"
+              fontFamily="$mono"
+              flexShrink={0}
+            >
+              {item.command}
+            </Text>
+            <Text
+              color={colors.text.muted}
+              fontSize={12}
+              numberOfLines={1}
+              flex={1}
+            >
+              {item.description}
+            </Text>
+            {item.immediate && (
+              <View style={[rowStyles.badge, { backgroundColor: catColor + "18" }]}>
+                <ReturnIcon color={catColor} />
+              </View>
+            )}
+          </XStack>
+        )}
+      </Pressable>
     );
   }
 );
 
+const rowStyles = StyleSheet.create({
+  dot: { width: 5, height: 5, borderRadius: 2.5 },
+  badge: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});
+
 export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
-  const { colors } = useTheme();
-  const CATEGORY_COLORS: Record<string, string> = {
-    openclaw: colors.brand.blue,
-    custom: colors.accent.purple,
-  };
+  const { colors, isDark } = useTheme();
+
   const filtered = useMemo(() => {
     const q = filter.toLowerCase();
     if (!q) return SLASH_COMMANDS;
@@ -108,19 +117,29 @@ export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
   return (
     <YStack
       backgroundColor={colors.bg.secondary}
-      borderTopWidth={1}
+      borderTopLeftRadius={12}
+      borderTopRightRadius={12}
+      borderWidth={1}
+      borderBottomWidth={0}
       borderColor={colors.border.subtle}
-      maxHeight={260}
+      maxHeight={280}
+      {...(isDark && {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+      })}
     >
       <FlatList
         data={grouped}
         keyExtractor={(g) => g.category}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingVertical: 4 }}
         renderItem={({ item: group }) => (
           <YStack>
-            <XStack paddingHorizontal={14} paddingVertical={6}>
+            <XStack paddingHorizontal={16} paddingTop={8} paddingBottom={4}>
               <Text
-                color={CATEGORY_COLORS[group.category] ?? colors.text.muted}
+                color={group.category === "openclaw" ? colors.brand.blue : colors.accent.purple}
                 fontSize={11}
                 fontWeight="700"
                 textTransform="uppercase"

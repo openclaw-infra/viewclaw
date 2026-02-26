@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { Pressable, Alert, View, StyleSheet, Image, ScrollView } from "react-native";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing } from "react-native";
 import { Input, Text, XStack, YStack } from "tamagui";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../theme/theme-context";
@@ -170,10 +170,47 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
   const isTranscribing = voice.status === "transcribing";
   const isVoiceBusy = isRecording || isTranscribing;
 
+  const slashVisible = !!slashState?.active;
+  const slashAnim = useRef(new Animated.Value(0)).current;
+  const [slashMounted, setSlashMounted] = useState(false);
+
+  useEffect(() => {
+    if (slashVisible) {
+      setSlashMounted(true);
+      Animated.timing(slashAnim, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    } else if (slashMounted) {
+      Animated.timing(slashAnim, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setSlashMounted(false);
+      });
+    }
+  }, [slashVisible]);
+
   return (
     <YStack>
-      {slashState?.active && (
-        <SlashCommandPanel filter={slashState.filter} onSelect={handleSelect} />
+      {slashMounted && (
+        <Animated.View
+          style={{
+            opacity: slashAnim,
+            transform: [{
+              translateY: slashAnim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [20, 0],
+              }),
+            }],
+          }}
+        >
+          <SlashCommandPanel filter={slashState?.filter ?? ""} onSelect={handleSelect} />
+        </Animated.View>
       )}
 
       {isRecording && (
