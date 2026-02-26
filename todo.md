@@ -30,7 +30,7 @@
 
 ## P2 — 多模态 & 管理
 
-- [ ] **语音输入**
+- [x] **语音输入**
   集成 expo-av 实现语音录制 → Whisper/本地 STT 转文字，ChatComposer 增加麦克风按钮
 
 - [ ] **图片支持**
@@ -45,7 +45,7 @@
 ## P3 — 品牌 & 设置 & 美化
 
 - [ ] **项目名称修改**
-  确定正式产品名称（替换当前 ViewClaw），统一更新 App 显示名、Header 标题、package.json name、app.json、启动屏、README 等所有引用处
+  确定正式产品名称ClawFlow（替换当前 ViewClaw），统一更新 App 显示名、Header 标题、package.json name、app.json、启动屏、README 等所有引用处
 
 - [ ] **整体 UI 精修美化**
   统一间距/圆角/字号/字重规范，优化动画过渡（列表进入、卡片展开、发送反馈），气泡阴影与层次感，空状态/加载态/错误态的精致插画，适配不同屏幕尺寸，整体视觉一致性打磨

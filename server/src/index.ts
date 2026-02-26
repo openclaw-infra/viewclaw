@@ -1,5 +1,5 @@
 import { Elysia, t } from "elysia";
-import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME } from "./config";
+import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
 import { startWatcher, stopWatcher, isWatching, getActiveWatchers } from "./jsonl-watcher";
 import {
@@ -103,6 +103,59 @@ export const app = new Elysia()
         sessionId: t.Optional(t.String()),
         content: t.String(),
         agentId: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  .post(
+    "/api/transcribe",
+    async ({ body }) => {
+      if (!WHISPER_API_KEY) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "OPENAI_API_KEY not configured on server" }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      const file = body.file;
+      if (!file || !(file instanceof Blob)) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "No audio file provided" }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file, (file as File).name || "recording.m4a");
+        formData.append("model", WHISPER_MODEL);
+
+        const res = await fetch(WHISPER_API_URL, {
+          method: "POST",
+          headers: { authorization: `Bearer ${WHISPER_API_KEY}` },
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          return new Response(
+            JSON.stringify({ ok: false, error: errText }),
+            { status: res.status, headers: { "content-type": "application/json" } },
+          );
+        }
+
+        const data = await res.json() as { text?: string };
+        return { ok: true, text: data.text ?? "" };
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ ok: false, error: (error as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    },
+    {
+      body: t.Object({
+        file: t.File(),
       }),
     }
   )

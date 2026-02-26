@@ -11,6 +11,7 @@
     "dev:server": "bun run --cwd server dev"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^3.0.1"
+    "@react-native-async-storage/async-storage": "^3.0.1",
+    "expo-av": "^16.0.8"
   }
 }

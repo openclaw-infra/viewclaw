@@ -52,6 +52,7 @@ export default function App() {
 
               <ChatComposer
                 sending={session.sending}
+                gatewayHttpUrl={session.gatewayHttpUrl}
                 onSend={session.sendMessage}
               />
             </YStack>

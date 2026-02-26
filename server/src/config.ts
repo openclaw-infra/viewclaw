@@ -9,6 +9,11 @@ export const OPENCLAW_BASE_URL = process.env.OPENCLAW_BASE_URL ?? "http://127.0.
 
 export const JSONL_POLL_INTERVAL_MS = 150;
 
+export const WHISPER_API_URL =
+  process.env.WHISPER_API_URL ?? "https://api.openai.com/v1/audio/transcriptions";
+export const WHISPER_API_KEY = process.env.OPENAI_API_KEY ?? "";
+export const WHISPER_MODEL = process.env.WHISPER_MODEL ?? "whisper-1";
+
 export const normalizeToken = (token?: string | null): string => {
   if (!token) return "";
   return token.trim();
