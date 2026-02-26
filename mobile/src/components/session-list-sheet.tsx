@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { FlatList, Pressable, Modal } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
 import type { SessionInfo } from "../types/gateway";
 
@@ -14,7 +15,7 @@ type Props = {
   onRefresh: () => Promise<void>;
 };
 
-const formatDate = (iso: string): string => {
+const formatDate = (iso: string, yesterdayLabel: string): string => {
   if (!iso) return "—";
   const d = new Date(iso);
   const now = new Date();
@@ -35,7 +36,7 @@ const formatDate = (iso: string): string => {
     d.getDate() === yesterday.getDate();
 
   if (isYesterday) {
-    return "Yesterday " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return yesterdayLabel + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
 
   return d.toLocaleDateString([], { month: "short", day: "numeric" }) +
@@ -53,6 +54,7 @@ const SessionRow = memo(
     onSelect: (id: string) => void;
   }) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const shortId = item.id.slice(0, 8);
     const displayTitle = item.title ?? (item.sessionKey
       ? item.sessionKey.replace(/^agent:\w+:/, "").replace(/^openresponses:/, "").slice(0, 20)
@@ -96,7 +98,7 @@ const SessionRow = memo(
                     flexShrink={0}
                   >
                     <Text color="#FFFFFF" fontSize={9} fontWeight="700" letterSpacing={0.5}>
-                      ACTIVE
+                      {t("common.active")}
                     </Text>
                   </YStack>
                 )}
@@ -106,7 +108,7 @@ const SessionRow = memo(
                   {shortId}
                 </Text>
                 <Text color={colors.text.muted} fontSize={11}>
-                  {formatDate(item.createdAt)}
+                  {formatDate(item.createdAt, t("common.yesterday"))}
                 </Text>
               </XStack>
             </YStack>
@@ -128,6 +130,7 @@ export const SessionListSheet = memo(
     onRefresh,
   }: Props) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [creating, setCreating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
 
@@ -201,7 +204,7 @@ export const SessionListSheet = memo(
                   fontSize={20}
                   fontWeight="700"
                 >
-                  Sessions
+                  {t("sessionList.title")}
                 </Text>
                 <XStack gap={8}>
                   <Pressable onPress={handleRefresh} disabled={refreshing}>
@@ -218,7 +221,7 @@ export const SessionListSheet = memo(
                         fontSize={12}
                         fontWeight="600"
                       >
-                        {refreshing ? "..." : "Refresh"}
+                        {refreshing ? "..." : t("common.refresh")}
                       </Text>
                     </YStack>
                   </Pressable>
@@ -234,7 +237,7 @@ export const SessionListSheet = memo(
                         fontSize={12}
                         fontWeight="600"
                       >
-                        {creating ? "Creating..." : "+ New"}
+                        {creating ? t("common.creating") : t("common.new")}
                       </Text>
                     </YStack>
                   </Pressable>
@@ -243,7 +246,7 @@ export const SessionListSheet = memo(
 
               <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
-                  {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+                  {t("sessionList.sessionCount", { count: sessions.length })}
                 </Text>
               </XStack>
 
@@ -267,10 +270,10 @@ export const SessionListSheet = memo(
                     gap={8}
                   >
                     <Text color={colors.text.muted} fontSize={14}>
-                      No sessions found
+                      {t("sessionList.noSessions")}
                     </Text>
                     <Text color={colors.text.muted} fontSize={12} opacity={0.7}>
-                      Create a new session to get started
+                      {t("sessionList.createToStart")}
                     </Text>
                   </YStack>
                 }

@@ -1,3 +1,4 @@
+import "./src/i18n";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";

@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { FlatList, Pressable, Modal, ActivityIndicator, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
 import type { AgentInfo } from "../types/gateway";
 
@@ -76,6 +77,7 @@ const AgentRow = memo(
     onSelect: (id: string) => void;
   }) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [expanded, setExpanded] = useState(false);
     const hasDetails = !!(item.model || item.workspace || item.instructions);
 
@@ -127,14 +129,14 @@ const AgentRow = memo(
                         borderRadius={4}
                       >
                         <Text color="#FFFFFF" fontSize={9} fontWeight="700">
-                          ACTIVE
+                          {t("common.active")}
                         </Text>
                       </YStack>
                     )}
                   </XStack>
                   <XStack gap="$2" alignItems="center">
                     <Text color={colors.text.muted} fontSize={11}>
-                      {item.sessionCount} session{item.sessionCount !== 1 ? "s" : ""}
+                      {t("agent.sessionCount", { count: item.sessionCount })}
                     </Text>
                     {item.model && (
                       <YStack
@@ -167,7 +169,7 @@ const AgentRow = memo(
                     backgroundColor={colors.bg.tertiary}
                   >
                     <Text color={colors.text.secondary} fontSize={11}>
-                      {expanded ? "Less" : "Info"}
+                      {expanded ? t("common.less") : t("common.info")}
                     </Text>
                   </YStack>
                 </Pressable>
@@ -183,11 +185,11 @@ const AgentRow = memo(
                 borderColor={colors.border.subtle}
                 marginTop="$1"
               >
-                {item.model && <InfoRow label="Model" value={item.model} />}
-                {item.workspace && <InfoRow label="Workspace" value={item.workspace} />}
+                {item.model && <InfoRow label={t("agent.model")} value={item.model} />}
+                {item.workspace && <InfoRow label={t("agent.workspace")} value={item.workspace} />}
                 {item.instructions && (
                   <InfoRow
-                    label="Prompt"
+                    label={t("agent.prompt")}
                     value={
                       item.instructions.length > 200
                         ? item.instructions.slice(0, 200) + "..."
@@ -215,6 +217,7 @@ export const AgentSheet = memo(
     onRefresh,
   }: Props) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [refreshing, setRefreshing] = useState(false);
 
     const handleRefresh = useCallback(async () => {
@@ -277,7 +280,7 @@ export const AgentSheet = memo(
                   fontSize={20}
                   fontWeight="700"
                 >
-                  Agents
+                  {t("agent.title")}
                 </Text>
                 <Pressable onPress={handleRefresh} disabled={refreshing}>
                   <YStack
@@ -293,7 +296,7 @@ export const AgentSheet = memo(
                       fontSize={12}
                       fontWeight="600"
                     >
-                      {refreshing ? "..." : "Refresh"}
+                      {refreshing ? "..." : t("common.refresh")}
                     </Text>
                   </YStack>
                 </Pressable>
@@ -301,7 +304,7 @@ export const AgentSheet = memo(
 
               <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
-                  {agents.length} agent{agents.length !== 1 ? "s" : ""} available
+                  {t("agent.agentCount", { count: agents.length })}
                 </Text>
               </XStack>
 
@@ -315,7 +318,7 @@ export const AgentSheet = memo(
                 >
                   <ActivityIndicator color={colors.accent.purple} />
                   <Text color={colors.text.muted} fontSize={13}>
-                    Loading agents...
+                    {t("agent.loadingAgents")}
                   </Text>
                 </YStack>
               ) : (
@@ -339,10 +342,10 @@ export const AgentSheet = memo(
                       gap="$2"
                     >
                       <Text color={colors.text.muted} fontSize={14}>
-                        No agents found
+                        {t("agent.noAgents")}
                       </Text>
                       <Text color={colors.text.muted} fontSize={12}>
-                        Make sure OpenClaw is running
+                        {t("agent.ensureRunning")}
                       </Text>
                     </YStack>
                   }

@@ -1,6 +1,7 @@
 import { memo, useCallback, useState } from "react";
 import { FlatList, Pressable, Modal, TextInput, Alert } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
 import type { GatewayConfig } from "../types/gateway";
 
@@ -37,6 +38,7 @@ const GatewayRow = memo(
     onDelete: (id: string) => void;
   }) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const isDefault = item.id === "default-local";
 
     return (
@@ -76,7 +78,7 @@ const GatewayRow = memo(
                     borderRadius={4}
                   >
                     <Text color="#FFFFFF" fontSize={9} fontWeight="700">
-                      ACTIVE
+                      {t("common.active")}
                     </Text>
                   </YStack>
                 )}
@@ -100,7 +102,7 @@ const GatewayRow = memo(
                   backgroundColor={colors.bg.tertiary}
                 >
                   <Text color={colors.text.secondary} fontSize={11}>
-                    Edit
+                    {t("common.edit")}
                   </Text>
                 </YStack>
               </Pressable>
@@ -113,7 +115,7 @@ const GatewayRow = memo(
                     backgroundColor={colors.bg.tertiary}
                   >
                     <Text color={colors.accent.red} fontSize={11}>
-                      Del
+                      {t("gateway.del")}
                     </Text>
                   </YStack>
                 </Pressable>
@@ -137,6 +139,7 @@ const EditForm = memo(
     onCancel: () => void;
   }) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [label, setLabel] = useState(editing.label);
     const [url, setUrl] = useState(editing.url);
     const canSave = label.trim().length > 0 && url.trim().length > 0;
@@ -149,17 +152,17 @@ const EditForm = memo(
         borderColor={colors.border.subtle}
       >
         <Text color={colors.text.primary} fontSize={15} fontWeight="600">
-          {editing.mode === "add" ? "Add Gateway" : "Edit Gateway"}
+          {editing.mode === "add" ? t("gateway.addGateway") : t("gateway.editGateway")}
         </Text>
 
         <YStack gap="$1.5">
           <Text color={colors.text.secondary} fontSize={12}>
-            Label
+            {t("gateway.label")}
           </Text>
           <TextInput
             value={label}
             onChangeText={setLabel}
-            placeholder="e.g. Home Server"
+            placeholder={t("gateway.labelPlaceholder")}
             placeholderTextColor={colors.text.muted}
             style={{
               backgroundColor: colors.bg.tertiary,
@@ -176,12 +179,12 @@ const EditForm = memo(
 
         <YStack gap="$1.5">
           <Text color={colors.text.secondary} fontSize={12}>
-            WebSocket URL
+            {t("gateway.websocketUrl")}
           </Text>
           <TextInput
             value={url}
             onChangeText={setUrl}
-            placeholder="ws://192.168.1.100:3000"
+            placeholder={t("gateway.urlPlaceholder")}
             placeholderTextColor={colors.text.muted}
             autoCapitalize="none"
             autoCorrect={false}
@@ -209,7 +212,7 @@ const EditForm = memo(
               backgroundColor={colors.bg.elevated}
             >
               <Text color={colors.text.secondary} fontSize={13} fontWeight="600">
-                Cancel
+                {t("common.cancel")}
               </Text>
             </YStack>
           </Pressable>
@@ -222,7 +225,7 @@ const EditForm = memo(
               opacity={canSave ? 1 : 0.5}
             >
               <Text color={canSave ? "#FFFFFF" : colors.text.muted} fontSize={13} fontWeight="600">
-                Save
+                {t("common.save")}
               </Text>
             </YStack>
           </Pressable>
@@ -244,6 +247,7 @@ export const GatewaySheet = memo(
     onRemove,
   }: Props) => {
     const { colors } = useTheme();
+    const { t } = useTranslation();
     const [editing, setEditing] = useState<EditingState | null>(null);
 
     const handleSelect = useCallback(
@@ -260,10 +264,10 @@ export const GatewaySheet = memo(
 
     const handleDelete = useCallback(
       (id: string) => {
-        Alert.alert("Remove Gateway", "Are you sure?", [
-          { text: "Cancel", style: "cancel" },
+        Alert.alert(t("gateway.removeGateway"), t("gateway.removeConfirm"), [
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Remove",
+            text: t("common.remove"),
             style: "destructive",
             onPress: () => onRemove(id),
           },
@@ -334,7 +338,7 @@ export const GatewaySheet = memo(
                   fontSize={20}
                   fontWeight="700"
                 >
-                  Gateways
+                  {t("gateway.title")}
                 </Text>
                 <Pressable onPress={openAddForm}>
                   <YStack
@@ -344,7 +348,7 @@ export const GatewaySheet = memo(
                     backgroundColor={colors.brand.blue}
                   >
                     <Text color="#FFFFFF" fontSize={12} fontWeight="600">
-                      + Add
+                      {t("common.add")}
                     </Text>
                   </YStack>
                 </Pressable>
@@ -352,7 +356,7 @@ export const GatewaySheet = memo(
 
               <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
-                  {gateways.length} gateway{gateways.length !== 1 ? "s" : ""} configured
+                  {t("gateway.gatewayCount", { count: gateways.length })}
                 </Text>
               </XStack>
 
@@ -379,7 +383,7 @@ export const GatewaySheet = memo(
                     gap="$2"
                   >
                     <Text color={colors.text.muted} fontSize={14}>
-                      No gateways configured
+                      {t("gateway.noGateways")}
                     </Text>
                   </YStack>
                 }

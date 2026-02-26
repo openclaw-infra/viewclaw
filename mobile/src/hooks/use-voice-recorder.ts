@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Audio } from "expo-av";
+import i18n from "../i18n";
 
 export type RecordingStatus = "idle" | "recording" | "transcribing";
 
@@ -19,7 +20,7 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
     try {
       const { granted } = await Audio.requestPermissionsAsync();
       if (!granted) {
-        onError?.("Microphone permission denied");
+        onError?.(i18n.t("voice.micPermissionDenied"));
         return;
       }
 
@@ -67,7 +68,7 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
       recordingRef.current = null;
 
       if (!uri) {
-        onError?.("No recording URI");
+        onError?.(i18n.t("voice.noRecordingUri"));
         setStatus("idle");
         return;
       }
@@ -86,7 +87,7 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
 
       if (!res.ok) {
         const text = await res.text();
-        onError?.(text || `Transcription failed (${res.status})`);
+        onError?.(text || i18n.t("voice.transcriptionFailed", { status: res.status }));
         setStatus("idle");
         return;
       }
@@ -97,7 +98,7 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
       if (transcript) {
         onTranscript?.(transcript);
       } else {
-        onError?.("No speech detected");
+        onError?.(i18n.t("voice.noSpeechDetected"));
       }
     } catch (err) {
       onError?.((err as Error).message);

@@ -1,19 +1,20 @@
 import { memo, useMemo } from "react";
 import { FlatList, Pressable, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
 import type { SlashCommand } from "../data/slash-commands";
-import { SLASH_COMMANDS } from "../data/slash-commands";
+import { getSlashCommands } from "../data/slash-commands";
 
 type Props = {
   filter: string;
   onSelect: (cmd: SlashCommand) => void;
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  openclaw: "OpenClaw",
-  custom: "Custom",
-};
+const getCategoryLabels = (t: (key: string) => string): Record<string, string> => ({
+  openclaw: t("slashCommand.openclaw"),
+  custom: t("slashCommand.custom"),
+});
 
 const ReturnIcon = ({ color }: { color: string }) => (
   <View style={iconStyles.returnWrap}>
@@ -86,17 +87,20 @@ const rowStyles = StyleSheet.create({
 
 export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
   const { colors, isDark } = useTheme();
+  const { t } = useTranslation();
+  const commands = useMemo(() => getSlashCommands(t), [t]);
+  const categoryLabels = useMemo(() => getCategoryLabels(t), [t]);
 
   const filtered = useMemo(() => {
     const q = filter.toLowerCase();
-    if (!q) return SLASH_COMMANDS;
-    return SLASH_COMMANDS.filter(
+    if (!q) return commands;
+    return commands.filter(
       (c) =>
         c.command.toLowerCase().includes(q) ||
         c.label.toLowerCase().includes(q) ||
         c.description.toLowerCase().includes(q)
     );
-  }, [filter]);
+  }, [filter, commands]);
 
   const grouped = useMemo(() => {
     const groups: { category: string; data: SlashCommand[] }[] = [];
@@ -145,7 +149,7 @@ export const SlashCommandPanel = memo(({ filter, onSelect }: Props) => {
                 textTransform="uppercase"
                 letterSpacing={0.8}
               >
-                {CATEGORY_LABELS[group.category] ?? group.category}
+                {categoryLabels[group.category] ?? group.category}
               </Text>
             </XStack>
             {group.data.map((cmd) => (

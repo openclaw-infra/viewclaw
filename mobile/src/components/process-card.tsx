@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Pressable, View, StyleSheet, Animated, Easing, LayoutAnimation, Platform, UIManager } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import type { ExecutionLog } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
 import type { ColorPalette } from "../theme/colors";
@@ -88,13 +89,13 @@ const SpinnerDot = ({ color }: { color: string }) => {
   );
 };
 
-const getNodeMeta = (colors: ColorPalette) => ({
-  thought: { label: "Thinking", color: colors.log.thought },
-  action: { label: "Tool Call", color: colors.log.action },
-  observation: { label: "Result", color: colors.log.observation },
-  error: { label: "Error", color: colors.log.error },
-  done: { label: "Completed", color: colors.log.done },
-  status: { label: "Status", color: colors.log.status },
+const getNodeMeta = (colors: ColorPalette, t: (key: string) => string) => ({
+  thought: { label: t("process.thinking"), color: colors.log.thought },
+  action: { label: t("process.toolCall"), color: colors.log.action },
+  observation: { label: t("process.result"), color: colors.log.observation },
+  error: { label: t("process.error"), color: colors.log.error },
+  done: { label: t("process.completed"), color: colors.log.done },
+  status: { label: t("process.status"), color: colors.log.status },
 });
 
 type OverallStatus = "running" | "success" | "error";
@@ -105,18 +106,18 @@ const getOverallStatus = (logs: ExecutionLog[]): OverallStatus => {
   return "running";
 };
 
-const getHeaderInfo = (logs: ExecutionLog[], colors: ColorPalette): { label: string; color: string } => {
+const getHeaderInfo = (logs: ExecutionLog[], colors: ColorPalette, t: (key: string) => string): { label: string; color: string } => {
   const status = getOverallStatus(logs);
-  if (status === "error") return { label: "Execution Error", color: colors.log.error };
-  if (status === "success") return { label: "Execution Complete", color: colors.log.done };
+  if (status === "error") return { label: t("process.executionError"), color: colors.log.error };
+  if (status === "success") return { label: t("process.executionComplete"), color: colors.log.done };
   const lastLog = logs[logs.length - 1];
   if (lastLog?.level === "action") {
-    return { label: lastLog.toolName ?? "Executing...", color: colors.state.running };
+    return { label: lastLog.toolName ?? t("process.executing"), color: colors.state.running };
   }
   if (lastLog?.level === "thought") {
-    return { label: "Thinking...", color: colors.log.thought };
+    return { label: t("process.thinkingEllipsis"), color: colors.log.thought };
   }
-  return { label: "Executing...", color: colors.state.running };
+  return { label: t("process.executing"), color: colors.state.running };
 };
 
 const ChevronDown = ({ color, expanded }: { color: string; expanded: boolean }) => (
@@ -250,10 +251,11 @@ const TimelineNode = ({
 
 export const ProcessCard = ({ logs }: Props) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
-  const nodeMeta = getNodeMeta(colors);
+  const nodeMeta = getNodeMeta(colors, t);
   const overallStatus = getOverallStatus(logs);
-  const headerInfo = getHeaderInfo(logs, colors);
+  const headerInfo = getHeaderInfo(logs, colors, t);
   const isRunning = overallStatus === "running";
 
   const visibleLogs = logs.filter((l) => l.level !== "status" && l.level !== "done");
@@ -332,7 +334,7 @@ export const ProcessCard = ({ logs }: Props) => {
 
           {collapsed && stepCount > 0 && (
             <Text color={colors.text.muted} fontSize={11}>
-              {stepCount} steps
+              {t("process.steps", { count: stepCount })}
             </Text>
           )}
 

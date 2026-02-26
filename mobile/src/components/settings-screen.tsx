@@ -1,9 +1,12 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, Alert, View, Image, Animated, Easing, Dimensions } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
 import type { ThemeMode } from "../theme/colors";
 import type { SessionInfo } from "../types/gateway";
+import { changeLanguage, getCurrentLanguagePref } from "../i18n";
+import type { AppLanguage } from "../data/settings-storage";
 
 const logoIcon = require("../../assets/logo-icon.png");
 const SCREEN_WIDTH = Dimensions.get("window").width;
@@ -72,11 +75,26 @@ const MonitorIcon = ({ color, size = 22 }: { color: string; size?: number; bgCol
   </View>
 );
 
-type ThemeOptionType = { mode: ThemeMode; label: string; Icon: React.FC<{ color: string; size?: number; bgColor?: string }> };
+type ThemeOptionType = { mode: ThemeMode; labelKey: string; Icon: React.FC<{ color: string; size?: number; bgColor?: string }> };
 const THEME_OPTIONS: ThemeOptionType[] = [
-  { mode: "light", label: "Light", Icon: SunIcon },
-  { mode: "dark", label: "Dark", Icon: MoonIcon },
-  { mode: "system", label: "System", Icon: MonitorIcon },
+  { mode: "light", labelKey: "settings.light", Icon: SunIcon },
+  { mode: "dark", labelKey: "settings.dark", Icon: MoonIcon },
+  { mode: "system", labelKey: "settings.system", Icon: MonitorIcon },
+];
+
+const GlobeIcon = ({ color, size = 22 }: { color: string; size?: number; bgColor?: string }) => (
+  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+    <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 1.5, borderColor: color }} />
+    <View style={{ position: "absolute", width: 14, height: 1.2, backgroundColor: color, borderRadius: 0.6 }} />
+    <View style={{ position: "absolute", width: 1.2, height: 14, backgroundColor: color, borderRadius: 0.6 }} />
+  </View>
+);
+
+type LangOptionType = { lang: AppLanguage; labelKey: string; Icon: React.FC<{ color: string; size?: number; bgColor?: string }> };
+const LANG_OPTIONS: LangOptionType[] = [
+  { lang: "en", labelKey: "settings.english", Icon: GlobeIcon },
+  { lang: "zh", labelKey: "settings.chinese", Icon: GlobeIcon },
+  { lang: "system", labelKey: "settings.system", Icon: MonitorIcon },
 ];
 
 const SectionHeader = memo(({ title }: { title: string }) => {
@@ -148,7 +166,9 @@ export const SettingsScreen = memo(
     onRefreshSessions,
   }: Props) => {
     const { mode, colors, setMode } = useTheme();
+    const { t } = useTranslation();
     const [deleting, setDeleting] = useState<string | null>(null);
+    const [langPref, setLangPref] = useState<AppLanguage>(getCurrentLanguagePref);
     const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
     useEffect(() => {
@@ -173,14 +193,14 @@ export const SettingsScreen = memo(
       (sessionId: string) => {
         const isCurrent = sessionId === currentSessionId;
         Alert.alert(
-          "Delete Session",
+          t("settings.deleteSession"),
           isCurrent
-            ? "This is the active session. Delete it?"
-            : "Delete this session and its history?",
+            ? t("settings.deleteActiveSessionConfirm")
+            : t("settings.deleteSessionConfirm"),
           [
-            { text: "Cancel", style: "cancel" },
+            { text: t("common.cancel"), style: "cancel" },
             {
-              text: "Delete",
+              text: t("common.delete"),
               style: "destructive",
               onPress: async () => {
                 setDeleting(sessionId);
@@ -203,12 +223,12 @@ export const SettingsScreen = memo(
 
     const handleClearAll = useCallback(() => {
       Alert.alert(
-        "Clear All Sessions",
-        `Delete all ${sessions.length} sessions? This cannot be undone.`,
+        t("settings.clearAllSessions"),
+        t("settings.clearAllConfirm", { count: sessions.length }),
         [
-          { text: "Cancel", style: "cancel" },
+          { text: t("common.cancel"), style: "cancel" },
           {
-            text: "Delete All",
+            text: t("settings.deleteAll"),
             style: "destructive",
             onPress: async () => {
               setDeleting("all");
@@ -268,13 +288,13 @@ export const SettingsScreen = memo(
               fontWeight="700"
               flex={1}
             >
-              Settings
+              {t("settings.title")}
             </Text>
           </XStack>
 
           <ScrollView showsVerticalScrollIndicator={false}>
             {/* Theme */}
-            <SectionHeader title="Appearance" />
+            <SectionHeader title={t("settings.appearance")} />
             <XStack paddingHorizontal={16} gap={8}>
               {THEME_OPTIONS.map((opt) => {
                 const active = mode === opt.mode;
@@ -300,7 +320,45 @@ export const SettingsScreen = memo(
                         fontSize={13}
                         fontWeight={active ? "700" : "500"}
                       >
-                        {opt.label}
+                        {t(opt.labelKey)}
+                      </Text>
+                    </YStack>
+                  </Pressable>
+                );
+              })}
+            </XStack>
+
+            {/* Language */}
+            <SectionHeader title={t("settings.language")} />
+            <XStack paddingHorizontal={16} gap={8}>
+              {LANG_OPTIONS.map((opt) => {
+                const active = langPref === opt.lang;
+                const cardBg = active ? colors.brand.purple + "12" : colors.bg.tertiary;
+                return (
+                  <Pressable
+                    key={opt.lang}
+                    onPress={() => {
+                      setLangPref(opt.lang);
+                      changeLanguage(opt.lang);
+                    }}
+                    style={{ flex: 1 }}
+                  >
+                    <YStack
+                      alignItems="center"
+                      paddingVertical={12}
+                      borderRadius={12}
+                      borderWidth={2}
+                      borderColor={active ? colors.brand.purple : colors.border.subtle}
+                      backgroundColor={cardBg}
+                      gap={6}
+                    >
+                      <opt.Icon color={active ? colors.brand.purple : colors.text.muted} size={22} bgColor={cardBg} />
+                      <Text
+                        color={active ? colors.brand.purple : colors.text.secondary}
+                        fontSize={13}
+                        fontWeight={active ? "700" : "500"}
+                      >
+                        {t(opt.labelKey)}
                       </Text>
                     </YStack>
                   </Pressable>
@@ -309,9 +367,9 @@ export const SettingsScreen = memo(
             </XStack>
 
             {/* Session management */}
-            <SectionHeader title="Sessions" />
+            <SectionHeader title={t("settings.sessions")} />
             <SettingRow
-              label="Total sessions"
+              label={t("settings.totalSessions")}
               value={String(sessions.length)}
             />
 
@@ -348,7 +406,7 @@ export const SettingsScreen = memo(
                                 flexShrink={0}
                               >
                                 <Text color="#FFF" fontSize={8} fontWeight="700" letterSpacing={0.5}>
-                                  ACTIVE
+                                  {t("common.active")}
                                 </Text>
                               </YStack>
                             )}
@@ -381,7 +439,7 @@ export const SettingsScreen = memo(
                               fontSize={11}
                               fontWeight="600"
                             >
-                              {isDeleting ? "..." : "Delete"}
+                              {isDeleting ? "..." : t("common.delete")}
                             </Text>
                           </YStack>
                         </Pressable>
@@ -406,7 +464,7 @@ export const SettingsScreen = memo(
                           fontSize={14}
                           fontWeight="600"
                         >
-                          {deleting === "all" ? "Deleting..." : "Delete All Sessions"}
+                          {deleting === "all" ? t("common.deleting") : t("settings.deleteAllSessions")}
                         </Text>
                       </YStack>
                     </Pressable>
@@ -416,14 +474,14 @@ export const SettingsScreen = memo(
             )}
 
             {/* About */}
-            <SectionHeader title="About" />
+            <SectionHeader title={t("settings.about")} />
             <YStack alignItems="center" paddingVertical={24} gap={8}>
               <Image source={logoIcon} style={{ width: 56, height: 56 }} resizeMode="contain" />
               <Text color={colors.text.primary} fontSize={18} fontWeight="700">
                 ClawFlow
               </Text>
               <Text color={colors.text.muted} fontSize={12}>
-                Version 2.0.0
+                {t("common.version", { version: "2.0.0" })}
               </Text>
             </YStack>
 

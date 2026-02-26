@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo, memo, useState } from "react";
 import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import type { ChatMessage, ExecutionLog, ImageAttachment, StreamItem } from "../types/gateway";
 import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
@@ -93,6 +94,16 @@ const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
   );
 });
 
+const GeneratingLabel = () => {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  return (
+    <Text color={colors.text.muted} fontSize={12} marginRight={4} fontStyle="italic">
+      {t("chat.generating")}
+    </Text>
+  );
+};
+
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const { colors, isDark } = useTheme();
   const isUser = item.role === "user";
@@ -145,9 +156,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
         {item.streaming ? (
           <XStack alignItems="center" height={20}>
             {!item.content && (
-              <Text color={colors.text.muted} fontSize={12} marginRight={4} fontStyle="italic">
-                Generating
-              </Text>
+              <GeneratingLabel />
             )}
             <StreamingCursor />
           </XStack>
@@ -275,8 +284,30 @@ const RenderDisplayItem = memo(({ item }: { item: DisplayItem }) => {
   return <ProcessCard logs={item.logs} />;
 });
 
-export const ChatStream = ({ stream }: Props) => {
+const EmptyState = () => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
+  return (
+    <YStack
+      flex={1}
+      alignItems="center"
+      justifyContent="center"
+      paddingVertical="$10"
+      gap={12}
+      transform={[{ scaleY: -1 }]}
+    >
+      <Image source={logoIcon} style={{ width: 56, height: 56, opacity: 0.6 }} resizeMode="contain" />
+      <Text color={colors.text.muted} fontSize={14} fontWeight="500">
+        {t("chat.emptyTitle")}
+      </Text>
+      <Text color={colors.text.muted} fontSize={12} opacity={0.6}>
+        {t("chat.emptyHint")}
+      </Text>
+    </YStack>
+  );
+};
+
+export const ChatStream = ({ stream }: Props) => {
   const grouped = useMemo(() => groupStreamItems(stream), [stream]);
   const reversed = useMemo(() => [...grouped].reverse(), [grouped]);
 
@@ -289,24 +320,7 @@ export const ChatStream = ({ stream }: Props) => {
       contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
-      ListEmptyComponent={
-        <YStack
-          flex={1}
-          alignItems="center"
-          justifyContent="center"
-          paddingVertical="$10"
-          gap={12}
-          transform={[{ scaleY: -1 }]}
-        >
-          <Image source={logoIcon} style={{ width: 56, height: 56, opacity: 0.6 }} resizeMode="contain" />
-          <Text color={colors.text.muted} fontSize={14} fontWeight="500">
-            Send a task to ClawFlow
-          </Text>
-          <Text color={colors.text.muted} fontSize={12} opacity={0.6}>
-            Type "/" for quick commands
-          </Text>
-        </YStack>
-      }
+      ListEmptyComponent={<EmptyState />}
     />
   );
 };

@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing } from "react-native";
 import { Input, Text, XStack, YStack } from "tamagui";
+import { useTranslation } from "react-i18next";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../theme/theme-context";
 import { SlashCommandPanel } from "./slash-command-panel";
@@ -90,6 +91,7 @@ const SendArrow = ({ color }: { color: string }) => (
 
 export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
   const { colors } = useTheme();
+  const { t } = useTranslation();
   const [value, setValue] = useState("");
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const canSend = (value.trim().length > 0 || attachedImages.length > 0) && !sending;
@@ -102,7 +104,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
         return joined;
       });
     },
-    onError: (msg) => Alert.alert("Voice Error", msg),
+    onError: (msg) => Alert.alert(t("voice.error"), msg),
   });
 
   const slashState = useMemo(() => {
@@ -227,7 +229,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             {formatDuration(voice.durationMs)}
           </Text>
           <Text color={colors.text.muted} fontSize={12}>
-            Tap mic to finish
+            {t("chat.tapMicToFinish")}
           </Text>
         </XStack>
       )}
@@ -242,7 +244,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
           gap={8}
         >
           <Text color={colors.brand.blue} fontSize={13} fontWeight="600">
-            Transcribing...
+            {t("chat.transcribing")}
           </Text>
         </XStack>
       )}
@@ -319,7 +321,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             value={value}
             onChangeText={setValue}
             onSubmitEditing={submit}
-            placeholder='Message ClawFlow... (type "/" for commands)'
+            placeholder={t("chat.placeholder")}
             placeholderTextColor={colors.text.muted as any}
             backgroundColor="transparent"
             borderWidth={0}
