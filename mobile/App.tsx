@@ -10,6 +10,7 @@ import { SessionListSheet } from "./src/components/session-list-sheet";
 import { GatewaySheet } from "./src/components/gateway-sheet";
 import { AgentSheet } from "./src/components/agent-sheet";
 import { SettingsScreen } from "./src/components/settings-screen";
+import { SplashScreen } from "./src/components/splash-screen";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
 import { useGatewayManager } from "./src/hooks/use-gateway-manager";
 import { AppThemeProvider, useTheme } from "./src/theme/theme-context";
@@ -18,7 +19,9 @@ import type { AgentInfo } from "./src/types/gateway";
 type Page = "chat" | "settings";
 
 function Main() {
-  const { isDark, colors } = useTheme();
+  const { isDark, colors, loaded } = useTheme();
+  const [splashDone, setSplashDone] = useState(false);
+  const onSplashFinish = useCallback(() => setSplashDone(true), []);
   const gateway = useGatewayManager();
 
   const [activeAgentId, setActiveAgentId] = useState("main");
@@ -148,6 +151,9 @@ function Main() {
         )}
       </SafeAreaView>
       <StatusBar style={isDark ? "light" : "dark"} />
+      {!splashDone && (
+        <SplashScreen ready={loaded} onFinish={onSplashFinish} />
+      )}
     </Theme>
   );
 }

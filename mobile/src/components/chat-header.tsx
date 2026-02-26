@@ -17,13 +17,48 @@ type Props = {
   onSettingsPress?: () => void;
 };
 
-const SettingsIcon = ({ color, size = 16 }: { color: string; size?: number }) => (
-  <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-    <View style={[iconStyles.gear, { borderColor: color }]}>
-      <View style={[iconStyles.gearCenter, { backgroundColor: color }]} />
+const SettingsIcon = ({ color, size = 16 }: { color: string; size?: number }) => {
+  const toothW = 2.4;
+  const toothH = 3.2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const dist = 5.2;
+  const teeth = [0, 45, 90, 135, 180, 225, 270, 315];
+  return (
+    <View style={{ width: size, height: size }}>
+      {teeth.map((deg) => {
+        const rad = (deg * Math.PI) / 180;
+        return (
+          <View
+            key={deg}
+            style={{
+              position: "absolute",
+              width: toothW,
+              height: toothH,
+              borderRadius: 1,
+              backgroundColor: color,
+              left: cx - toothW / 2 + Math.cos(rad) * dist,
+              top: cy - toothH / 2 + Math.sin(rad) * dist,
+              transform: [{ rotate: `${deg}deg` }],
+            }}
+          />
+        );
+      })}
+      <View
+        style={{
+          position: "absolute",
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          borderWidth: 1.6,
+          borderColor: color,
+          left: cx - 4,
+          top: cy - 4,
+        }}
+      />
     </View>
-  </View>
-);
+  );
+};
 
 const AgentIcon = ({ color, size = 12 }: { color: string; size?: number }) => (
   <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
@@ -39,8 +74,6 @@ const ChevronDown = ({ color, size = 8 }: { color: string; size?: number }) => (
 );
 
 const iconStyles = StyleSheet.create({
-  gear: { width: 13, height: 13, borderWidth: 1.8, borderRadius: 6.5, alignItems: "center", justifyContent: "center" },
-  gearCenter: { width: 4, height: 4, borderRadius: 2 },
   agentHead: { width: 6, height: 6, borderRadius: 3, marginBottom: 1 },
   agentBody: { width: 10, height: 4, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
   chevron: { width: 5, height: 5, borderBottomWidth: 1.5, borderRightWidth: 1.5, transform: [{ rotate: "45deg" }], marginTop: -2 },

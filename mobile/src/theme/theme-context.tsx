@@ -8,6 +8,7 @@ type ThemeContextValue = {
   mode: ThemeMode;
   isDark: boolean;
   colors: ColorPalette;
+  loaded: boolean;
   setMode: (mode: ThemeMode) => void;
 };
 
@@ -15,16 +16,19 @@ const ThemeContext = createContext<ThemeContextValue>({
   mode: "dark",
   isDark: true,
   colors: darkPalette,
+  loaded: false,
   setMode: () => {},
 });
 
 export const AppThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const systemScheme = useColorScheme();
   const [mode, setModeState] = useState<ThemeMode>("dark");
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     settingsStorage.load().then(() => {
       setModeState(settingsStorage.getThemeMode());
+      setLoaded(true);
     });
   }, []);
 
@@ -40,9 +44,10 @@ export const AppThemeProvider = ({ children }: { children: React.ReactNode }) =>
       mode,
       isDark,
       colors: isDark ? darkPalette : lightPalette,
+      loaded,
       setMode,
     }),
-    [mode, isDark, setMode],
+    [mode, isDark, loaded, setMode],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
