@@ -14,7 +14,7 @@ type Watcher = {
 
 const watchers = new Map<string, Watcher>();
 
-const classifyEntry = (entry: OpenClawJsonlEntry): {
+export const classifyEntry = (entry: OpenClawJsonlEntry): {
   eventType: "message" | "thought" | "action" | "observation" | "status" | "error";
   payload: Record<string, unknown>;
 } | null => {

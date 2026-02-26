@@ -82,7 +82,7 @@ export default function App() {
               />
 
               <YStack flex={1}>
-                <ChatStream stream={session.stream} />
+                <ChatStream key={session.currentSessionId} stream={session.stream} />
               </YStack>
 
               <ChatComposer

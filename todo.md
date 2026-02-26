@@ -39,8 +39,8 @@
 - [x] **Agent 管理**
   Agent 列表展示（从 /api/agents 获取），切换不同 Agent，显示 Agent 配置信息（model、workspace 等）
 
-- [ ] **本地数据持久化**
-  集成 expo-sqlite + MMKV，聊天记录本地存储与加载，执行日志本地缓存，离线查看历史会话
+- [x] ~~**本地数据持久化**~~
+  不再需要：会话数据已通过服务端 JSONL 文件持久化，切换 session 时 watcher 自动重新读取恢复
 
 ## P3 — 品牌 & 设置 & 美化
 

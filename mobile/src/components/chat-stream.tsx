@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, memo, useState } from "react";
+import { useRef, useEffect, useMemo, memo, useState } from "react";
 import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import type { ChatMessage, ImageAttachment, StreamItem } from "../types/gateway";
@@ -213,38 +213,17 @@ const renderItem = ({ item }: { item: StreamItem }) => {
 };
 
 export const ChatStream = ({ stream }: Props) => {
-  const listRef = useRef<FlatList>(null);
-  const isNearBottomRef = useRef(true);
-
-  const lastStreamingContent = stream.reduce((acc, item) => {
-    if (item.kind === "message" && item.data.streaming) return item.data.content.length;
-    return acc;
-  }, 0);
-
-  const onScroll = useCallback((e: any) => {
-    const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
-    const distanceFromBottom =
-      contentSize.height - layoutMeasurement.height - contentOffset.y;
-    isNearBottomRef.current = distanceFromBottom < 120;
-  }, []);
-
-  useEffect(() => {
-    if (stream.length > 0 && isNearBottomRef.current) {
-      setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
-    }
-  }, [stream.length, lastStreamingContent]);
+  const reversed = useMemo(() => [...stream].reverse(), [stream]);
 
   return (
     <FlatList
-      ref={listRef}
-      data={stream}
-      extraData={lastStreamingContent}
+      inverted
+      data={reversed}
       keyExtractor={getItemId}
       renderItem={renderItem}
-      onScroll={onScroll}
-      scrollEventThrottle={100}
       contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
       ListEmptyComponent={
         <YStack
           flex={1}
@@ -252,6 +231,7 @@ export const ChatStream = ({ stream }: Props) => {
           justifyContent="center"
           paddingVertical="$10"
           gap="$3"
+          transform={[{ scaleY: -1 }]}
         >
           <Text color={colors.text.muted} fontSize={32}>
             {"{ }"}

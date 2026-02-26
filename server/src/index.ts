@@ -1,9 +1,10 @@
 import { Elysia, t } from "elysia";
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { join, extname } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
-import { startWatcher, stopWatcher, isWatching, getActiveWatchers } from "./jsonl-watcher";
+import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry } from "./jsonl-watcher";
+import type { OpenClawJsonlEntry, OpenClawMessage } from "./types";
 import {
   sendMessage,
   checkHealth,
@@ -44,6 +45,35 @@ export const app = new Elysia()
   })
 
   .get(
+    "/api/images/*",
+    async ({ params }) => {
+      const filePath = "/" + (params as Record<string, string>)["*"];
+      try {
+        await stat(filePath);
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+
+      const ext = extname(filePath).toLowerCase();
+      const mimeMap: Record<string, string> = {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+        ".png": "image/png", ".gif": "image/gif",
+        ".webp": "image/webp", ".heic": "image/heic",
+        ".heif": "image/heif", ".svg": "image/svg+xml",
+      };
+      const mime = mimeMap[ext] ?? "application/octet-stream";
+
+      const data = await readFile(filePath);
+      return new Response(data, {
+        headers: {
+          "content-type": mime,
+          "cache-control": "public, max-age=31536000, immutable",
+        },
+      });
+    }
+  )
+
+  .get(
     "/api/sessions",
     async ({ query }) => {
       const agentId = query.agentId ?? "main";
@@ -71,6 +101,125 @@ export const app = new Elysia()
       body: t.Object({
         agentId: t.Optional(t.String()),
         initialMessage: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  .get(
+    "/api/sessions/:sessionId/history",
+    async ({ params, query }) => {
+      const agentId = query.agentId ?? "main";
+      const jsonlPath = await getSessionJsonlPath(agentId, params.sessionId);
+
+      let raw: string;
+      try {
+        raw = await readFile(jsonlPath, "utf8");
+      } catch {
+        return { ok: true, messages: [] };
+      }
+
+      const lines = raw.split("\n").filter((l) => l.trim());
+      const limit = Number(query.limit) || 100;
+      const recent = lines.slice(-limit);
+
+      type HistoryItem = {
+        id: string;
+        type: string;
+        role?: string;
+        content?: string;
+        thinking?: string;
+        thinkingSummary?: string;
+        toolName?: string;
+        toolCalls?: unknown[];
+        imagePaths?: string[];
+        ts: string;
+      };
+
+      const IMAGE_REF_RE = /\[Attached image:\s*([^\]]+)\]/g;
+      const REPLY_PREFIX_RE = /^\[\[reply_to_current\]\]\s*/i;
+
+      const extractImages = (text: string): { clean: string; images: string[] } => {
+        const images: string[] = [];
+        const clean = text.replace(IMAGE_REF_RE, (_, path) => {
+          images.push(path.trim());
+          return "";
+        }).trim();
+        return { clean, images };
+      };
+
+      const messages: HistoryItem[] = [];
+
+      for (const line of recent) {
+        try {
+          const entry = JSON.parse(line) as OpenClawJsonlEntry;
+
+          if (entry.type === "message") {
+            const msg = (entry as OpenClawMessage).message;
+            if (!msg) continue;
+
+            if (msg.role === "user") {
+              const contents = msg.content ?? [];
+              const rawText = contents
+                .filter((c) => c.type === "text" && c.text)
+                .map((c) => c.text!)
+                .join("\n");
+              if (!rawText) continue;
+
+              const { clean, images } = extractImages(rawText);
+              const item: HistoryItem = {
+                id: entry.id,
+                type: "message",
+                role: "user",
+                content: clean,
+                ts: entry.timestamp,
+              };
+              if (images.length > 0) item.imagePaths = images;
+              messages.push(item);
+              continue;
+            }
+          }
+
+          const classified = classifyEntry(entry);
+          if (!classified) continue;
+
+          const p = classified.payload;
+          const item: HistoryItem = {
+            id: entry.id,
+            type: classified.eventType,
+            ts: entry.timestamp,
+          };
+
+          if (classified.eventType === "message") {
+            item.role = String(p.role ?? "assistant");
+            let content = String(p.content ?? "");
+            content = content.replace(REPLY_PREFIX_RE, "");
+            item.content = content;
+            if (p.thinking) item.thinking = String(p.thinking);
+            if (p.thinkingSummary) item.thinkingSummary = String(p.thinkingSummary);
+          } else if (classified.eventType === "thought") {
+            if (p.thinkingSummary) item.thinkingSummary = String(p.thinkingSummary);
+            if (p.thinking) item.thinking = String(p.thinking);
+          } else if (classified.eventType === "action") {
+            if (p.toolCalls) item.toolCalls = p.toolCalls as unknown[];
+            if (p.text) item.content = String(p.text);
+          } else if (classified.eventType === "observation") {
+            item.toolName = p.toolName ? String(p.toolName) : undefined;
+            item.content = p.content ? String(p.content) : undefined;
+          } else if (classified.eventType === "error") {
+            item.content = p.message ? String(p.message) : undefined;
+          }
+
+          messages.push(item);
+        } catch { /* skip malformed */ }
+      }
+
+      return { ok: true, messages };
+    },
+    {
+      params: t.Object({ sessionId: t.String() }),
+      query: t.Object({
+        agentId: t.Optional(t.String()),
+        limit: t.Optional(t.String()),
       }),
     }
   )
@@ -354,9 +503,7 @@ export const app = new Elysia()
   });
 
 if (import.meta.main) {
-  const { startUploadCleaner } = await import("./upload-cleaner");
   app.listen(PORT);
-  startUploadCleaner();
   console.log(`ViewClaw Gateway running on http://${app.server?.hostname}:${app.server?.port}`);
   console.log(`  OpenClaw home: ${OPENCLAW_HOME}`);
   console.log(`  OpenClaw upstream: ${OPENCLAW_BASE_URL}`);

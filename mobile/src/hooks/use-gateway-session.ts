@@ -412,6 +412,78 @@ export const useGatewaySession = ({
     ws.onerror = () => setConnectionStatus("disconnected");
   }, [appendLog, parseEvent, scheduleReconnect]);
 
+  const loadHistory = useCallback(async (sessionId: string) => {
+    try {
+      const baseUrl = httpUrlRef.current;
+      const res = await fetch(
+        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${agentIdRef.current}&limit=100`
+      );
+      const data = await res.json();
+      if (!data.ok || !Array.isArray(data.messages)) return;
+
+      const toImageUrl = (path: string) => {
+        const normalized = path.startsWith("/") ? path : `/${path}`;
+        return `${baseUrl}/api/images${normalized}`;
+      };
+
+      const items: StreamItem[] = [];
+      for (const m of data.messages) {
+        if (seenRef.current.has(m.id)) continue;
+        seenRef.current.add(m.id);
+
+        if (m.type === "message" && m.role) {
+          const images: ImageAttachment[] | undefined =
+            m.imagePaths?.length
+              ? (m.imagePaths as string[]).map((p: string) => ({
+                  uri: toImageUrl(p),
+                  width: 200,
+                  height: 200,
+                }))
+              : undefined;
+
+          const msg: ChatMessage = {
+            id: m.id,
+            role: m.role === "user" ? "user" : "assistant",
+            content: m.content ?? "",
+            thinking: m.thinking,
+            thinkingSummary: m.thinkingSummary,
+            images,
+            createdAt: m.ts ? new Date(m.ts).getTime() : 0,
+          };
+          items.push({ kind: "message", data: msg });
+        } else if (m.type === "thought" || m.type === "action" || m.type === "observation" || m.type === "error" || m.type === "status") {
+          let text = "";
+          if (m.type === "thought") {
+            text = m.thinkingSummary || m.thinking || "Thinking...";
+          } else if (m.type === "action") {
+            const tc = m.toolCalls as Array<{ name?: string }> | undefined;
+            text = tc?.[0]?.name ?? m.content ?? "Action";
+          } else if (m.type === "observation") {
+            text = m.toolName ? `${m.toolName} returned` : (m.content?.slice(0, 200) || "Observation");
+          } else if (m.type === "error") {
+            text = m.content ?? "Error";
+          } else {
+            text = m.content ?? "status";
+          }
+
+          const log: ExecutionLog = {
+            id: m.id,
+            level: m.type as ExecutionLog["level"],
+            text,
+            detail: m.type === "observation" ? m.content : undefined,
+            toolName: m.toolName,
+            createdAt: m.ts ? new Date(m.ts).getTime() : 0,
+          };
+          items.push({ kind: "log", data: log });
+        }
+      }
+
+      if (items.length > 0) {
+        setStream((prev) => [...items, ...prev]);
+      }
+    } catch { /* offline */ }
+  }, []);
+
   const fetchSessions = useCallback(async () => {
     try {
       const res = await fetch(`${httpUrlRef.current}/api/sessions?agentId=${agentId}`);
@@ -423,11 +495,12 @@ export const useGatewaySession = ({
           if (active) {
             setCurrentSessionId(active);
             subscribeToSession(active);
+            loadHistory(active);
           }
         }
       }
     } catch { /* offline */ }
-  }, [agentId, subscribeToSession]);
+  }, [agentId, subscribeToSession, loadHistory]);
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -448,30 +521,6 @@ export const useGatewaySession = ({
       fetchSessions();
     }
   }, [connectionStatus, fetchSessions]);
-
-  const prevAgentIdRef = useRef(agentId);
-  useEffect(() => {
-    if (prevAgentIdRef.current === agentId) return;
-    prevAgentIdRef.current = agentId;
-
-    const oldSid = currentSessionRef.current;
-    if (oldSid) {
-      wsSend({ type: "unsubscribe_session", sessionId: oldSid });
-    }
-
-    setStream([]);
-    seenRef.current.clear();
-    bufferRef.current = [];
-    streamingMsgRef.current = null;
-    streamedDoneRef.current = false;
-    typingIdRef.current = null;
-    setCurrentSessionId("");
-    setSessions([]);
-
-    if (connectionStatus === "connected") {
-      fetchSessions();
-    }
-  }, [agentId, connectionStatus, fetchSessions, wsSend]);
 
   const uploadImage = useCallback(
     async (img: ImageAttachment): Promise<string | null> => {
@@ -558,8 +607,9 @@ export const useGatewaySession = ({
       typingIdRef.current = null;
       setCurrentSessionId(newSessionId);
       subscribeToSession(newSessionId);
+      loadHistory(newSessionId);
     },
-    [subscribeToSession, unsubscribeFromSession]
+    [subscribeToSession, unsubscribeFromSession, loadHistory]
   );
 
   const refreshSessions = useCallback(async () => {
