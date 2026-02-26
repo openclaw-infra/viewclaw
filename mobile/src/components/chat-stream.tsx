@@ -1,7 +1,7 @@
-import { useRef, useEffect, useCallback, memo } from "react";
-import { FlatList, Animated, Easing } from "react-native";
+import { useRef, useEffect, useCallback, memo, useState } from "react";
+import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import type { ChatMessage, StreamItem } from "../types/gateway";
+import type { ChatMessage, ImageAttachment, StreamItem } from "../types/gateway";
 import { EventCard } from "./event-card";
 import { MarkdownBody } from "./markdown-body";
 import { colors } from "../theme/colors";
@@ -38,6 +38,58 @@ const StreamingCursor = () => {
   );
 };
 
+const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
+  const [previewUri, setPreviewUri] = useState<string | null>(null);
+  const screenWidth = Dimensions.get("window").width;
+
+  return (
+    <>
+      <XStack flexWrap="wrap" gap={4} marginBottom={4}>
+        {images.map((img, idx) => {
+          const size = images.length === 1 ? 180 : 88;
+          return (
+            <Pressable key={idx} onPress={() => setPreviewUri(img.uri)}>
+              <Image
+                source={{ uri: img.uri }}
+                style={{
+                  width: size,
+                  height: size,
+                  borderRadius: 10,
+                }}
+                resizeMode="cover"
+              />
+            </Pressable>
+          );
+        })}
+      </XStack>
+
+      <Modal visible={!!previewUri} transparent animationType="fade">
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.9)",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          onPress={() => setPreviewUri(null)}
+        >
+          {previewUri && (
+            <Image
+              source={{ uri: previewUri }}
+              style={{
+                width: screenWidth - 32,
+                height: screenWidth - 32,
+                borderRadius: 12,
+              }}
+              resizeMode="contain"
+            />
+          )}
+        </Pressable>
+      </Modal>
+    </>
+  );
+});
+
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const isUser = item.role === "user";
   const time = new Date(item.createdAt).toLocaleTimeString([], {
@@ -63,6 +115,8 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
         borderColor={colors.bubble.assistantBorder}
         gap="$1"
       >
+        {item.images?.length ? <ImageGrid images={item.images} /> : null}
+
         {item.thinkingSummary ? (
           <Text color={colors.accent.yellow} fontSize={11} opacity={0.8}>
             {item.thinkingSummary}

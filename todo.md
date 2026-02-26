@@ -33,7 +33,7 @@
 - [x] **语音输入**
   集成 expo-av 实现语音录制 → Whisper/本地 STT 转文字，ChatComposer 增加麦克风按钮
 
-- [ ] **图片支持**
+- [x] **图片支持**
   ChatComposer 增加图片选择（expo-image-picker），支持发送图片给 OpenClaw（base64/input_image）；ChatStream 渲染 assistant 返回的图片内容
 
 - [ ] **Agent 管理**

@@ -1,4 +1,6 @@
 import { Elysia, t } from "elysia";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
 import { startWatcher, stopWatcher, isWatching, getActiveWatchers } from "./jsonl-watcher";
@@ -11,6 +13,7 @@ import {
   getActiveSessionId,
   resolveSessionKey,
   createSession,
+  getWorkspaceDir,
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 
@@ -161,6 +164,45 @@ export const app = new Elysia()
   )
 
   .post(
+    "/api/upload-image",
+    async ({ body }) => {
+      const file = body.file;
+      if (!file || !(file instanceof Blob)) {
+        return new Response(
+          JSON.stringify({ ok: false, error: "No image file provided" }),
+          { status: 400, headers: { "content-type": "application/json" } },
+        );
+      }
+
+      try {
+        const workspace = await getWorkspaceDir();
+        const uploadDir = join(workspace, ".viewclaw-uploads");
+        await mkdir(uploadDir, { recursive: true });
+
+        const origName = (file as File).name ?? "image";
+        const ext = origName.split(".").pop() ?? "jpg";
+        const filename = `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const filePath = join(uploadDir, filename);
+
+        const buffer = Buffer.from(await file.arrayBuffer());
+        await writeFile(filePath, buffer);
+
+        return { ok: true, path: filePath };
+      } catch (error) {
+        return new Response(
+          JSON.stringify({ ok: false, error: (error as Error).message }),
+          { status: 500, headers: { "content-type": "application/json" } },
+        );
+      }
+    },
+    {
+      body: t.Object({
+        file: t.File(),
+      }),
+    }
+  )
+
+  .post(
     "/api/dev/emit",
     ({ body }) => {
       emitEvent({
@@ -200,6 +242,7 @@ export const app = new Elysia()
         sessionId: t.Optional(t.String()),
         messageId: t.Optional(t.String()),
         content: t.String(),
+        imagePaths: t.Optional(t.Array(t.String())),
         agentId: t.Optional(t.String()),
       }),
       t.Object({
@@ -279,6 +322,7 @@ export const app = new Elysia()
         const sessionKey = await resolveSessionKey(sessionId);
         sendMessage({
           content: body.content,
+          imagePaths: body.imagePaths,
           agentId: body.agentId,
           sessionKey,
           onStream: (evt) => {

@@ -1,15 +1,17 @@
 import { useState, useCallback, useMemo } from "react";
-import { Pressable, Alert, View, StyleSheet } from "react-native";
+import { Pressable, Alert, View, StyleSheet, Image, ScrollView } from "react-native";
 import { Input, Text, XStack, YStack } from "tamagui";
+import * as ImagePicker from "expo-image-picker";
 import { colors } from "../theme/colors";
 import { SlashCommandPanel } from "./slash-command-panel";
 import { useVoiceRecorder } from "../hooks/use-voice-recorder";
 import type { SlashCommand } from "../data/slash-commands";
+import type { ImageAttachment } from "../types/gateway";
 
 type Props = {
   sending: boolean;
   gatewayHttpUrl: string;
-  onSend: (text: string) => void;
+  onSend: (text: string, images?: ImageAttachment[]) => void;
 };
 
 const formatDuration = (ms: number): string => {
@@ -18,6 +20,38 @@ const formatDuration = (ms: number): string => {
   const sec = totalSec % 60;
   return `${min}:${sec.toString().padStart(2, "0")}`;
 };
+
+const ImageIcon = ({ color }: { color: string }) => (
+  <View style={imgIconStyles.container}>
+    <View style={[imgIconStyles.frame, { borderColor: color }]}>
+      <View style={[imgIconStyles.sun, { backgroundColor: color }]} />
+      <View style={[imgIconStyles.mountain, { borderBottomColor: color }]} />
+    </View>
+  </View>
+);
+
+const imgIconStyles = StyleSheet.create({
+  container: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
+  frame: { width: 16, height: 14, borderWidth: 1.5, borderRadius: 2.5, position: "relative", overflow: "hidden" },
+  sun: { width: 4, height: 4, borderRadius: 2, position: "absolute", top: 2, left: 2 },
+  mountain: {
+    width: 0, height: 0,
+    borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 6,
+    borderLeftColor: "transparent", borderRightColor: "transparent",
+    position: "absolute", bottom: 0, right: 1,
+  },
+});
+
+const imgPreviewStyles = StyleSheet.create({
+  wrapper: { width: 64, height: 64, borderRadius: 10, overflow: "hidden", position: "relative" },
+  thumb: { width: 64, height: 64, borderRadius: 10 },
+  removeBtn: { position: "absolute", top: 2, right: 2 },
+  removeBg: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center", justifyContent: "center",
+  },
+});
 
 const MicIcon = ({ color }: { color: string }) => (
   <View style={micStyles.container}>
@@ -49,7 +83,8 @@ const micStyles = StyleSheet.create({
 
 export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
   const [value, setValue] = useState("");
-  const canSend = value.trim().length > 0 && !sending;
+  const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
+  const canSend = (value.trim().length > 0 || attachedImages.length > 0) && !sending;
 
   const voice = useVoiceRecorder({
     gatewayHttpUrl,
@@ -70,11 +105,32 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
     return null;
   }, [value]);
 
+  const pickImage = useCallback(async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsMultipleSelection: true,
+      selectionLimit: 4,
+      quality: 0.8,
+    });
+    if (result.canceled) return;
+    const newImages: ImageAttachment[] = result.assets.map((a) => ({
+      uri: a.uri,
+      width: a.width,
+      height: a.height,
+    }));
+    setAttachedImages((prev) => [...prev, ...newImages].slice(0, 4));
+  }, []);
+
+  const removeImage = useCallback((idx: number) => {
+    setAttachedImages((prev) => prev.filter((_, i) => i !== idx));
+  }, []);
+
   const submit = useCallback(() => {
     if (!canSend) return;
-    onSend(value);
+    onSend(value, attachedImages.length > 0 ? attachedImages : undefined);
     setValue("");
-  }, [canSend, value, onSend]);
+    setAttachedImages([]);
+  }, [canSend, value, attachedImages, onSend]);
 
   const handleSelect = useCallback(
     (cmd: SlashCommand) => {
@@ -152,7 +208,36 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
         borderColor={colors.border.subtle}
         paddingHorizontal="$3"
         paddingVertical="$2.5"
+        gap="$2"
       >
+        {attachedImages.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}
+          >
+            {attachedImages.map((img, idx) => (
+              <View key={img.uri} style={imgPreviewStyles.wrapper}>
+                <Image
+                  source={{ uri: img.uri }}
+                  style={imgPreviewStyles.thumb}
+                />
+                <Pressable
+                  style={imgPreviewStyles.removeBtn}
+                  onPress={() => removeImage(idx)}
+                  hitSlop={8}
+                >
+                  <View style={imgPreviewStyles.removeBg}>
+                    <Text color="#FFFFFF" fontSize={11} fontWeight="700" lineHeight={14}>
+                      ✕
+                    </Text>
+                  </View>
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
         <XStack
           alignItems="center"
           gap="$2"
@@ -166,10 +251,24 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
                 ? colors.accent.blue
                 : colors.border.subtle
           }
-          paddingLeft="$3.5"
+          paddingLeft="$1.5"
           paddingRight="$1.5"
           paddingVertical="$1"
         >
+          <Pressable onPress={pickImage} disabled={isVoiceBusy || sending || attachedImages.length >= 4}>
+            <YStack
+              width={36}
+              height={36}
+              borderRadius={18}
+              backgroundColor={colors.bg.elevated}
+              alignItems="center"
+              justifyContent="center"
+              opacity={attachedImages.length >= 4 ? 0.4 : 1}
+            >
+              <ImageIcon color={colors.text.muted} />
+            </YStack>
+          </Pressable>
+
           <Input
             flex={1}
             value={value}
@@ -187,7 +286,6 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             editable={!isVoiceBusy}
           />
 
-          {/* Mic button */}
           <Pressable
             onPress={handleMicPress}
             onLongPress={handleMicLongPress}
@@ -216,7 +314,6 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
             </YStack>
           </Pressable>
 
-          {/* Send button */}
           <Pressable onPress={submit} disabled={!canSend}>
             <YStack
               width={36}

@@ -1,9 +1,20 @@
-import { readdir, stat } from "node:fs/promises";
+import { readdir, stat, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { OPENCLAW_BASE_URL, OPENCLAW_HOME, getGatewayToken, normalizeToken } from "./config";
 import type { SessionInfo, AgentInfo } from "./types";
 
 const sessionKeyCache = new Map<string, string>();
+
+export const getWorkspaceDir = async (): Promise<string> => {
+  try {
+    const configPath = join(OPENCLAW_HOME, "openclaw.json");
+    const raw = await readFile(configPath, "utf8");
+    const config = JSON.parse(raw);
+    return config?.agents?.defaults?.workspace ?? join(OPENCLAW_HOME, "workspace");
+  } catch {
+    return join(OPENCLAW_HOME, "workspace");
+  }
+};
 
 const buildAuthHeaders = async (overrideToken?: string): Promise<Record<string, string>> => {
   const token = normalizeToken(overrideToken) || (await getGatewayToken());
@@ -20,6 +31,7 @@ export type StreamCallback = (event: {
 
 export const sendMessage = async (body: {
   content: string;
+  imagePaths?: string[];
   agentId?: string;
   sessionKey?: string;
   overrideToken?: string;
@@ -35,9 +47,19 @@ export const sendMessage = async (body: {
   const agentId = body.agentId ?? "main";
   const streaming = !!body.onStream;
 
+  let finalContent = body.content;
+  if (body.imagePaths?.length) {
+    const fileRefs = body.imagePaths
+      .map((p) => `[Attached image: ${p}]`)
+      .join("\n");
+    finalContent = finalContent
+      ? `${fileRefs}\n\n${finalContent}`
+      : fileRefs;
+  }
+
   const requestBody: Record<string, unknown> = {
     model: `openclaw:${agentId}`,
-    input: body.content,
+    input: finalContent,
     stream: streaming,
   };
 

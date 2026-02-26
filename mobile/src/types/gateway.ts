@@ -22,6 +22,12 @@ export type GatewayEvent = {
   payload: Record<string, unknown>;
 };
 
+export type ImageAttachment = {
+  uri: string;
+  width: number;
+  height: number;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
@@ -29,6 +35,7 @@ export type ChatMessage = {
   thinking?: string;
   thinkingSummary?: string;
   streaming?: boolean;
+  images?: ImageAttachment[];
   createdAt: number;
 };
 

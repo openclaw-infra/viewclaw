@@ -27,6 +27,7 @@ export type ClientMessage =
       sessionId: string;
       messageId?: string;
       content: string;
+      imagePaths?: string[];
       agentId?: string;
     }
   | {

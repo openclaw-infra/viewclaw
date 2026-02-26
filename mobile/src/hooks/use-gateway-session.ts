@@ -4,6 +4,7 @@ import type {
   ConnectionStatus,
   ExecutionLog,
   GatewayEvent,
+  ImageAttachment,
   SessionInfo,
   StreamItem,
 } from "../types/gateway";
@@ -442,13 +443,40 @@ export const useGatewaySession = ({
     }
   }, [connectionStatus, fetchSessions]);
 
+  const uploadImage = useCallback(
+    async (img: ImageAttachment): Promise<string | null> => {
+      try {
+        const uri = img.uri;
+        const filename = uri.split("/").pop() ?? "image.jpg";
+        const formData = new FormData();
+        formData.append("file", { uri, name: filename, type: "image/jpeg" } as any);
+
+        const res = await fetch(`${httpUrlRef.current}/api/upload-image`, {
+          method: "POST",
+          body: formData,
+        });
+        const data = (await res.json()) as { ok: boolean; path?: string; error?: string };
+        return data.ok ? (data.path ?? null) : null;
+      } catch {
+        return null;
+      }
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
-    (content: string) => {
+    async (content: string, images?: ImageAttachment[]) => {
       const text = content.trim();
-      if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      if ((!text && !images?.length) || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
       const messageId = `local-${Date.now()}`;
-      const msg: ChatMessage = { id: messageId, role: "user", content: text, createdAt: Date.now() };
+      const msg: ChatMessage = {
+        id: messageId,
+        role: "user",
+        content: text,
+        images: images?.length ? images : undefined,
+        createdAt: Date.now(),
+      };
       seenRef.current.add(messageId);
 
       streamedDoneRef.current = false;
@@ -461,18 +489,28 @@ export const useGatewaySession = ({
       ]);
 
       setSending(true);
-      wsRef.current.send(
-        JSON.stringify({
-          type: "send_message",
-          sessionId: currentSessionRef.current,
-          messageId,
-          content: text,
-          agentId,
-        })
-      );
+
+      let imagePaths: string[] | undefined;
+      if (images?.length) {
+        const results = await Promise.all(images.map(uploadImage));
+        imagePaths = results.filter((p): p is string => p !== null);
+      }
+
+      const wsPayload: Record<string, unknown> = {
+        type: "send_message",
+        sessionId: currentSessionRef.current,
+        messageId,
+        content: text,
+        agentId,
+      };
+      if (imagePaths?.length) {
+        wsPayload.imagePaths = imagePaths;
+      }
+
+      wsRef.current.send(JSON.stringify(wsPayload));
       setTimeout(() => setSending(false), 80);
     },
-    [agentId, appendMessage]
+    [agentId, uploadImage],
   );
 
   const switchSession = useCallback(
