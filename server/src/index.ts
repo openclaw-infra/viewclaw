@@ -18,6 +18,39 @@ import {
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 
+const CONTEXT_WINDOWS: Record<string, number> = {
+  "gpt-5.3-codex": 200_000,
+  "gpt-4.1": 1_000_000,
+  "gpt-4.1-mini": 1_000_000,
+  "gpt-4.1-nano": 1_000_000,
+  "gpt-4o": 128_000,
+  "gpt-4o-mini": 128_000,
+  "o3": 200_000,
+  "o3-mini": 200_000,
+  "o4-mini": 200_000,
+  "claude-sonnet-4-20250514": 200_000,
+  "claude-opus-4-20250514": 200_000,
+  "claude-4.6-opus": 200_000,
+  "claude-4-sonnet": 200_000,
+  "claude-3.5-sonnet": 200_000,
+  "claude-3-opus": 200_000,
+  "claude-3-haiku": 200_000,
+};
+
+const resolveContextWindow = (model?: string): number => {
+  if (!model) return 200_000;
+  const exact = CONTEXT_WINDOWS[model];
+  if (exact) return exact;
+  for (const [key, val] of Object.entries(CONTEXT_WINDOWS)) {
+    if (model.includes(key)) return val;
+  }
+  if (model.includes("gpt-4")) return 128_000;
+  if (model.includes("gpt-5")) return 200_000;
+  if (model.includes("claude")) return 200_000;
+  if (model.includes("o3") || model.includes("o4")) return 200_000;
+  return 200_000;
+};
+
 export const app = new Elysia()
   .get("/", () => ({
     name: "ClawFlow Gateway",
@@ -240,6 +273,74 @@ export const app = new Elysia()
       query: t.Object({
         agentId: t.Optional(t.String()),
         limit: t.Optional(t.String()),
+      }),
+    }
+  )
+
+  .get(
+    "/api/sessions/:sessionId/context",
+    async ({ params, query }) => {
+      const agentId = query.agentId ?? "main";
+      const jsonlPath = await getSessionJsonlPath(agentId, params.sessionId);
+
+      let raw: string;
+      try {
+        raw = await readFile(jsonlPath, "utf8");
+      } catch {
+        return { ok: true, context: null };
+      }
+
+      const lines = raw.split("\n");
+      let model: string | undefined;
+      let lastUsage: { input: number; output: number; cacheRead: number; totalTokens: number } | undefined;
+      let totalCost = 0;
+
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        try {
+          const entry = JSON.parse(line);
+          if (entry.type === "message" && entry.message?.usage) {
+            const u = entry.message.usage;
+            if (!lastUsage) {
+              lastUsage = {
+                input: u.input ?? 0,
+                output: u.output ?? 0,
+                cacheRead: u.cacheRead ?? 0,
+                totalTokens: u.totalTokens ?? 0,
+              };
+            }
+            totalCost += u.cost?.total ?? 0;
+            if (!model && entry.message.model) {
+              model = entry.message.model;
+            }
+          }
+          if (!model && (entry.type === "model_change" || entry.type === "custom") && entry.modelId) {
+            model = entry.modelId;
+          }
+        } catch { /* skip */ }
+      }
+
+      const contextWindow = resolveContextWindow(model);
+
+      return {
+        ok: true,
+        context: lastUsage ? {
+          usedTokens: lastUsage.totalTokens,
+          maxTokens: contextWindow,
+          percent: contextWindow > 0 ? Math.round((lastUsage.totalTokens / contextWindow) * 1000) / 10 : 0,
+          model: model ?? "unknown",
+          lastInput: lastUsage.input,
+          lastOutput: lastUsage.output,
+          cacheRead: lastUsage.cacheRead,
+          totalCost: Math.round(totalCost * 1_000_000) / 1_000_000,
+        } : null,
+      };
+    },
+    {
+      params: t.Object({ sessionId: t.String() }),
+      query: t.Object({
+        agentId: t.Optional(t.String()),
       }),
     }
   )

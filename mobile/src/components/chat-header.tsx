@@ -1,6 +1,6 @@
 import { Pressable, View, StyleSheet, Image } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import type { ConnectionStatus } from "../types/gateway";
+import type { ConnectionStatus, SessionContext } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
 
 const logoIcon = require("../../assets/logo-icon.png");
@@ -11,6 +11,7 @@ type Props = {
   sessionCount?: number;
   gatewayLabel?: string;
   agentId?: string;
+  context?: SessionContext | null;
   onSessionPress?: () => void;
   onGatewayPress?: () => void;
   onAgentPress?: () => void;
@@ -73,11 +74,22 @@ const ChevronDown = ({ color, size = 8 }: { color: string; size?: number }) => (
   </View>
 );
 
+const ctxStyles = StyleSheet.create({
+  bar: { width: 32, height: 3, borderRadius: 1.5, overflow: "hidden" },
+  barFill: { height: 3, borderRadius: 1.5 },
+});
+
 const iconStyles = StyleSheet.create({
   agentHead: { width: 6, height: 6, borderRadius: 3, marginBottom: 1 },
   agentBody: { width: 10, height: 4, borderTopLeftRadius: 5, borderTopRightRadius: 5 },
   chevron: { width: 5, height: 5, borderBottomWidth: 1.5, borderRightWidth: 1.5, transform: [{ rotate: "45deg" }], marginTop: -2 },
 });
+
+const formatTokens = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+};
 
 export const ChatHeader = ({
   sessionId,
@@ -85,6 +97,7 @@ export const ChatHeader = ({
   sessionCount,
   gatewayLabel,
   agentId,
+  context,
   onSessionPress,
   onGatewayPress,
   onAgentPress,
@@ -133,26 +146,50 @@ export const ChatHeader = ({
             </Pressable>
           )}
         </XStack>
-        <Pressable onPress={onSessionPress}>
-          <XStack alignItems="center" gap={6}>
-            <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
-              {shortId}
-            </Text>
-            {sessionCount != null && sessionCount > 0 && (
-              <YStack
-                backgroundColor={colors.bg.elevated}
-                paddingHorizontal={6}
-                paddingVertical={1}
-                borderRadius={4}
-              >
-                <Text color={colors.text.muted} fontSize={10} fontWeight="600">
-                  {sessionCount}
-                </Text>
-              </YStack>
-            )}
-            <ChevronDown color={colors.text.muted} />
-          </XStack>
-        </Pressable>
+        <XStack alignItems="center" gap={6}>
+          <Pressable onPress={onSessionPress}>
+            <XStack alignItems="center" gap={6}>
+              <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
+                {shortId}
+              </Text>
+              {sessionCount != null && sessionCount > 0 && (
+                <YStack
+                  backgroundColor={colors.bg.elevated}
+                  paddingHorizontal={6}
+                  paddingVertical={1}
+                  borderRadius={4}
+                >
+                  <Text color={colors.text.muted} fontSize={10} fontWeight="600">
+                    {sessionCount}
+                  </Text>
+                </YStack>
+              )}
+              <ChevronDown color={colors.text.muted} />
+            </XStack>
+          </Pressable>
+          {context && (
+            <XStack alignItems="center" gap={4} marginLeft={2}>
+              <Text color={colors.text.muted} fontSize={10} opacity={0.5}>·</Text>
+              <View style={[ctxStyles.bar, { backgroundColor: colors.bg.tertiary }]}>
+                <View
+                  style={[
+                    ctxStyles.barFill,
+                    {
+                      backgroundColor:
+                        context.percent > 85 ? colors.accent.red :
+                        context.percent > 65 ? colors.accent.yellow :
+                        colors.brand.blue,
+                      width: `${Math.min(context.percent, 100)}%` as any,
+                    },
+                  ]}
+                />
+              </View>
+              <Text color={colors.text.muted} fontSize={10} fontFamily="$mono">
+                {formatTokens(context.usedTokens)}/{formatTokens(context.maxTokens)}
+              </Text>
+            </XStack>
+          )}
+        </XStack>
       </YStack>
 
       <XStack alignItems="center" gap={8}>

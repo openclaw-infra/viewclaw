@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
@@ -13,6 +13,7 @@ import { SettingsScreen } from "./src/components/settings-screen";
 import { SplashScreen } from "./src/components/splash-screen";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
 import { useGatewayManager } from "./src/hooks/use-gateway-manager";
+import { useSessionContext } from "./src/hooks/use-session-context";
 import { AppThemeProvider, useTheme } from "./src/theme/theme-context";
 import type { AgentInfo } from "./src/types/gateway";
 
@@ -28,11 +29,22 @@ function Main() {
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [agentsLoading, setAgentsLoading] = useState(false);
 
+  const contextRefreshRef = useRef(() => {});
+
   const session = useGatewaySession({
     agentId: activeAgentId,
     wsUrl: gateway.wsUrl,
     httpUrl: gateway.httpUrl,
+    onMessageDone: () => setTimeout(() => contextRefreshRef.current(), 600),
   });
+
+  const sessionContext = useSessionContext({
+    sessionId: session.currentSessionId,
+    httpUrl: gateway.httpUrl,
+    agentId: activeAgentId,
+  });
+
+  contextRefreshRef.current = sessionContext.refresh;
 
   const [currentPage, setCurrentPage] = useState<Page>("chat");
   const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
@@ -99,6 +111,7 @@ function Main() {
                   sessionCount={session.sessions.length}
                   gatewayLabel={gateway.activeGateway?.label}
                   agentId={activeAgentId}
+                  context={sessionContext.context}
                   onSessionPress={openSessionSheet}
                   onGatewayPress={openGatewaySheet}
                   onAgentPress={openAgentSheet}

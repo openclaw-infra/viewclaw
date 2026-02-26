@@ -19,6 +19,7 @@ type Options = {
   sessionId?: string;
   wsUrl?: string;
   httpUrl?: string;
+  onMessageDone?: () => void;
 };
 
 type WsIncoming =
@@ -29,6 +30,7 @@ export const useGatewaySession = ({
   agentId = "main",
   sessionId: initialSessionId,
   wsUrl: externalWsUrl,
+  onMessageDone,
   httpUrl: externalHttpUrl,
 }: Options) => {
   const wsUrl = externalWsUrl || FALLBACK_WS;
@@ -51,11 +53,13 @@ export const useGatewaySession = ({
   const reconnectAttemptRef = useRef(0);
   const wsUrlRef = useRef(wsUrl);
   const httpUrlRef = useRef(httpUrl);
+  const onMessageDoneRef = useRef(onMessageDone);
 
   currentSessionRef.current = currentSessionId;
   agentIdRef.current = agentId;
   wsUrlRef.current = wsUrl;
   httpUrlRef.current = httpUrl;
+  onMessageDoneRef.current = onMessageDone;
 
   const bufferRef = useRef<StreamItem[]>([]);
 
@@ -190,6 +194,7 @@ export const useGatewaySession = ({
         if (msgId) {
           finalizeStreamingMessage(msgId, content);
         }
+        onMessageDoneRef.current?.();
         return;
       }
 

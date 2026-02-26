@@ -78,3 +78,14 @@ export type AgentInfo = {
   workspace?: string;
   instructions?: string;
 };
+
+export type SessionContext = {
+  usedTokens: number;
+  maxTokens: number;
+  percent: number;
+  model: string;
+  lastInput: number;
+  lastOutput: number;
+  cacheRead: number;
+  totalCost: number;
+};
