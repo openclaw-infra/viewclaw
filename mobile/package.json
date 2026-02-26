@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@ronradtke/react-native-markdown-display": "^8.1.0",
     "@tamagui/babel-plugin": "^2.0.0-rc.17",
     "@tamagui/config": "^2.0.0-rc.17",

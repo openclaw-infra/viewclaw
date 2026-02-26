@@ -9,5 +9,8 @@
     "dev": "bun run dev:server & bun run dev:mobile",
     "dev:mobile": "bun run --cwd mobile start",
     "dev:server": "bun run --cwd server dev"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^3.0.1"
   }
 }

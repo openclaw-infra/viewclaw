@@ -7,10 +7,19 @@ type Props = {
   sessionId: string;
   status: ConnectionStatus;
   sessionCount?: number;
+  gatewayLabel?: string;
   onSessionPress?: () => void;
+  onGatewayPress?: () => void;
 };
 
-export const ChatHeader = ({ sessionId, status, sessionCount, onSessionPress }: Props) => {
+export const ChatHeader = ({
+  sessionId,
+  status,
+  sessionCount,
+  gatewayLabel,
+  onSessionPress,
+  onGatewayPress,
+}: Props) => {
   const statusColor = colors.status[status];
   const shortId = sessionId ? sessionId.slice(0, 8) : "---";
 
@@ -49,26 +58,35 @@ export const ChatHeader = ({ sessionId, status, sessionCount, onSessionPress }: 
         </Pressable>
       </YStack>
 
-      <XStack alignItems="center" gap="$2">
-        <XStack
-          alignItems="center"
-          gap="$1.5"
-          backgroundColor={colors.bg.elevated}
-          paddingHorizontal="$2.5"
-          paddingVertical="$1.5"
-          borderRadius="$10"
-        >
-          <YStack
-            width={6}
-            height={6}
-            borderRadius={3}
-            backgroundColor={statusColor}
-          />
-          <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5}>
-            {status}
-          </Text>
-        </XStack>
-      </XStack>
+      <YStack alignItems="flex-end" gap="$1.5">
+        <Pressable onPress={onGatewayPress}>
+          <XStack
+            alignItems="center"
+            gap="$1.5"
+            backgroundColor={colors.bg.elevated}
+            paddingHorizontal="$2.5"
+            paddingVertical="$1.5"
+            borderRadius="$10"
+          >
+            <YStack
+              width={6}
+              height={6}
+              borderRadius={3}
+              backgroundColor={statusColor}
+            />
+            <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5}>
+              {status}
+            </Text>
+          </XStack>
+        </Pressable>
+        {gatewayLabel && (
+          <Pressable onPress={onGatewayPress}>
+            <Text color={colors.text.muted} fontSize={10}>
+              {gatewayLabel} ▾
+            </Text>
+          </Pressable>
+        )}
+      </YStack>
     </XStack>
   );
 };

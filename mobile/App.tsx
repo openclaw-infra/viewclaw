@@ -7,14 +7,25 @@ import { ChatComposer } from "./src/components/chat-composer";
 import { ChatHeader } from "./src/components/chat-header";
 import { ChatStream } from "./src/components/chat-stream";
 import { SessionListSheet } from "./src/components/session-list-sheet";
+import { GatewaySheet } from "./src/components/gateway-sheet";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
+import { useGatewayManager } from "./src/hooks/use-gateway-manager";
 
 export default function App() {
-  const session = useGatewaySession({ agentId: "main" });
+  const gateway = useGatewayManager();
+  const session = useGatewaySession({
+    agentId: "main",
+    wsUrl: gateway.wsUrl,
+    httpUrl: gateway.httpUrl,
+  });
+
   const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
+  const [gatewaySheetVisible, setGatewaySheetVisible] = useState(false);
 
   const openSessionSheet = useCallback(() => setSessionSheetVisible(true), []);
   const closeSessionSheet = useCallback(() => setSessionSheetVisible(false), []);
+  const openGatewaySheet = useCallback(() => setGatewaySheetVisible(true), []);
+  const closeGatewaySheet = useCallback(() => setGatewaySheetVisible(false), []);
 
   return (
     <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
@@ -30,7 +41,9 @@ export default function App() {
                 sessionId={session.currentSessionId}
                 status={session.connectionStatus}
                 sessionCount={session.sessions.length}
+                gatewayLabel={gateway.activeGateway?.label}
                 onSessionPress={openSessionSheet}
+                onGatewayPress={openGatewaySheet}
               />
 
               <YStack flex={1}>
@@ -52,6 +65,17 @@ export default function App() {
             onSelect={session.switchSession}
             onCreate={session.createNewSession}
             onRefresh={session.refreshSessions}
+          />
+
+          <GatewaySheet
+            visible={gatewaySheetVisible}
+            gateways={gateway.gateways}
+            activeId={gateway.activeId}
+            onClose={closeGatewaySheet}
+            onSwitch={gateway.switchGateway}
+            onAdd={gateway.addGateway}
+            onUpdate={gateway.updateGateway}
+            onRemove={gateway.removeGateway}
           />
         </SafeAreaView>
         <StatusBar style="light" />

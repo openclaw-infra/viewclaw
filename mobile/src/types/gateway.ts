@@ -54,3 +54,10 @@ export type SessionInfo = {
   jsonlPath: string;
   createdAt: string;
 };
+
+export type GatewayConfig = {
+  id: string;
+  label: string;
+  url: string;
+  createdAt: number;
+};

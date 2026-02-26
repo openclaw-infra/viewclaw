@@ -22,8 +22,11 @@
 - [x] **会话管理**
   点击 Header session ID 弹出会话列表 Sheet，显示所有会话（session key + ID + 时间），支持切换/新建/删除/刷新，当前会话蓝色高亮 + ACTIVE 标签，新建通过 Server 端 `POST /api/sessions` 创建
 
-- [ ] **服务端连接管理**
-  支持配置多个 Gateway 地址（本地/远程），连接切换 UI，连接状态持久化（MMKV），断线自动重连策略优化
+- [x] **服务端连接管理**
+  支持配置多个 Gateway 地址（本地/远程），连接切换 UI，连接状态持久化（AsyncStorage），断线自动重连策略优化（指数退避）
+
+- [ ] **Gateway 远程鉴权**
+  GatewayConfig 增加可选 token 字段，WebSocket 连接和 HTTP 请求时携带 Bearer Token，支持远程部署的 Elysia 服务端鉴权场景
 
 ## P2 — 多模态 & 管理
 

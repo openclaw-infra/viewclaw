@@ -8,20 +8,31 @@ import type {
   StreamItem,
 } from "../types/gateway";
 
-const DEFAULT_WS_URL = process.env.EXPO_PUBLIC_GATEWAY_WS_URL ?? "ws://127.0.0.1:3000";
-const DEFAULT_HTTP_URL =
-  process.env.EXPO_PUBLIC_GATEWAY_HTTP_URL ?? DEFAULT_WS_URL.replace(/^ws/, "http");
+const FALLBACK_WS = "ws://127.0.0.1:3000";
+
+const RECONNECT_BASE_MS = 1000;
+const RECONNECT_MAX_MS = 30_000;
 
 type Options = {
   agentId?: string;
   sessionId?: string;
+  wsUrl?: string;
+  httpUrl?: string;
 };
 
 type WsIncoming =
   | GatewayEvent
   | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed" | "unknown_message"; [k: string]: unknown };
 
-export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionId }: Options) => {
+export const useGatewaySession = ({
+  agentId = "main",
+  sessionId: initialSessionId,
+  wsUrl: externalWsUrl,
+  httpUrl: externalHttpUrl,
+}: Options) => {
+  const wsUrl = externalWsUrl || FALLBACK_WS;
+  const httpUrl = externalHttpUrl || wsUrl.replace(/^ws(s?)/, "http$1");
+
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
   const [stream, setStream] = useState<StreamItem[]>([]);
   const [sending, setSending] = useState(false);
@@ -36,9 +47,14 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
   const currentSessionRef = useRef(currentSessionId);
   const agentIdRef = useRef(agentId);
   const typingIdRef = useRef<string | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const wsUrlRef = useRef(wsUrl);
+  const httpUrlRef = useRef(httpUrl);
 
   currentSessionRef.current = currentSessionId;
   agentIdRef.current = agentId;
+  wsUrlRef.current = wsUrl;
+  httpUrlRef.current = httpUrl;
 
   const bufferRef = useRef<StreamItem[]>([]);
 
@@ -311,14 +327,31 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
     [wsSend]
   );
 
+  const scheduleReconnect = useCallback((connectFn: () => void) => {
+    if (isUnmountedRef.current) return;
+    const attempt = reconnectAttemptRef.current;
+    const delay = Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+    reconnectAttemptRef.current = attempt + 1;
+    reconnectRef.current = setTimeout(connectFn, delay);
+  }, []);
+
   const connect = useCallback(() => {
     if (isUnmountedRef.current) return;
+
+    if (wsRef.current) {
+      wsRef.current.onclose = null;
+      wsRef.current.onerror = null;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     setConnectionStatus("connecting");
 
-    const ws = new WebSocket(`${DEFAULT_WS_URL}/stream`);
+    const ws = new WebSocket(`${wsUrlRef.current}/stream`);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      reconnectAttemptRef.current = 0;
       setConnectionStatus("connected");
 
       if (pingRef.current) clearInterval(pingRef.current);
@@ -366,17 +399,15 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
     ws.onclose = () => {
       setConnectionStatus("disconnected");
       if (pingRef.current) clearInterval(pingRef.current);
-      if (!isUnmountedRef.current) {
-        reconnectRef.current = setTimeout(connect, 2000);
-      }
+      scheduleReconnect(connect);
     };
 
     ws.onerror = () => setConnectionStatus("disconnected");
-  }, [appendLog, parseEvent]);
+  }, [appendLog, parseEvent, scheduleReconnect]);
 
   const fetchSessions = useCallback(async () => {
     try {
-      const res = await fetch(`${DEFAULT_HTTP_URL}/api/sessions?agentId=${agentId}`);
+      const res = await fetch(`${httpUrlRef.current}/api/sessions?agentId=${agentId}`);
       const data = await res.json();
       if (data.ok && Array.isArray(data.sessions)) {
         setSessions(data.sessions);
@@ -393,6 +424,7 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
 
   useEffect(() => {
     isUnmountedRef.current = false;
+    reconnectAttemptRef.current = 0;
     connect();
     return () => {
       isUnmountedRef.current = true;
@@ -400,7 +432,9 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       if (pingRef.current) clearInterval(pingRef.current);
       wsRef.current?.close();
     };
-  }, [connect]);
+    // reconnect when wsUrl changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wsUrl]);
 
   useEffect(() => {
     if (connectionStatus === "connected") {
@@ -466,7 +500,7 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
 
   const createNewSession = useCallback(async () => {
     try {
-      const res = await fetch(`${DEFAULT_HTTP_URL}/api/sessions`, {
+      const res = await fetch(`${httpUrlRef.current}/api/sessions`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ agentId: agentIdRef.current }),
@@ -518,8 +552,8 @@ export const useGatewaySession = ({ agentId = "main", sessionId: initialSessionI
       createNewSession,
       deleteSession,
       refreshSessions,
-      gatewayHttpUrl: DEFAULT_HTTP_URL,
+      gatewayHttpUrl: httpUrl,
     }),
-    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, switchSession, createNewSession, deleteSession, refreshSessions]
+    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, switchSession, createNewSession, deleteSession, refreshSessions, httpUrl]
   );
 };
