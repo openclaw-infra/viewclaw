@@ -285,12 +285,6 @@ export const useGatewaySession = ({
       }
 
       if (event.type === "status") {
-        appendLog({
-          id: `log-${event.sessionId}-${event.seq}`,
-          level: "status",
-          text: typeof p.subtype === "string" ? p.subtype : "status",
-          createdAt: event.ts,
-        });
         return;
       }
 
@@ -385,12 +379,6 @@ export const useGatewaySession = ({
       if (parsed.type === "pong" || parsed.type === "ack") return;
 
       if (parsed.type === "subscribed") {
-        appendLog({
-          id: `log-subscribed-${Date.now()}`,
-          level: "status",
-          text: `Watching session ${parsed.sessionId}`,
-          createdAt: Date.now(),
-        });
         return;
       }
 
@@ -451,7 +439,7 @@ export const useGatewaySession = ({
             createdAt: m.ts ? new Date(m.ts).getTime() : 0,
           };
           items.push({ kind: "message", data: msg });
-        } else if (m.type === "thought" || m.type === "action" || m.type === "observation" || m.type === "error" || m.type === "status") {
+        } else if (m.type === "thought" || m.type === "action" || m.type === "observation" || m.type === "error") {
           let text = "";
           if (m.type === "thought") {
             text = m.thinkingSummary || m.thinking || "Thinking...";
@@ -460,10 +448,8 @@ export const useGatewaySession = ({
             text = tc?.[0]?.name ?? m.content ?? "Action";
           } else if (m.type === "observation") {
             text = m.toolName ? `${m.toolName} returned` : (m.content?.slice(0, 200) || "Observation");
-          } else if (m.type === "error") {
-            text = m.content ?? "Error";
           } else {
-            text = m.content ?? "status";
+            text = m.content ?? "Error";
           }
 
           const log: ExecutionLog = {

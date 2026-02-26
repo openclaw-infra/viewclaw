@@ -1,8 +1,8 @@
 import { useRef, useEffect, useMemo, memo, useState } from "react";
 import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
-import type { ChatMessage, ImageAttachment, StreamItem } from "../types/gateway";
-import { EventCard } from "./event-card";
+import type { ChatMessage, ExecutionLog, ImageAttachment, StreamItem } from "../types/gateway";
+import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
 import { useTheme } from "../theme/theme-context";
 
@@ -221,25 +221,71 @@ const emptyStyles = StyleSheet.create({
   thinkDot: { width: 4, height: 4, borderRadius: 2 },
 });
 
-const getItemId = (item: StreamItem): string =>
-  item.kind === "typing" ? item.id : item.data.id;
+type DisplayItem =
+  | { kind: "message"; id: string; data: ChatMessage }
+  | { kind: "process"; id: string; logs: ExecutionLog[] }
+  | { kind: "typing"; id: string };
 
-const renderItem = ({ item }: { item: StreamItem }) => {
+const groupStreamItems = (stream: StreamItem[]): DisplayItem[] => {
+  const result: DisplayItem[] = [];
+  let currentLogs: ExecutionLog[] = [];
+
+  const flushLogs = (followedByMessage: boolean) => {
+    if (currentLogs.length === 0) return;
+    const hasDone = currentLogs.some((l) => l.level === "done");
+    const isComplete = hasDone || followedByMessage;
+    if (!hasDone && isComplete) {
+      currentLogs.push({
+        id: `synthetic-done-${currentLogs[0].id}`,
+        level: "done",
+        text: "Done",
+        createdAt: Date.now(),
+      });
+    }
+    result.push({
+      kind: "process",
+      id: `process-${currentLogs[0].id}`,
+      logs: [...currentLogs],
+    });
+    currentLogs = [];
+  };
+
+  for (const item of stream) {
+    if (item.kind === "log") {
+      currentLogs.push(item.data);
+    } else {
+      const isMessage = item.kind === "message" && item.data.role === "assistant";
+      flushLogs(isMessage);
+      if (item.kind === "message") {
+        result.push({ kind: "message", id: item.data.id, data: item.data });
+      } else {
+        result.push({ kind: "typing", id: item.id });
+      }
+    }
+  }
+  flushLogs(false);
+  return result;
+};
+
+const getDisplayItemId = (item: DisplayItem): string => item.id;
+
+const RenderDisplayItem = memo(({ item }: { item: DisplayItem }) => {
   if (item.kind === "typing") return <TypingIndicator />;
   if (item.kind === "message") return <Bubble item={item.data} />;
-  return <EventCard log={item.data} />;
-};
+  return <ProcessCard logs={item.logs} />;
+});
 
 export const ChatStream = ({ stream }: Props) => {
   const { colors } = useTheme();
-  const reversed = useMemo(() => [...stream].reverse(), [stream]);
+  const grouped = useMemo(() => groupStreamItems(stream), [stream]);
+  const reversed = useMemo(() => [...grouped].reverse(), [grouped]);
 
   return (
     <FlatList
       inverted
       data={reversed}
-      keyExtractor={getItemId}
-      renderItem={renderItem}
+      keyExtractor={getDisplayItemId}
+      renderItem={({ item }) => <RenderDisplayItem item={item} />}
       contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
