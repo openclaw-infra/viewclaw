@@ -122,52 +122,35 @@ export const ChatHeader = ({
         </Pressable>
       </YStack>
 
-      <YStack alignItems="flex-end" gap={6}>
-        <XStack alignItems="center" gap={8}>
-          <Pressable onPress={onSettingsPress}>
+      <XStack alignItems="center" gap={8}>
+        <Pressable onPress={onGatewayPress} hitSlop={8}>
+          <XStack alignItems="center" gap={5}>
             <YStack
-              width={32}
-              height={32}
-              borderRadius={16}
-              backgroundColor={colors.bg.tertiary}
-              alignItems="center"
-              justifyContent="center"
-            >
-              <SettingsIcon color={colors.text.secondary} />
-            </YStack>
-          </Pressable>
-          <Pressable onPress={onGatewayPress}>
-            <XStack
-              alignItems="center"
-              gap={6}
-              backgroundColor={colors.bg.tertiary}
-              paddingHorizontal={10}
-              height={32}
-              borderRadius={16}
-            >
-              <YStack
-                width={7}
-                height={7}
-                borderRadius={3.5}
-                backgroundColor={statusColor}
-              />
-              <Text color={colors.text.secondary} fontSize={11} textTransform="uppercase" letterSpacing={0.5} fontWeight="500">
-                {status}
-              </Text>
-            </XStack>
-          </Pressable>
-        </XStack>
-        {gatewayLabel && (
-          <Pressable onPress={onGatewayPress}>
-            <XStack alignItems="center" gap={4}>
-              <Text color={colors.text.muted} fontSize={10}>
+              width={8}
+              height={8}
+              borderRadius={4}
+              backgroundColor={statusColor}
+            />
+            {gatewayLabel && (
+              <Text color={colors.text.muted} fontSize={11}>
                 {gatewayLabel}
               </Text>
-              <ChevronDown color={colors.text.muted} size={6} />
-            </XStack>
-          </Pressable>
-        )}
-      </YStack>
+            )}
+          </XStack>
+        </Pressable>
+        <Pressable onPress={onSettingsPress}>
+          <YStack
+            width={32}
+            height={32}
+            borderRadius={16}
+            backgroundColor={colors.bg.tertiary}
+            alignItems="center"
+            justifyContent="center"
+          >
+            <SettingsIcon color={colors.text.secondary} />
+          </YStack>
+        </Pressable>
+      </XStack>
     </XStack>
   );
 };
