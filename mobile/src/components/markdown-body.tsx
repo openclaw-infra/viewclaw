@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { Linking, StyleSheet } from "react-native";
+import { memo, useEffect, useState } from "react";
+import { Image, Linking, StyleSheet, useWindowDimensions } from "react-native";
 import Markdown from "@ronradtke/react-native-markdown-display";
 import { useTheme } from "../theme/theme-context";
 import type { ColorPalette } from "../theme/colors";
@@ -153,12 +153,61 @@ const mdStyles = (textColor: string, c: ColorPalette, isDark: boolean) =>
     },
   });
 
+function AutoImage({ uri, alt, style }: { uri: string; alt?: string; style?: any }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const maxWidth = screenWidth - 80;
+  const [size, setSize] = useState({ width: maxWidth, height: maxWidth * 0.6 });
+
+  useEffect(() => {
+    Image.getSize(
+      uri,
+      (w, h) => {
+        const ratio = Math.min(maxWidth / w, 1);
+        setSize({ width: w * ratio, height: h * ratio });
+      },
+      () => {},
+    );
+  }, [uri, maxWidth]);
+
+  return (
+    <Image
+      source={{ uri }}
+      style={[style, { width: size.width, height: size.height }]}
+      resizeMode="contain"
+      accessible={!!alt}
+      accessibilityLabel={alt || undefined}
+    />
+  );
+}
+
+const imageRule = (
+  node: any,
+  _children: any,
+  _parent: any,
+  styles: any,
+  allowedImageHandlers: string[],
+  defaultImageHandler: string | null,
+) => {
+  const { src, alt } = node.attributes;
+  const show = allowedImageHandlers.some(
+    (h: string) => src.toLowerCase().startsWith(h.toLowerCase()),
+  );
+
+  if (!show && defaultImageHandler === null) return null;
+
+  const uri = show ? src : `${defaultImageHandler}${src}`;
+
+  return <AutoImage key={node.key} uri={uri} alt={alt} style={styles._VIEW_SAFE_image} />;
+};
+
+const customRules = { image: imageRule };
+
 export const MarkdownBody = memo(({ children, color }: Props) => {
   const { colors, isDark } = useTheme();
   const isUserBubble = color === "#FFFFFF";
   const styles = mdStyles(isUserBubble ? "#FFFFFF" : colors.text.primary, colors, isDark);
   return (
-    <Markdown style={styles} onLinkPress={onLinkPress}>
+    <Markdown style={styles} rules={customRules} onLinkPress={onLinkPress}>
       {children}
     </Markdown>
   );
