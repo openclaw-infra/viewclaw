@@ -1,5 +1,10 @@
 import { useCallback, useRef, useState } from "react";
-import { Audio } from "expo-av";
+import {
+  useAudioRecorder,
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+} from "expo-audio";
 import i18n from "../i18n";
 
 export type RecordingStatus = "idle" | "recording" | "transcribing";
@@ -13,27 +18,26 @@ type Options = {
 export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Options) => {
   const [status, setStatus] = useState<RecordingStatus>("idle");
   const [durationMs, setDurationMs] = useState(0);
-  const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
 
   const startRecording = useCallback(async () => {
     try {
-      const { granted } = await Audio.requestPermissionsAsync();
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) {
         onError?.(i18n.t("voice.micPermissionDenied"));
         return;
       }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
       });
 
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
+      await recorder.prepareToRecordAsync();
+      recorder.record();
 
-      recordingRef.current = recording;
       setStatus("recording");
       setDurationMs(0);
 
@@ -45,7 +49,7 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
       onError?.((err as Error).message);
       setStatus("idle");
     }
-  }, [onError]);
+  }, [onError, recorder]);
 
   const stopAndTranscribe = useCallback(async () => {
     if (timerRef.current) {
@@ -53,19 +57,12 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
       timerRef.current = null;
     }
 
-    const recording = recordingRef.current;
-    if (!recording) {
-      setStatus("idle");
-      return;
-    }
-
     try {
       setStatus("transcribing");
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
 
-      const uri = recording.getURI();
-      recordingRef.current = null;
+      const uri = recorder.uri;
 
       if (!uri) {
         onError?.(i18n.t("voice.noRecordingUri"));
@@ -106,7 +103,7 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
       setStatus("idle");
       setDurationMs(0);
     }
-  }, [gatewayHttpUrl, onTranscript, onError]);
+  }, [gatewayHttpUrl, onTranscript, onError, recorder]);
 
   const cancelRecording = useCallback(async () => {
     if (timerRef.current) {
@@ -114,18 +111,14 @@ export const useVoiceRecorder = ({ gatewayHttpUrl, onTranscript, onError }: Opti
       timerRef.current = null;
     }
 
-    const recording = recordingRef.current;
-    if (recording) {
-      try {
-        await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      } catch { /* already stopped */ }
-      recordingRef.current = null;
-    }
+    try {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+    } catch { /* already stopped */ }
 
     setStatus("idle");
     setDurationMs(0);
-  }, []);
+  }, [recorder]);
 
   return {
     status,
