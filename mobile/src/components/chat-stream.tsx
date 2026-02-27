@@ -1,10 +1,12 @@
-import { useRef, useEffect, useMemo, memo, useState } from "react";
-import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet } from "react-native";
+import { useRef, useEffect, useMemo, memo, useState, useCallback } from "react";
+import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet, type LayoutRectangle } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import * as Haptics from "expo-haptics";
 import type { ChatMessage, ExecutionLog, ImageAttachment, StreamItem } from "../types/gateway";
 import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
+import { MessageContextMenu } from "./message-context-menu";
 import { useTheme } from "../theme/theme-context";
 
 const logoIcon = require("../../assets/logo-icon.png");
@@ -112,64 +114,93 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
     minute: "2-digit",
   });
 
+  const bubbleRef = useRef<View>(null);
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<LayoutRectangle | null>(null);
+
+  const handleLongPress = useCallback(() => {
+    if (item.streaming || !item.content) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    bubbleRef.current?.measureInWindow((x, y, width, height) => {
+      setMenuAnchor({ x, y, width, height });
+      setMenuVisible(true);
+    });
+  }, [item.streaming, item.content]);
+
+  const handleMenuClose = useCallback(() => {
+    setMenuVisible(false);
+    setMenuAnchor(null);
+  }, []);
+
   return (
     <XStack
       justifyContent={isUser ? "flex-end" : "flex-start"}
       paddingHorizontal={12}
       marginBottom={8}
     >
-      <YStack
-        maxWidth="82%"
-        paddingHorizontal={14}
-        paddingVertical={10}
-        backgroundColor={isUser ? colors.bubble.user : colors.bubble.assistant}
-        borderRadius={18}
-        borderBottomRightRadius={isUser ? 4 : 18}
-        borderBottomLeftRadius={isUser ? 18 : 4}
-        borderWidth={isUser ? 1 : 1}
-        borderColor={isUser ? colors.bubble.userBorder + "40" : colors.bubble.assistantBorder}
-        gap={4}
-        {...(!isUser && isDark && {
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: 0.15,
-          shadowRadius: 3,
-        })}
-      >
-        {item.images?.length ? <ImageGrid images={item.images} /> : null}
-
-        {item.thinkingSummary ? (
-          <XStack alignItems="center" gap={4} marginBottom={2}>
-            <View style={[emptyStyles.thinkDot, { backgroundColor: colors.accent.yellow }]} />
-            <Text color={colors.accent.yellow} fontSize={11} opacity={0.85} fontWeight="500">
-              {item.thinkingSummary}
-            </Text>
-          </XStack>
-        ) : null}
-
-        {item.content ? (
-          <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
-            {item.content}
-          </MarkdownBody>
-        ) : null}
-
-        {item.streaming ? (
-          <XStack alignItems="center" height={20}>
-            {!item.content && (
-              <GeneratingLabel />
-            )}
-            <StreamingCursor />
-          </XStack>
-        ) : (
-          <Text
-            color={isUser ? "rgba(255,255,255,0.45)" : colors.text.muted}
-            fontSize={10}
-            alignSelf={isUser ? "flex-end" : "flex-start"}
+      <Pressable onLongPress={handleLongPress} delayLongPress={400}>
+        <View ref={bubbleRef} collapsable={false}>
+          <YStack
+            maxWidth={Dimensions.get("window").width * 0.82}
+            paddingHorizontal={14}
+            paddingVertical={10}
+            backgroundColor={isUser ? colors.bubble.user : colors.bubble.assistant}
+            borderRadius={18}
+            borderBottomRightRadius={isUser ? 4 : 18}
+            borderBottomLeftRadius={isUser ? 18 : 4}
+            borderWidth={isUser ? 1 : 1}
+            borderColor={isUser ? colors.bubble.userBorder + "40" : colors.bubble.assistantBorder}
+            gap={4}
+            {...(!isUser && isDark && {
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 1 },
+              shadowOpacity: 0.15,
+              shadowRadius: 3,
+            })}
           >
-            {time}
-          </Text>
-        )}
-      </YStack>
+            {item.images?.length ? <ImageGrid images={item.images} /> : null}
+
+            {item.thinkingSummary ? (
+              <XStack alignItems="center" gap={4} marginBottom={2}>
+                <View style={[emptyStyles.thinkDot, { backgroundColor: colors.accent.yellow }]} />
+                <Text color={colors.accent.yellow} fontSize={11} opacity={0.85} fontWeight="500">
+                  {item.thinkingSummary}
+                </Text>
+              </XStack>
+            ) : null}
+
+            {item.content ? (
+              <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
+                {item.content}
+              </MarkdownBody>
+            ) : null}
+
+            {item.streaming ? (
+              <XStack alignItems="center" height={20}>
+                {!item.content && (
+                  <GeneratingLabel />
+                )}
+                <StreamingCursor />
+              </XStack>
+            ) : (
+              <Text
+                color={isUser ? "rgba(255,255,255,0.45)" : colors.text.muted}
+                fontSize={10}
+                alignSelf={isUser ? "flex-end" : "flex-start"}
+              >
+                {time}
+              </Text>
+            )}
+          </YStack>
+        </View>
+      </Pressable>
+
+      <MessageContextMenu
+        visible={menuVisible}
+        anchorRect={menuAnchor}
+        content={item.content}
+        onClose={handleMenuClose}
+      />
     </XStack>
   );
 });

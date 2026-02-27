@@ -88,6 +88,9 @@ export default {
     noGateways: "暂无网关配置",
     del: "删除",
   },
+  contextMenu: {
+    copy: "复制",
+  },
   slashCommand: {
     openclaw: "OpenClaw",
     custom: "自定义",

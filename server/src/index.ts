@@ -3,7 +3,7 @@ import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
-import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry } from "./jsonl-watcher";
+import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry, muteWatcher, unmuteWatcher } from "./jsonl-watcher";
 import type { OpenClawJsonlEntry, OpenClawMessage } from "./types";
 import {
   sendMessage,
@@ -367,6 +367,8 @@ export const app = new Elysia()
       const abortController = new AbortController();
       activeRuns.set(sessionId, abortController);
 
+      muteWatcher(sessionId);
+
       const sessionKey = await resolveSessionKey(sessionId);
       const result = await sendMessage({
         content: body.content,
@@ -389,6 +391,7 @@ export const app = new Elysia()
       if (activeRuns.get(sessionId) === abortController) {
         activeRuns.delete(sessionId);
       }
+      unmuteWatcher(sessionId);
 
       return { ok: true, accepted: true, messageId, forwarded: result };
     },
@@ -624,6 +627,8 @@ export const app = new Elysia()
         const abortController = new AbortController();
         activeRuns.set(sessionId, abortController);
 
+        muteWatcher(sessionId);
+
         const sessionKey = await resolveSessionKey(sessionId);
         sendMessage({
           content: body.content,
@@ -648,6 +653,7 @@ export const app = new Elysia()
             if (activeRuns.get(sessionId) === abortController) {
               activeRuns.delete(sessionId);
             }
+            unmuteWatcher(sessionId);
           });
         return;
       }

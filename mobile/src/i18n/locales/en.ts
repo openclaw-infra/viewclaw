@@ -88,6 +88,9 @@ export default {
     noGateways: "No gateways configured",
     del: "Del",
   },
+  contextMenu: {
+    copy: "Copy",
+  },
   slashCommand: {
     openclaw: "OpenClaw",
     custom: "Custom",

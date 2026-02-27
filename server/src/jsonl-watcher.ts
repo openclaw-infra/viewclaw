@@ -13,6 +13,20 @@ type Watcher = {
 };
 
 const watchers = new Map<string, Watcher>();
+const mutedSessions = new Set<string>();
+
+export const muteWatcher = (sessionId: string) => { mutedSessions.add(sessionId); };
+export const unmuteWatcher = async (sessionId: string) => {
+  const watcher = watchers.get(sessionId);
+  if (watcher) {
+    const info = await stat(watcher.logFile).catch(() => null);
+    if (info) {
+      watcher.position = Number(info.size);
+      watcher.remainder = "";
+    }
+  }
+  mutedSessions.delete(sessionId);
+};
 
 export const classifyEntry = (entry: OpenClawJsonlEntry): {
   eventType: "message" | "thought" | "action" | "observation" | "status" | "error";
@@ -165,6 +179,7 @@ export const startWatcher = async (sessionId: string, logFile: string) => {
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed) continue;
+          if (mutedSessions.has(sessionId)) continue;
           try {
             const entry = JSON.parse(trimmed) as OpenClawJsonlEntry;
             const result = classifyEntry(entry);

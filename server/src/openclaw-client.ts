@@ -1,5 +1,5 @@
 import { readdir, stat, readFile, access } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { OPENCLAW_BASE_URL, OPENCLAW_HOME, getGatewayToken, normalizeToken } from "./config";
 import type { SessionInfo, AgentInfo } from "./types";
 
@@ -298,11 +298,15 @@ export const listSessions = async (agentId: string = "main"): Promise<SessionInf
         if (!s.sessionId) continue;
         sessionKeyCache.set(s.sessionId, s.key);
         const defaultPath = join(OPENCLAW_HOME, "agents", agentId, "sessions", `${s.sessionId}.jsonl`);
+        const transcriptPath =
+          typeof s.transcriptPath === "string" && s.transcriptPath.trim().length > 0
+            ? (isAbsolute(s.transcriptPath) ? s.transcriptPath : join(OPENCLAW_HOME, s.transcriptPath))
+            : defaultPath;
         sessions.push({
           id: s.sessionId,
           agentId,
           sessionKey: s.key,
-          jsonlPath: defaultPath,
+          jsonlPath: transcriptPath,
           createdAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : "",
         });
       }

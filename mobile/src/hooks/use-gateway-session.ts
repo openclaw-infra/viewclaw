@@ -47,6 +47,7 @@ export const useGatewaySession = ({
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isUnmountedRef = useRef(false);
   const seenRef = useRef<Set<string>>(new Set());
+  const lastSeqRef = useRef(0);
   const currentSessionRef = useRef(currentSessionId);
   const typingIdRef = useRef<string | null>(null);
   const reconnectAttemptRef = useRef(0);
@@ -398,6 +399,8 @@ export const useGatewaySession = ({
       if (evt.sessionId && currentSessionRef.current && evt.sessionId !== currentSessionRef.current) {
         return;
       }
+      if (evt.seq != null && evt.seq <= lastSeqRef.current) return;
+      if (evt.seq != null) lastSeqRef.current = evt.seq;
       parseEvent(evt);
     };
 
@@ -606,6 +609,7 @@ export const useGatewaySession = ({
       streamingMsgRef.current = null;
       streamedDoneRef.current = false;
       typingIdRef.current = null;
+      lastSeqRef.current = 0;
       setCurrentSessionId(newSessionId);
       subscribeToSession(newSessionId);
       loadHistory(newSessionId);
