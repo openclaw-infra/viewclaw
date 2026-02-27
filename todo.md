@@ -42,16 +42,22 @@
 - [ ] **Agent 管理**
   Agent 列表展示（从 /api/agents 获取），切换不同 Agent，显示 Agent 配置信息（model、workspace 等）
 
+- [ ] **会话 Agent 展示与指定**
+  当前 OpenClaw 每个会话绑定一个 Agent（默认 `main`），需要在 UI 各处体现 Agent 信息：① ChatHeader 展示当前会话的 agentId；② SessionListSheet 每行显示 agentId 标签；③ 新建会话时支持指定 Agent（默认 `main`），`POST /api/sessions` 传入 agentId 参数。将现有硬编码的 `AGENT_ID = "main"` 改为从当前会话的 `SessionInfo.agentId` 动态读取
+
 - [x] ~~**本地数据持久化**~~
   不再需要：会话数据已通过服务端 JSONL 文件持久化，切换 session 时 watcher 自动重新读取恢复
 
 ## P2.5 — 交互优化
 
-- [ ] **消息分享按钮（扩展上下文菜单）**
+- [x] **消息分享按钮（扩展上下文菜单）**
   在 MessageContextMenu 复制按钮组中新增「分享」操作，长按消息后可选择将当前选中消息的内容分享到另一个会话。点击后弹出会话选择列表，选中目标会话后将消息内容作为引用/转发发送至该会话
 
 - [ ] **消息回复按钮（扩展上下文菜单）**
   在 MessageContextMenu 复制按钮组中新增「回复」操作，长按消息后可选择回复该消息。点击后将选中消息作为引用上下文附加到 ChatComposer 输入框，用户可在此基础上编辑并发送新消息，实现针对特定消息的上下文回复
+
+- [x] **会话标题展示优化**
+  服务端已通过 `extractSessionTitle` 从 JSONL 第一条用户消息提取标题（>50 字符截断 + `...`），但 ChatHeader 目前仅显示 8 位 session ID，需要将标题展示到 ChatHeader 中（标题优先，ID 作为次级信息）。需要：① App.tsx 从 `sessions` 中查找当前会话的 `SessionInfo` 传给 ChatHeader；② ChatHeader 优先显示 `title`，无标题时回退为 shortId；③ 确保 SessionListSheet、ForwardSheet 中 `displayTitle` 逻辑一致
 
 - [x] **会话 Context 用量展示**
   在会话界面中展示当前会话的 context token 用量信息（进度条 + 百分比 + 已用/总量），打开会话即显示，消息完成后自动刷新。服务端解析 JSONL 中的 usage 数据，根据模型推断 context window 大小

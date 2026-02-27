@@ -1,5 +1,5 @@
 import "./src/i18n";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
@@ -68,6 +68,11 @@ function Main() {
 
   const closeForwardSheet = useCallback(() => setForwardContent(null), []);
 
+  const currentSessionTitle = useMemo(
+    () => session.sessions.find((s) => s.id === session.currentSessionId)?.title,
+    [session.sessions, session.currentSessionId],
+  );
+
   const themeName = isDark ? "dark" : "light";
 
   return (
@@ -92,6 +97,7 @@ function Main() {
               <YStack flex={1} backgroundColor={colors.bg.primary}>
                 <ChatHeader
                   sessionId={session.currentSessionId}
+                  sessionTitle={currentSessionTitle}
                   status={session.connectionStatus}
                   sessionCount={session.sessions.length}
                   gatewayLabel={gateway.activeGateway?.label}

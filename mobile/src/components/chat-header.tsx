@@ -8,6 +8,7 @@ const logoIcon = require("../../assets/logo-icon.png");
 
 type Props = {
   sessionId: string;
+  sessionTitle?: string;
   status: ConnectionStatus;
   sessionCount?: number;
   gatewayLabel?: string;
@@ -30,6 +31,7 @@ const formatTokens = (n: number): string => {
 
 export const ChatHeader = ({
   sessionId,
+  sessionTitle,
   status,
   sessionCount,
   gatewayLabel,
@@ -64,9 +66,21 @@ export const ChatHeader = ({
         <XStack alignItems="center" gap={6}>
           <Pressable onPress={onSessionPress}>
             <XStack alignItems="center" gap={6}>
-              <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
-                {shortId}
-              </Text>
+              {sessionTitle ? (
+                <Text
+                  color={colors.text.secondary}
+                  fontSize={12}
+                  fontWeight="500"
+                  numberOfLines={1}
+                  maxWidth={160}
+                >
+                  {sessionTitle}
+                </Text>
+              ) : (
+                <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
+                  {shortId}
+                </Text>
+              )}
               {sessionCount != null && sessionCount > 0 && (
                 <YStack
                   backgroundColor={colors.bg.elevated}
