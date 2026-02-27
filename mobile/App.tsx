@@ -44,6 +44,7 @@ function Main() {
   const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
   const [gatewaySheetVisible, setGatewaySheetVisible] = useState(false);
   const [forwardContent, setForwardContent] = useState<string | null>(null);
+  const [replyContent, setReplyContent] = useState<string | null>(null);
 
   const openSessionSheet = useCallback(() => setSessionSheetVisible(true), []);
   const closeSessionSheet = useCallback(() => setSessionSheetVisible(false), []);
@@ -67,6 +68,12 @@ function Main() {
   );
 
   const closeForwardSheet = useCallback(() => setForwardContent(null), []);
+
+  const handleReplyRequest = useCallback((content: string) => {
+    setReplyContent(content);
+  }, []);
+
+  const clearReply = useCallback(() => setReplyContent(null), []);
 
   const currentSessionTitle = useMemo(
     () => session.sessions.find((s) => s.id === session.currentSessionId)?.title,
@@ -112,12 +119,15 @@ function Main() {
                     key={session.currentSessionId}
                     stream={session.stream}
                     onForward={handleForwardRequest}
+                    onReply={handleReplyRequest}
                   />
                 </YStack>
 
                 <ChatComposer
                   sending={session.sending}
                   gatewayHttpUrl={session.gatewayHttpUrl}
+                  replyContent={replyContent}
+                  onClearReply={clearReply}
                   onSend={(text, images) => session.sendMessage(text, images)}
                 />
               </YStack>

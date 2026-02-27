@@ -25,6 +25,7 @@ export default {
     emptyHint: '输入 "/" 使用快捷指令',
     tapMicToFinish: "点击麦克风结束录音",
     transcribing: "转录中...",
+    replyingTo: "回复",
   },
   process: {
     thinking: "思考中",
@@ -91,6 +92,7 @@ export default {
   contextMenu: {
     copy: "复制",
     forward: "转发",
+    reply: "回复",
   },
   forwardSheet: {
     title: "转发到…",

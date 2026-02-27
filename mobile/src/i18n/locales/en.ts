@@ -25,6 +25,7 @@ export default {
     emptyHint: 'Type "/" for quick commands',
     tapMicToFinish: "Tap mic to finish",
     transcribing: "Transcribing...",
+    replyingTo: "Replying to",
   },
   process: {
     thinking: "Thinking",
@@ -91,6 +92,7 @@ export default {
   contextMenu: {
     copy: "Copy",
     forward: "Forward",
+    reply: "Reply",
   },
   forwardSheet: {
     title: "Forward to…",

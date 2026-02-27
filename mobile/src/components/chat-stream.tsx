@@ -3,7 +3,7 @@ import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, 
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
-import { Forward } from "@tamagui/lucide-icons";
+import { Forward, Reply } from "@tamagui/lucide-icons";
 import type { ChatMessage, ExecutionLog, ImageAttachment, StreamItem } from "../types/gateway";
 import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
@@ -12,6 +12,7 @@ import { useTheme } from "../theme/theme-context";
 
 type ChatStreamActions = {
   onForward?: (content: string) => void;
+  onReply?: (content: string) => void;
 };
 
 const ChatStreamActionsContext = createContext<ChatStreamActions>({});
@@ -21,6 +22,7 @@ const logoIcon = require("../../assets/logo-icon.png");
 type Props = {
   stream: StreamItem[];
   onForward?: (content: string) => void;
+  onReply?: (content: string) => void;
 };
 
 const StreamingCursor = () => {
@@ -117,7 +119,7 @@ const GeneratingLabel = () => {
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-  const { onForward } = useContext(ChatStreamActionsContext);
+  const { onForward, onReply } = useContext(ChatStreamActionsContext);
   const isUser = item.role === "user";
   const time = new Date(item.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
@@ -140,9 +142,20 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
   }, []);
 
   const extraActions = useMemo<MenuAction[]>(() => {
-    if (!onForward) return [];
-    return [
-      {
+    const actions: MenuAction[] = [];
+    if (onReply) {
+      actions.push({
+        id: "reply",
+        label: t("contextMenu.reply"),
+        icon: <Reply size={16} color={colors.text.primary} />,
+        onPress: () => {
+          handleMenuClose();
+          onReply(item.content);
+        },
+      });
+    }
+    if (onForward) {
+      actions.push({
         id: "forward",
         label: t("contextMenu.forward"),
         icon: <Forward size={16} color={colors.text.primary} />,
@@ -150,9 +163,10 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
           handleMenuClose();
           onForward(item.content);
         },
-      },
-    ];
-  }, [onForward, t, colors.text.primary, handleMenuClose, item.content]);
+      });
+    }
+    return actions;
+  }, [onForward, onReply, t, colors.text.primary, handleMenuClose, item.content]);
 
   return (
     <XStack
@@ -359,10 +373,10 @@ const EmptyState = () => {
   );
 };
 
-export const ChatStream = ({ stream, onForward }: Props) => {
+export const ChatStream = ({ stream, onForward, onReply }: Props) => {
   const grouped = useMemo(() => groupStreamItems(stream), [stream]);
   const reversed = useMemo(() => [...grouped].reverse(), [grouped]);
-  const actions = useMemo<ChatStreamActions>(() => ({ onForward }), [onForward]);
+  const actions = useMemo<ChatStreamActions>(() => ({ onForward, onReply }), [onForward, onReply]);
 
   return (
     <ChatStreamActionsContext.Provider value={actions}>

@@ -3,7 +3,7 @@ import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing
 import { LinearGradient } from "expo-linear-gradient";
 import { Input, Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
-import { ImagePlus, Mic, Send, Square } from "@tamagui/lucide-icons";
+import { ImagePlus, Mic, Send, Square, X } from "@tamagui/lucide-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../theme/theme-context";
 import { SlashCommandPanel } from "./slash-command-panel";
@@ -14,6 +14,8 @@ import type { ImageAttachment } from "../types/gateway";
 type Props = {
   sending: boolean;
   gatewayHttpUrl: string;
+  replyContent?: string | null;
+  onClearReply?: () => void;
   onSend: (text: string, images?: ImageAttachment[]) => void;
 };
 
@@ -35,7 +37,7 @@ const imgPreviewStyles = StyleSheet.create({
   },
 });
 
-export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
+export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearReply, onSend }: Props) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const [value, setValue] = useState("");
@@ -83,10 +85,16 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
 
   const submit = useCallback(() => {
     if (!canSend) return;
-    onSend(value, attachedImages.length > 0 ? attachedImages : undefined);
+    let text = value;
+    if (replyContent) {
+      const preview = replyContent.length > 200 ? replyContent.slice(0, 200) + "…" : replyContent;
+      text = `[Replying to: ${preview}]\n\n${value}`;
+      onClearReply?.();
+    }
+    onSend(text, attachedImages.length > 0 ? attachedImages : undefined);
     setValue("");
     setAttachedImages([]);
-  }, [canSend, value, attachedImages, onSend]);
+  }, [canSend, value, attachedImages, replyContent, onSend, onClearReply]);
 
   const handleSelect = useCallback(
     (cmd: SlashCommand) => {
@@ -203,6 +211,31 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, onSend }: Props) => {
         paddingVertical={10}
         gap={8}
       >
+        {replyContent && (
+          <XStack
+            backgroundColor={colors.bg.tertiary}
+            borderLeftWidth={3}
+            borderLeftColor={colors.brand.blue}
+            borderRadius={8}
+            paddingHorizontal={12}
+            paddingVertical={8}
+            alignItems="center"
+            gap={8}
+          >
+            <YStack flex={1} gap={2}>
+              <Text color={colors.brand.blue} fontSize={11} fontWeight="600">
+                {t("chat.replyingTo")}
+              </Text>
+              <Text color={colors.text.secondary} fontSize={13} numberOfLines={2}>
+                {replyContent}
+              </Text>
+            </YStack>
+            <Pressable onPress={onClearReply} hitSlop={8}>
+              <X size={14} color={colors.text.muted} />
+            </Pressable>
+          </XStack>
+        )}
+
         {attachedImages.length > 0 && (
           <ScrollView
             horizontal
