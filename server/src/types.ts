@@ -29,6 +29,7 @@ export type ClientMessage =
       content: string;
       imagePaths?: string[];
       agentId?: string;
+      newSession?: boolean;
     }
   | {
       type: "subscribe_session";

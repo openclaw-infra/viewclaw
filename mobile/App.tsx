@@ -33,9 +33,17 @@ function Main() {
     onMessageDone: () => setTimeout(() => contextRefreshRef.current(), 600),
   });
 
+  const currentSession = useMemo(
+    () => session.sessions.find((s) => s.id === session.currentSessionId),
+    [session.sessions, session.currentSessionId],
+  );
+  const currentSessionTitle = currentSession?.title;
+  const currentAgentId = currentSession?.agentId ?? "main";
+
   const sessionContext = useSessionContext({
     sessionId: session.currentSessionId,
     httpUrl: gateway.httpUrl,
+    agentId: currentAgentId,
   });
 
   contextRefreshRef.current = sessionContext.refresh;
@@ -75,11 +83,6 @@ function Main() {
 
   const clearReply = useCallback(() => setReplyContent(null), []);
 
-  const currentSessionTitle = useMemo(
-    () => session.sessions.find((s) => s.id === session.currentSessionId)?.title,
-    [session.sessions, session.currentSessionId],
-  );
-
   const themeName = isDark ? "dark" : "light";
 
   return (
@@ -105,6 +108,7 @@ function Main() {
                 <ChatHeader
                   sessionId={session.currentSessionId}
                   sessionTitle={currentSessionTitle}
+                  agentId={currentAgentId}
                   status={session.connectionStatus}
                   sessionCount={session.sessions.length}
                   gatewayLabel={gateway.activeGateway?.label}
@@ -136,6 +140,7 @@ function Main() {
             <SessionListSheet
               visible={sessionSheetVisible}
               sessions={session.sessions}
+              agents={session.agents}
               currentSessionId={session.currentSessionId}
               onClose={closeSessionSheet}
               onSelect={session.switchSession}

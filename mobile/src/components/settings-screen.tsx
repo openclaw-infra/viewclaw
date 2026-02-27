@@ -145,9 +145,11 @@ export const SettingsScreen = memo(
               onPress: async () => {
                 setDeleting(sessionId);
                 try {
-                  await fetch(`${gatewayHttpUrl}/api/sessions/${sessionId}`, {
-                    method: "DELETE",
-                  });
+                  if (!sessionId.startsWith("pending-")) {
+                    await fetch(`${gatewayHttpUrl}/api/sessions/${sessionId}`, {
+                      method: "DELETE",
+                    });
+                  }
                   onSessionDeleted(sessionId);
                   await onRefreshSessions();
                 } catch { /* offline */ } finally {

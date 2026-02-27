@@ -42,7 +42,7 @@
 - [ ] **Agent 管理**
   Agent 列表展示（从 /api/agents 获取），切换不同 Agent，显示 Agent 配置信息（model、workspace 等）
 
-- [ ] **会话 Agent 展示与指定**
+- [x] **会话 Agent 展示与指定**
   当前 OpenClaw 每个会话绑定一个 Agent（默认 `main`），需要在 UI 各处体现 Agent 信息：① ChatHeader 展示当前会话的 agentId；② SessionListSheet 每行显示 agentId 标签；③ 新建会话时支持指定 Agent（默认 `main`），`POST /api/sessions` 传入 agentId 参数。将现有硬编码的 `AGENT_ID = "main"` 改为从当前会话的 `SessionInfo.agentId` 动态读取
 
 - [x] ~~**本地数据持久化**~~

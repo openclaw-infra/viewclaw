@@ -1,4 +1,5 @@
-import { Pressable, View, StyleSheet, Image } from "react-native";
+import { useEffect, useRef } from "react";
+import { Pressable, View, StyleSheet, Image, Animated } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { Settings, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
 import type { ConnectionStatus, SessionContext } from "../types/gateway";
@@ -9,6 +10,7 @@ const logoIcon = require("../../assets/logo-icon.png");
 type Props = {
   sessionId: string;
   sessionTitle?: string;
+  agentId?: string;
   status: ConnectionStatus;
   sessionCount?: number;
   gatewayLabel?: string;
@@ -32,6 +34,7 @@ const formatTokens = (n: number): string => {
 export const ChatHeader = ({
   sessionId,
   sessionTitle,
+  agentId,
   status,
   sessionCount,
   gatewayLabel,
@@ -42,7 +45,18 @@ export const ChatHeader = ({
 }: Props) => {
   const { colors } = useTheme();
   const statusColor = colors.status[status];
-  const shortId = sessionId ? sessionId.slice(0, 8) : "---";
+  const isPending = sessionId.startsWith("pending-");
+  const shortId = sessionId && !isPending ? sessionId.slice(0, 8) : "---";
+
+  const showInfo = !isPending;
+  const infoAnim = useRef(new Animated.Value(showInfo ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(infoAnim, {
+      toValue: showInfo ? 1 : 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start();
+  }, [showInfo, infoAnim]);
 
   return (
     <XStack
@@ -66,20 +80,34 @@ export const ChatHeader = ({
         <XStack alignItems="center" gap={6}>
           <Pressable onPress={onSessionPress}>
             <XStack alignItems="center" gap={6}>
-              {sessionTitle ? (
-                <Text
-                  color={colors.text.secondary}
-                  fontSize={12}
-                  fontWeight="500"
-                  numberOfLines={1}
-                  maxWidth={160}
+              <Animated.View style={{ opacity: infoAnim }}>
+                {sessionTitle ? (
+                  <Text
+                    color={colors.text.secondary}
+                    fontSize={12}
+                    fontWeight="500"
+                    numberOfLines={1}
+                    maxWidth={160}
+                  >
+                    {sessionTitle}
+                  </Text>
+                ) : !isPending ? (
+                  <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
+                    {shortId}
+                  </Text>
+                ) : null}
+              </Animated.View>
+              {agentId && (
+                <YStack
+                  backgroundColor={colors.brand.blue + "18"}
+                  paddingHorizontal={6}
+                  paddingVertical={1}
+                  borderRadius={4}
                 >
-                  {sessionTitle}
-                </Text>
-              ) : (
-                <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
-                  {shortId}
-                </Text>
+                  <Text color={colors.brand.blue} fontSize={10} fontWeight="600">
+                    {agentId}
+                  </Text>
+                </YStack>
               )}
               {sessionCount != null && sessionCount > 0 && (
                 <YStack
@@ -97,26 +125,28 @@ export const ChatHeader = ({
             </XStack>
           </Pressable>
           {context && (
-            <XStack alignItems="center" gap={4} marginLeft={2}>
-              <Text color={colors.text.muted} fontSize={10} opacity={0.5}>·</Text>
-              <View style={[ctxStyles.bar, { backgroundColor: colors.bg.tertiary }]}>
-                <View
-                  style={[
-                    ctxStyles.barFill,
-                    {
-                      backgroundColor:
-                        context.percent > 85 ? colors.accent.red :
-                        context.percent > 65 ? colors.accent.yellow :
-                        colors.brand.blue,
-                      width: `${Math.min(context.percent, 100)}%` as any,
-                    },
-                  ]}
-                />
-              </View>
-              <Text color={colors.text.muted} fontSize={10} fontFamily="$mono">
-                {formatTokens(context.usedTokens)}/{formatTokens(context.maxTokens)}
-              </Text>
-            </XStack>
+            <Animated.View style={{ opacity: infoAnim }}>
+              <XStack alignItems="center" gap={4} marginLeft={2}>
+                <Text color={colors.text.muted} fontSize={10} opacity={0.5}>·</Text>
+                <View style={[ctxStyles.bar, { backgroundColor: colors.bg.tertiary }]}>
+                  <View
+                    style={[
+                      ctxStyles.barFill,
+                      {
+                        backgroundColor:
+                          context.percent > 85 ? colors.accent.red :
+                          context.percent > 65 ? colors.accent.yellow :
+                          colors.brand.blue,
+                        width: `${Math.min(context.percent, 100)}%` as any,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text color={colors.text.muted} fontSize={10} fontFamily="$mono">
+                  {formatTokens(context.usedTokens)}/{formatTokens(context.maxTokens)}
+                </Text>
+              </XStack>
+            </Animated.View>
           )}
         </XStack>
       </YStack>

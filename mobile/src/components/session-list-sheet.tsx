@@ -3,16 +3,19 @@ import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing, V
 import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
+import { Bot, X } from "@tamagui/lucide-icons";
+import * as Haptics from "expo-haptics";
 import { useTheme } from "../theme/theme-context";
-import type { SessionInfo } from "../types/gateway";
+import type { AgentInfo, SessionInfo } from "../types/gateway";
 
 type Props = {
   visible: boolean;
   sessions: SessionInfo[];
+  agents: AgentInfo[];
   currentSessionId: string;
   onClose: () => void;
   onSelect: (sessionId: string) => void;
-  onCreate: () => Promise<string | null>;
+  onCreate: (agentId?: string) => Promise<string | null>;
   onRefresh: () => Promise<void>;
 };
 
@@ -57,7 +60,7 @@ const SessionRow = memo(
     const { colors } = useTheme();
     const { t } = useTranslation();
     const shortId = item.id.slice(0, 8);
-    const displayTitle = item.title ?? (item.sessionKey
+    const displayTitle = item.title || (item.sessionKey
       ? item.sessionKey.replace(/^agent:\w+:/, "").replace(/^openresponses:/, "").slice(0, 20)
       : shortId);
 
@@ -108,6 +111,18 @@ const SessionRow = memo(
                 <Text color={colors.text.muted} fontSize={11} fontFamily="$mono">
                   {shortId}
                 </Text>
+                {item.agentId && (
+                  <YStack
+                    backgroundColor={colors.brand.blue + "18"}
+                    paddingHorizontal={5}
+                    paddingVertical={1}
+                    borderRadius={3}
+                  >
+                    <Text color={colors.brand.blue} fontSize={9} fontWeight="600">
+                      {item.agentId}
+                    </Text>
+                  </YStack>
+                )}
                 <Text color={colors.text.muted} fontSize={11}>
                   {formatDate(item.createdAt, t("common.yesterday"))}
                 </Text>
@@ -178,6 +193,7 @@ export const SessionListSheet = memo(
   ({
     visible,
     sessions,
+    agents,
     currentSessionId,
     onClose,
     onSelect,
@@ -186,9 +202,11 @@ export const SessionListSheet = memo(
   }: Props) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
-    const listItems = useMemo(() => buildSessionListItems(sessions, t), [sessions, t]);
+    const visibleSessions = useMemo(() => sessions.filter((s) => !s.id.startsWith("pending-")), [sessions]);
+    const listItems = useMemo(() => buildSessionListItems(visibleSessions, t), [visibleSessions, t]);
     const [creating, setCreating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [agentPickerVisible, setAgentPickerVisible] = useState(false);
     const screenHeight = Dimensions.get("window").height;
     const slideAnim = useRef(new Animated.Value(screenHeight)).current;
 
@@ -214,15 +232,24 @@ export const SessionListSheet = memo(
       }).start(() => onClose());
     }, [slideAnim, screenHeight, onClose]);
 
-    const handleCreate = useCallback(async () => {
+    const handleCreateWithAgent = useCallback(async (agentId?: string) => {
+      setAgentPickerVisible(false);
       setCreating(true);
       try {
-        const newId = await onCreate();
+        const newId = await onCreate(agentId);
         if (newId) animatedClose();
       } finally {
         setCreating(false);
       }
     }, [onCreate, animatedClose]);
+
+    const handleCreatePress = useCallback(() => {
+      if (agents.length > 1) {
+        setAgentPickerVisible(true);
+      } else {
+        handleCreateWithAgent(agents[0]?.id);
+      }
+    }, [agents, handleCreateWithAgent]);
 
     const handleRefresh = useCallback(async () => {
       setRefreshing(true);
@@ -308,7 +335,7 @@ export const SessionListSheet = memo(
                       </Text>
                     </YStack>
                   </Pressable>
-                  <Pressable onPress={handleCreate} disabled={creating}>
+                  <Pressable onPress={handleCreatePress} disabled={creating}>
                     <LinearGradient
                       colors={["#2CB5E8", "#8E2DE2"]}
                       start={{ x: 0, y: 0 }}
@@ -329,7 +356,7 @@ export const SessionListSheet = memo(
 
               <XStack paddingHorizontal={16} paddingBottom={8}>
                 <Text color={colors.text.muted} fontSize={12}>
-                  {t("sessionList.sessionCount", { count: sessions.length })}
+                  {t("sessionList.sessionCount", { count: visibleSessions.length })}
                 </Text>
               </XStack>
 
@@ -369,6 +396,108 @@ export const SessionListSheet = memo(
             </Pressable>
           </Animated.View>
         </Pressable>
+        {agentPickerVisible && (
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setAgentPickerVisible(false)}
+          >
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" }}>
+              <Pressable onPress={(e) => e.stopPropagation?.()}>
+                <YStack
+                  backgroundColor={colors.bg.secondary}
+                  borderRadius={24}
+                  width={300}
+                  overflow="hidden"
+                  shadowColor="#000"
+                  shadowOffset={{ width: 0, height: 8 }}
+                  shadowOpacity={0.2}
+                  shadowRadius={24}
+                  elevation={8}
+                >
+                  <XStack
+                    alignItems="center"
+                    justifyContent="space-between"
+                    paddingHorizontal={20}
+                    paddingTop={20}
+                    paddingBottom={4}
+                  >
+                    <Text color={colors.text.primary} fontSize={16} fontWeight="700">
+                      {t("sessionList.selectAgent")}
+                    </Text>
+                    <Pressable onPress={() => setAgentPickerVisible(false)} hitSlop={8}>
+                      <YStack
+                        width={28}
+                        height={28}
+                        borderRadius={14}
+                        backgroundColor={colors.bg.tertiary}
+                        alignItems="center"
+                        justifyContent="center"
+                      >
+                        <X size={14} color={colors.text.muted} />
+                      </YStack>
+                    </Pressable>
+                  </XStack>
+
+                  <YStack paddingHorizontal={12} paddingTop={12} paddingBottom={16} gap={8}>
+                    {agents.map((agent) => (
+                      <Pressable
+                        key={agent.id}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                          handleCreateWithAgent(agent.id);
+                        }}
+                      >
+                        {({ pressed }) => (
+                          <XStack
+                            paddingHorizontal={16}
+                            paddingVertical={14}
+                            alignItems="center"
+                            gap={12}
+                            backgroundColor={pressed ? colors.bg.elevated : colors.bg.tertiary}
+                            borderRadius={14}
+                            borderWidth={1}
+                            borderColor={pressed ? colors.brand.blue + "40" : colors.border.subtle}
+                          >
+                            <YStack
+                              width={36}
+                              height={36}
+                              borderRadius={10}
+                              backgroundColor={colors.brand.blue + "15"}
+                              alignItems="center"
+                              justifyContent="center"
+                            >
+                              <Bot size={18} color={colors.brand.blue} />
+                            </YStack>
+                            <YStack flex={1} gap={2}>
+                              <Text color={colors.text.primary} fontSize={14} fontWeight="600">
+                                {agent.id}
+                              </Text>
+                              {agent.model && (
+                                <Text color={colors.text.muted} fontSize={11} numberOfLines={1}>
+                                  {agent.model}
+                                </Text>
+                              )}
+                            </YStack>
+                            <YStack
+                              backgroundColor={colors.bg.elevated}
+                              paddingHorizontal={8}
+                              paddingVertical={3}
+                              borderRadius={6}
+                            >
+                              <Text color={colors.text.muted} fontSize={10} fontWeight="500">
+                                {agent.sessionCount}
+                              </Text>
+                            </YStack>
+                          </XStack>
+                        )}
+                      </Pressable>
+                    ))}
+                  </YStack>
+                </YStack>
+              </Pressable>
+            </View>
+          </Pressable>
+        )}
       </Modal>
     );
   }

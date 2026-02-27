@@ -73,6 +73,7 @@ export default {
   },
   sessionList: {
     title: "会话",
+    selectAgent: "选择 Agent",
     sessionCount: "{{count}} 个会话",
     sessionCount_other: "{{count}} 个会话",
     noSessions: "暂无会话",

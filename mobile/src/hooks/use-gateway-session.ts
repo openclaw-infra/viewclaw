@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  AgentInfo,
   ChatMessage,
   ConnectionStatus,
   ExecutionLog,
@@ -23,9 +24,11 @@ type Options = {
 
 type WsIncoming =
   | GatewayEvent
-  | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed" | "unknown_message"; [k: string]: unknown };
+  | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed" | "unknown_message" | "session_created"; [k: string]: unknown };
 
-const AGENT_ID = "main";
+const DEFAULT_AGENT_ID = "main";
+const PENDING_PREFIX = "pending-";
+const isPendingSession = (id: string) => id.startsWith(PENDING_PREFIX);
 
 export const useGatewaySession = ({
   sessionId: initialSessionId,
@@ -41,6 +44,7 @@ export const useGatewaySession = ({
   const [sending, setSending] = useState(false);
   const [currentSessionId, setCurrentSessionId] = useState(initialSessionId ?? "");
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [agents, setAgents] = useState<AgentInfo[]>([]);
 
   const wsRef = useRef<WebSocket | null>(null);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -49,6 +53,16 @@ export const useGatewaySession = ({
   const seenRef = useRef<Set<string>>(new Set());
   const lastSeqRef = useRef(0);
   const currentSessionRef = useRef(currentSessionId);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
+
+  const getAgentId = useCallback((sessionId?: string) => {
+    const sid = sessionId ?? currentSessionRef.current;
+    const s = sessionsRef.current.find((x) => x.id === sid);
+    return s?.agentId ?? DEFAULT_AGENT_ID;
+  }, []);
   const typingIdRef = useRef<string | null>(null);
   const reconnectAttemptRef = useRef(0);
   const wsUrlRef = useRef(wsUrl);
@@ -332,9 +346,9 @@ export const useGatewaySession = ({
   const subscribeToSession = useCallback(
     (sessionId: string) => {
       if (!sessionId) return;
-      wsSend({ type: "subscribe_session", sessionId, agentId: AGENT_ID });
+      wsSend({ type: "subscribe_session", sessionId, agentId: getAgentId(sessionId) });
     },
-    [wsSend]
+    [wsSend, getAgentId]
   );
 
   const unsubscribeFromSession = useCallback(
@@ -383,7 +397,7 @@ export const useGatewaySession = ({
           JSON.stringify({
             type: "subscribe_session",
             sessionId: sid,
-            agentId: AGENT_ID,
+            agentId: getAgentId(sid),
           })
         );
       }
@@ -405,9 +419,34 @@ export const useGatewaySession = ({
 
       if (parsed.type === "connected") return;
 
+      if (parsed.type === "session_created") {
+        const pendingId = parsed.pendingSessionId as string;
+        const realId = parsed.sessionId as string;
+        const realAgent = (parsed.agentId as string) ?? DEFAULT_AGENT_ID;
+        if (pendingId && realId) {
+          const title = sessionsRef.current.find((s) => s.id === pendingId)?.title || "";
+          setSessions((prev) =>
+            prev.map((s) => s.id === pendingId ? { ...s, id: realId, agentId: realAgent, title } : s)
+          );
+          sessionsRef.current = sessionsRef.current.map((s) =>
+            s.id === pendingId ? { ...s, id: realId, agentId: realAgent, title } : s
+          );
+          if (currentSessionRef.current === pendingId) {
+            setCurrentSessionId(realId);
+            currentSessionRef.current = realId;
+            setStream([]);
+            seenRef.current.clear();
+            bufferRef.current = [];
+            loadHistory(realId);
+          }
+          fetchSessions();
+        }
+        return;
+      }
+
       const evt = parsed as GatewayEvent;
       if (evt.sessionId && currentSessionRef.current && evt.sessionId !== currentSessionRef.current) {
-        return;
+        if (!isPendingSession(currentSessionRef.current)) return;
       }
       if (evt.seq != null && evt.seq <= lastSeqRef.current) return;
       if (evt.seq != null) lastSeqRef.current = evt.seq;
@@ -427,7 +466,7 @@ export const useGatewaySession = ({
     try {
       const baseUrl = httpUrlRef.current;
       const res = await fetch(
-        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${AGENT_ID}&limit=100`
+        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${getAgentId(sessionId)}&limit=100`
       );
       const data = await res.json();
       if (!data.ok || !Array.isArray(data.messages)) return;
@@ -493,19 +532,61 @@ export const useGatewaySession = ({
     } catch { /* offline */ }
   }, []);
 
-  const fetchSessions = useCallback(async () => {
+  const fetchAgents = useCallback(async (): Promise<AgentInfo[]> => {
     try {
-      const res = await fetch(`${httpUrlRef.current}/api/sessions?agentId=${AGENT_ID}`);
+      const res = await fetch(`${httpUrlRef.current}/api/agents`);
       const data = await res.json();
-      if (data.ok && Array.isArray(data.sessions)) {
-        setSessions(data.sessions);
-        if (!currentSessionRef.current && data.sessions.length > 0) {
-          const active = data.activeSessionId ?? data.sessions[0]?.id;
-          if (active) {
-            setCurrentSessionId(active);
-            subscribeToSession(active);
-            loadHistory(active);
-          }
+      if (data.ok && Array.isArray(data.agents)) {
+        setAgents(data.agents);
+        agentsRef.current = data.agents;
+        return data.agents;
+      }
+    } catch { /* offline */ }
+    return agentsRef.current;
+  }, []);
+
+  const fetchSessions = useCallback(async (agentsList?: AgentInfo[]) => {
+    try {
+      const known = agentsList ?? agentsRef.current;
+      const agentIds = known.length > 0
+        ? known.map((a) => a.id)
+        : [DEFAULT_AGENT_ID];
+
+      const allRes = await Promise.all(
+        agentIds.map((aid) =>
+          fetch(`${httpUrlRef.current}/api/sessions?agentId=${aid}`)
+            .then((r) => r.json())
+            .then((d) => ({ data: d, agentId: aid }))
+            .catch(() => null)
+        ),
+      );
+
+      const seen = new Set<string>();
+      let allSessions: SessionInfo[] = [];
+      let firstActive: string | undefined;
+
+      for (const item of allRes) {
+        if (!item || !item.data.ok || !Array.isArray(item.data.sessions)) continue;
+        for (const s of item.data.sessions as SessionInfo[]) {
+          if (seen.has(s.id)) continue;
+          seen.add(s.id);
+          allSessions.push(s);
+        }
+        if (!firstActive && item.data.activeSessionId) {
+          firstActive = item.data.activeSessionId;
+        }
+      }
+
+      allSessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setSessions(allSessions);
+      sessionsRef.current = allSessions;
+
+      if (!currentSessionRef.current && allSessions.length > 0) {
+        const active = firstActive ?? allSessions[0]?.id;
+        if (active) {
+          setCurrentSessionId(active);
+          subscribeToSession(active);
+          loadHistory(active);
         }
       }
     } catch { /* offline */ }
@@ -527,9 +608,9 @@ export const useGatewaySession = ({
 
   useEffect(() => {
     if (connectionStatus === "connected") {
-      fetchSessions();
+      fetchAgents().then((a) => fetchSessions(a));
     }
-  }, [connectionStatus, fetchSessions]);
+  }, [connectionStatus, fetchSessions, fetchAgents]);
 
   const uploadImage = useCallback(
     async (img: ImageAttachment): Promise<string | null> => {
@@ -583,6 +664,22 @@ export const useGatewaySession = ({
 
       setSending(true);
 
+      const currentSid = currentSessionRef.current;
+      const isNew = isPendingSession(currentSid);
+
+      if (isNew) {
+        const pendingSession = sessionsRef.current.find((s) => s.id === currentSid);
+        const titleText = text.length > 50 ? text.slice(0, 50) + "..." : text;
+        if (pendingSession) {
+          setSessions((prev) =>
+            prev.map((s) => s.id === currentSid ? { ...s, title: titleText } : s)
+          );
+          sessionsRef.current = sessionsRef.current.map((s) =>
+            s.id === currentSid ? { ...s, title: titleText } : s
+          );
+        }
+      }
+
       let imagePaths: string[] | undefined;
       if (images?.length) {
         const results = await Promise.all(images.map(uploadImage));
@@ -591,11 +688,14 @@ export const useGatewaySession = ({
 
       const wsPayload: Record<string, unknown> = {
         type: "send_message",
-        sessionId: currentSessionRef.current,
+        sessionId: currentSid,
         messageId,
         content: text,
-        agentId: AGENT_ID,
+        agentId: isNew ? getAgentId(currentSid) : getAgentId(),
       };
+      if (isNew) {
+        wsPayload.newSession = true;
+      }
       if (imagePaths?.length) {
         wsPayload.imagePaths = imagePaths;
       }
@@ -603,7 +703,7 @@ export const useGatewaySession = ({
       wsRef.current.send(JSON.stringify(wsPayload));
       setTimeout(() => setSending(false), 80);
     },
-    [uploadImage, finalizeStreamingMessage, removeTyping],
+    [uploadImage, finalizeStreamingMessage, removeTyping, getAgentId],
   );
 
   const forwardMessage = useCallback(
@@ -616,17 +716,17 @@ export const useGatewaySession = ({
           sessionId: targetSessionId,
           messageId: `forward-${Date.now()}`,
           content: content.trim(),
-          agentId: AGENT_ID,
+          agentId: getAgentId(targetSessionId),
         }),
       );
     },
-    [],
+    [getAgentId],
   );
 
   const switchSession = useCallback(
     (newSessionId: string) => {
       const oldSessionId = currentSessionRef.current;
-      if (oldSessionId) {
+      if (oldSessionId && !isPendingSession(oldSessionId)) {
         unsubscribeFromSession(oldSessionId);
       }
 
@@ -638,8 +738,11 @@ export const useGatewaySession = ({
       typingIdRef.current = null;
       lastSeqRef.current = 0;
       setCurrentSessionId(newSessionId);
-      subscribeToSession(newSessionId);
-      loadHistory(newSessionId);
+
+      if (!isPendingSession(newSessionId)) {
+        subscribeToSession(newSessionId);
+        loadHistory(newSessionId);
+      }
     },
     [subscribeToSession, unsubscribeFromSession, loadHistory]
   );
@@ -648,29 +751,44 @@ export const useGatewaySession = ({
     await fetchSessions();
   }, [fetchSessions]);
 
-  const createNewSession = useCallback(async () => {
-    try {
-      const res = await fetch(`${httpUrlRef.current}/api/sessions`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ agentId: AGENT_ID }),
-      });
-      const data = await res.json();
-      if (data.ok && data.sessionId) {
-        await fetchSessions();
-        switchSession(data.sessionId);
-        return data.sessionId as string;
-      }
-    } catch { /* offline */ }
-    return null;
-  }, [fetchSessions, switchSession]);
+  const createNewSession = useCallback(async (agentId?: string) => {
+    const resolvedAgent = agentId ?? getAgentId();
+    const pendingId = `${PENDING_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const pendingSession: SessionInfo = {
+      id: pendingId,
+      agentId: resolvedAgent,
+      jsonlPath: "",
+      createdAt: new Date().toISOString(),
+      title: "",
+    };
+
+    setSessions((prev) => [pendingSession, ...prev]);
+    sessionsRef.current = [pendingSession, ...sessionsRef.current];
+
+    setStream([]);
+    seenRef.current.clear();
+    bufferRef.current = [];
+    streamingMsgRef.current = null;
+    streamedDoneRef.current = false;
+    typingIdRef.current = null;
+    lastSeqRef.current = 0;
+
+    const oldSessionId = currentSessionRef.current;
+    if (oldSessionId && !isPendingSession(oldSessionId)) {
+      unsubscribeFromSession(oldSessionId);
+    }
+    setCurrentSessionId(pendingId);
+
+    return pendingId;
+  }, [getAgentId, unsubscribeFromSession]);
 
   const deleteSession = useCallback(
     (sessionId: string) => {
-      if (currentSessionRef.current === sessionId) {
+      if (currentSessionRef.current === sessionId && !isPendingSession(sessionId)) {
         unsubscribeFromSession(sessionId);
       }
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      sessionsRef.current = sessionsRef.current.filter((s) => s.id !== sessionId);
 
       if (currentSessionRef.current === sessionId) {
         setSessions((prev) => {
@@ -695,6 +813,7 @@ export const useGatewaySession = ({
       connectionStatus,
       currentSessionId,
       sessions,
+      agents,
       stream,
       sending,
       sendMessage,
@@ -705,6 +824,6 @@ export const useGatewaySession = ({
       refreshSessions,
       gatewayHttpUrl: httpUrl,
     }),
-    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, forwardMessage, switchSession, createNewSession, deleteSession, refreshSessions, httpUrl]
+    [connectionStatus, currentSessionId, sessions, agents, stream, sending, sendMessage, forwardMessage, switchSession, createNewSession, deleteSession, refreshSessions, httpUrl]
   );
 };

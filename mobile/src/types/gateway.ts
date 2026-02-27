@@ -63,6 +63,13 @@ export type SessionInfo = {
   title?: string;
 };
 
+export type AgentInfo = {
+  id: string;
+  sessionCount: number;
+  model?: string;
+  workspace?: string;
+};
+
 export type GatewayConfig = {
   id: string;
   label: string;

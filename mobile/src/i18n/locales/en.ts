@@ -73,6 +73,7 @@ export default {
   },
   sessionList: {
     title: "Sessions",
+    selectAgent: "Select Agent",
     sessionCount: "{{count}} session",
     sessionCount_other: "{{count}} sessions",
     noSessions: "No sessions found",

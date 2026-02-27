@@ -297,16 +297,26 @@ export const listSessions = async (agentId: string = "main"): Promise<SessionInf
       for (const s of raw) {
         if (!s.sessionId) continue;
         sessionKeyCache.set(s.sessionId, s.key);
-        const defaultPath = join(OPENCLAW_HOME, "agents", agentId, "sessions", `${s.sessionId}.jsonl`);
+
+        const keyAgentMatch = s.key?.match(/^agent:([^:]+):/);
+        const realAgentId = keyAgentMatch?.[1] ?? agentId;
+
+        if (realAgentId !== agentId) continue;
+
+        const defaultPath = join(OPENCLAW_HOME, "agents", realAgentId, "sessions", `${s.sessionId}.jsonl`);
         let resolvedPath = defaultPath;
         if (typeof s.transcriptPath === "string" && s.transcriptPath.trim().length > 0) {
           const candidate = isAbsolute(s.transcriptPath) ? s.transcriptPath : join(OPENCLAW_HOME, s.transcriptPath);
           const exists = await access(candidate).then(() => true, () => false);
           resolvedPath = exists ? candidate : defaultPath;
         }
+
+        const jsonlExists = await access(resolvedPath).then(() => true, () => false);
+        if (!jsonlExists) continue;
+
         sessions.push({
           id: s.sessionId,
-          agentId,
+          agentId: realAgentId,
           sessionKey: s.key,
           jsonlPath: resolvedPath,
           createdAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : "",

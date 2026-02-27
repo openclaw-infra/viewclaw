@@ -538,6 +538,7 @@ export const app = new Elysia()
         content: t.String(),
         imagePaths: t.Optional(t.Array(t.String())),
         agentId: t.Optional(t.String()),
+        newSession: t.Optional(t.Boolean()),
       }),
       t.Object({
         type: t.Literal("subscribe_session"),
@@ -610,6 +611,8 @@ export const app = new Elysia()
       if (body.type === "send_message") {
         const messageId = body.messageId ?? crypto.randomUUID();
         const sessionId = body.sessionId ?? "default";
+        const isNewSession = !!body.newSession;
+        const agentId = body.agentId ?? "main";
 
         const prevController = activeRuns.get(sessionId);
         if (prevController) {
@@ -627,17 +630,27 @@ export const app = new Elysia()
         const abortController = new AbortController();
         activeRuns.set(sessionId, abortController);
 
-        muteWatcher(sessionId);
+        if (!isNewSession) muteWatcher(sessionId);
 
-        const sessionKey = await resolveSessionKey(sessionId);
+        const sessionKey = isNewSession ? undefined : await resolveSessionKey(sessionId);
+
+        let streamSeq = 0;
+        const emitStream = isNewSession
+          ? (packet: { type: string; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
+              ws.send(JSON.stringify({ ...packet, seq: ++streamSeq, ts: Date.now() }));
+            }
+          : (packet: { type: string; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
+              emitEvent(packet);
+            };
+
         sendMessage({
           content: body.content,
           imagePaths: body.imagePaths,
-          agentId: body.agentId,
+          agentId,
           sessionKey,
           signal: abortController.signal,
           onStream: (evt) => {
-            emitEvent({
+            emitStream({
               type: evt.type,
               sessionId,
               messageId: evt.messageId,
@@ -648,12 +661,35 @@ export const app = new Elysia()
             });
           },
         })
+          .then(async () => {
+            if (isNewSession) {
+              try {
+                const sessions = await listSessions(agentId);
+                const newest = sessions[0];
+                if (newest) {
+                  ws.send(JSON.stringify({
+                    type: "session_created",
+                    pendingSessionId: sessionId,
+                    sessionId: newest.id,
+                    agentId,
+                    ts: Date.now(),
+                  }));
+
+                  subscribeSession(newest.id, ws);
+                  const jsonlPath = await getSessionJsonlPath(agentId, newest.id);
+                  if (!isWatching(newest.id)) {
+                    await startWatcher(newest.id, jsonlPath);
+                  }
+                }
+              } catch { /* ignore */ }
+            }
+          })
           .catch(() => {})
           .finally(() => {
             if (activeRuns.get(sessionId) === abortController) {
               activeRuns.delete(sessionId);
             }
-            unmuteWatcher(sessionId);
+            if (!isNewSession) unmuteWatcher(sessionId);
           });
         return;
       }
