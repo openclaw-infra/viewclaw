@@ -9,6 +9,7 @@ import { ChatHeader } from "./src/components/chat-header";
 import { ChatStream } from "./src/components/chat-stream";
 import { SessionListSheet } from "./src/components/session-list-sheet";
 import { GatewaySheet } from "./src/components/gateway-sheet";
+import { ForwardSheet } from "./src/components/forward-sheet";
 import { SettingsScreen } from "./src/components/settings-screen";
 import { SplashScreen } from "./src/components/splash-screen";
 import { useGatewaySession } from "./src/hooks/use-gateway-session";
@@ -42,6 +43,7 @@ function Main() {
   const [currentPage, setCurrentPage] = useState<Page>("chat");
   const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
   const [gatewaySheetVisible, setGatewaySheetVisible] = useState(false);
+  const [forwardContent, setForwardContent] = useState<string | null>(null);
 
   const openSessionSheet = useCallback(() => setSessionSheetVisible(true), []);
   const closeSessionSheet = useCallback(() => setSessionSheetVisible(false), []);
@@ -49,6 +51,22 @@ function Main() {
   const closeGatewaySheet = useCallback(() => setGatewaySheetVisible(false), []);
   const openSettings = useCallback(() => setCurrentPage("settings"), []);
   const closeSettings = useCallback(() => setCurrentPage("chat"), []);
+
+  const handleForwardRequest = useCallback((content: string) => {
+    setForwardContent(content);
+  }, []);
+
+  const handleForwardSelect = useCallback(
+    (targetSessionId: string) => {
+      if (forwardContent) {
+        session.forwardMessage(targetSessionId, forwardContent);
+      }
+      setForwardContent(null);
+    },
+    [forwardContent, session],
+  );
+
+  const closeForwardSheet = useCallback(() => setForwardContent(null), []);
 
   const themeName = isDark ? "dark" : "light";
 
@@ -84,7 +102,11 @@ function Main() {
                 />
 
                 <YStack flex={1}>
-                  <ChatStream key={session.currentSessionId} stream={session.stream} />
+                  <ChatStream
+                    key={session.currentSessionId}
+                    stream={session.stream}
+                    onForward={handleForwardRequest}
+                  />
                 </YStack>
 
                 <ChatComposer
@@ -114,6 +136,15 @@ function Main() {
               onAdd={gateway.addGateway}
               onUpdate={gateway.updateGateway}
               onRemove={gateway.removeGateway}
+            />
+
+            <ForwardSheet
+              visible={forwardContent !== null}
+              sessions={session.sessions}
+              currentSessionId={session.currentSessionId}
+              messagePreview={forwardContent ?? ""}
+              onClose={closeForwardSheet}
+              onSelect={handleForwardSelect}
             />
           </>
         )}

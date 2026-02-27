@@ -90,6 +90,13 @@ export default {
   },
   contextMenu: {
     copy: "复制",
+    forward: "转发",
+  },
+  forwardSheet: {
+    title: "转发到…",
+    preview: "消息预览",
+    noSessions: "没有其他可用会话",
+    forwarded: "已转发",
   },
   slashCommand: {
     openclaw: "OpenClaw",

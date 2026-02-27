@@ -606,6 +606,23 @@ export const useGatewaySession = ({
     [uploadImage, finalizeStreamingMessage, removeTyping],
   );
 
+  const forwardMessage = useCallback(
+    (targetSessionId: string, content: string) => {
+      const ws = wsRef.current;
+      if (!ws || ws.readyState !== WebSocket.OPEN || !content.trim()) return;
+      ws.send(
+        JSON.stringify({
+          type: "send_message",
+          sessionId: targetSessionId,
+          messageId: `forward-${Date.now()}`,
+          content: content.trim(),
+          agentId: AGENT_ID,
+        }),
+      );
+    },
+    [],
+  );
+
   const switchSession = useCallback(
     (newSessionId: string) => {
       const oldSessionId = currentSessionRef.current;
@@ -681,12 +698,13 @@ export const useGatewaySession = ({
       stream,
       sending,
       sendMessage,
+      forwardMessage,
       switchSession,
       createNewSession,
       deleteSession,
       refreshSessions,
       gatewayHttpUrl: httpUrl,
     }),
-    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, switchSession, createNewSession, deleteSession, refreshSessions, httpUrl]
+    [connectionStatus, currentSessionId, sessions, stream, sending, sendMessage, forwardMessage, switchSession, createNewSession, deleteSession, refreshSessions, httpUrl]
   );
 };

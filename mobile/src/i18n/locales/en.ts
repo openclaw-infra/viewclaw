@@ -90,6 +90,13 @@ export default {
   },
   contextMenu: {
     copy: "Copy",
+    forward: "Forward",
+  },
+  forwardSheet: {
+    title: "Forward to…",
+    preview: "Message preview",
+    noSessions: "No other sessions available",
+    forwarded: "Forwarded",
   },
   slashCommand: {
     openclaw: "OpenClaw",
