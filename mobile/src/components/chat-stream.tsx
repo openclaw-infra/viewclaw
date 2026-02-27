@@ -1,5 +1,5 @@
 import { useRef, useEffect, useMemo, memo, useState, useCallback } from "react";
-import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet, type LayoutRectangle } from "react-native";
+import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet, type GestureResponderEvent } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
@@ -114,22 +114,19 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
     minute: "2-digit",
   });
 
-  const bubbleRef = useRef<View>(null);
   const [menuVisible, setMenuVisible] = useState(false);
-  const [menuAnchor, setMenuAnchor] = useState<LayoutRectangle | null>(null);
+  const [pressPoint, setPressPoint] = useState<{ x: number; y: number } | null>(null);
 
-  const handleLongPress = useCallback(() => {
+  const handleLongPress = useCallback((e: GestureResponderEvent) => {
     if (item.streaming || !item.content) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    bubbleRef.current?.measureInWindow((x, y, width, height) => {
-      setMenuAnchor({ x, y, width, height });
-      setMenuVisible(true);
-    });
+    setPressPoint({ x: e.nativeEvent.pageX, y: e.nativeEvent.pageY });
+    setMenuVisible(true);
   }, [item.streaming, item.content]);
 
   const handleMenuClose = useCallback(() => {
     setMenuVisible(false);
-    setMenuAnchor(null);
+    setPressPoint(null);
   }, []);
 
   return (
@@ -139,7 +136,6 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
       marginBottom={8}
     >
       <Pressable onLongPress={handleLongPress} delayLongPress={400}>
-        <View ref={bubbleRef} collapsable={false}>
           <YStack
             maxWidth={Dimensions.get("window").width * 0.82}
             paddingHorizontal={14}
@@ -192,12 +188,11 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
               </Text>
             )}
           </YStack>
-        </View>
       </Pressable>
 
       <MessageContextMenu
         visible={menuVisible}
-        anchorRect={menuAnchor}
+        pressPoint={pressPoint}
         content={item.content}
         onClose={handleMenuClose}
       />

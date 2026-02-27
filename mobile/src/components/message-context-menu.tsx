@@ -5,7 +5,6 @@ import {
   Animated,
   Easing,
   StyleSheet,
-  type LayoutRectangle,
 } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { Copy } from "@tamagui/lucide-icons";
@@ -24,7 +23,7 @@ export type MenuAction = {
 
 type Props = {
   visible: boolean;
-  anchorRect: LayoutRectangle | null;
+  pressPoint: { x: number; y: number } | null;
   content: string;
   extraActions?: MenuAction[];
   onClose: () => void;
@@ -33,7 +32,7 @@ type Props = {
 const MENU_ANIM_DURATION = 180;
 
 export const MessageContextMenu = memo(
-  ({ visible, anchorRect, content, extraActions, onClose }: Props) => {
+  ({ visible, pressPoint, content, extraActions, onClose }: Props) => {
     const { colors, isDark } = useTheme();
     const { t } = useTranslation();
     const scale = useRef(new Animated.Value(0)).current;
@@ -94,9 +93,7 @@ export const MessageContextMenu = memo(
       ...(extraActions ?? []),
     ];
 
-    if (!visible || !anchorRect) return null;
-
-    const menuTop = anchorRect.y - 8;
+    if (!visible || !pressPoint) return null;
 
     return (
       <Modal transparent visible animationType="none" onRequestClose={dismiss}>
@@ -105,15 +102,15 @@ export const MessageContextMenu = memo(
             style={[
               styles.menuContainer,
               {
-                top: menuTop,
-                left: anchorRect.x + anchorRect.width / 2,
+                top: pressPoint.y,
+                left: pressPoint.x,
                 backgroundColor: isDark ? colors.bg.elevated : colors.bg.secondary,
                 borderColor: colors.border.subtle,
                 shadowColor: isDark ? "#000" : "#475569",
                 opacity,
                 transform: [
                   { translateX: -60 },
-                  { translateY: -8 },
+                  { translateY: -48 },
                   { scale },
                 ],
               },

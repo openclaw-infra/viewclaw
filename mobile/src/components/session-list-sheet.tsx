@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from "react";
-import { FlatList, Pressable, Modal, StyleSheet } from "react-native";
+import { memo, useCallback, useState, useRef, useEffect } from "react";
+import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
@@ -134,16 +134,40 @@ export const SessionListSheet = memo(
     const { t } = useTranslation();
     const [creating, setCreating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const screenHeight = Dimensions.get("window").height;
+    const slideAnim = useRef(new Animated.Value(screenHeight)).current;
+
+    useEffect(() => {
+      if (visible) {
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
+      } else {
+        slideAnim.setValue(screenHeight);
+      }
+    }, [visible, slideAnim, screenHeight]);
+
+    const animatedClose = useCallback(() => {
+      Animated.timing(slideAnim, {
+        toValue: screenHeight,
+        duration: 250,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }).start(() => onClose());
+    }, [slideAnim, screenHeight, onClose]);
 
     const handleCreate = useCallback(async () => {
       setCreating(true);
       try {
         const newId = await onCreate();
-        if (newId) onClose();
+        if (newId) animatedClose();
       } finally {
         setCreating(false);
       }
-    }, [onCreate, onClose]);
+    }, [onCreate, animatedClose]);
 
     const handleRefresh = useCallback(async () => {
       setRefreshing(true);
@@ -157,26 +181,29 @@ export const SessionListSheet = memo(
     const handleSelect = useCallback(
       (id: string) => {
         onSelect(id);
-        onClose();
+        animatedClose();
       },
-      [onSelect, onClose]
+      [onSelect, animatedClose]
     );
 
     return (
       <Modal
         visible={visible}
-        animationType="slide"
+        animationType="none"
         transparent
-        onRequestClose={onClose}
+        onRequestClose={animatedClose}
       >
         <Pressable
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
-          onPress={onClose}
+          onPress={animatedClose}
         >
-          <Pressable
-            style={{ flex: 1, marginTop: 80 }}
-            onPress={(e) => e.stopPropagation?.()}
+          <Animated.View
+            style={{ flex: 1, marginTop: 80, transform: [{ translateY: slideAnim }] }}
           >
+            <Pressable
+              style={{ flex: 1 }}
+              onPress={(e) => e.stopPropagation?.()}
+            >
             <YStack
               flex={1}
               backgroundColor={colors.bg.secondary}
@@ -280,7 +307,8 @@ export const SessionListSheet = memo(
                 }
               />
             </YStack>
-          </Pressable>
+            </Pressable>
+          </Animated.View>
         </Pressable>
       </Modal>
     );
