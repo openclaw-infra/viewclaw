@@ -372,7 +372,8 @@ const emptyStyles = StyleSheet.create({
 type DisplayItem =
   | { kind: "message"; id: string; data: ChatMessage }
   | { kind: "process"; id: string; logs: ExecutionLog[] }
-  | { kind: "typing"; id: string };
+  | { kind: "typing"; id: string }
+  | { kind: "dateSeparator"; id: string; timestamp: number };
 
 const groupStreamItems = (stream: StreamItem[]): DisplayItem[] => {
   const result: DisplayItem[] = [];
@@ -415,11 +416,71 @@ const groupStreamItems = (stream: StreamItem[]): DisplayItem[] => {
   return result;
 };
 
+const getItemTimestamp = (item: DisplayItem): number | null => {
+  if (item.kind === "message") return item.data.createdAt;
+  if (item.kind === "process" && item.logs.length > 0) return item.logs[0].createdAt;
+  return null;
+};
+
+const startOfDay = (ts: number): number => {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const insertDateSeparators = (items: DisplayItem[]): DisplayItem[] => {
+  if (items.length === 0) return items;
+  const result: DisplayItem[] = [];
+  let lastDayStart: number | null = null;
+
+  for (const item of items) {
+    const ts = getItemTimestamp(item);
+    if (ts !== null) {
+      const dayStart = startOfDay(ts);
+      if (lastDayStart === null || dayStart !== lastDayStart) {
+        result.push({ kind: "dateSeparator", id: `date-${dayStart}`, timestamp: ts });
+        lastDayStart = dayStart;
+      }
+    }
+    result.push(item);
+  }
+  return result;
+};
+
+const DateSeparator = memo(({ timestamp }: { timestamp: number }) => {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+
+  const label = useMemo(() => {
+    const now = new Date();
+    const target = new Date(timestamp);
+    const todayStart = startOfDay(now.getTime());
+    const targetStart = startOfDay(timestamp);
+    const diffDays = Math.round((todayStart - targetStart) / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return t("chat.dateToday");
+    if (diffDays === 1) return t("chat.dateYesterday");
+    if (diffDays <= 7) return t("chat.dateDaysAgo", { count: diffDays });
+    return target.toLocaleDateString(undefined, { month: "short", day: "numeric", year: target.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+  }, [timestamp, t]);
+
+  return (
+    <XStack justifyContent="center" paddingVertical={12} paddingHorizontal={16} alignItems="center" gap={12}>
+      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border.subtle }} />
+      <Text color={colors.text.muted} fontSize={11} fontWeight="500">
+        {label}
+      </Text>
+      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border.subtle }} />
+    </XStack>
+  );
+});
+
 const getDisplayItemId = (item: DisplayItem): string => item.id;
 
 const RenderDisplayItem = memo(({ item }: { item: DisplayItem }) => {
   if (item.kind === "typing") return <TypingIndicator />;
   if (item.kind === "message") return <Bubble item={item.data} />;
+  if (item.kind === "dateSeparator") return <DateSeparator timestamp={item.timestamp} />;
   return <ProcessCard logs={item.logs} />;
 });
 
@@ -507,7 +568,8 @@ const ScrollToBottomButton = memo(({ visible, onPress }: { visible: boolean; onP
 
 export const ChatStream = ({ stream, onForward, onReply }: Props) => {
   const grouped = useMemo(() => groupStreamItems(stream), [stream]);
-  const reversed = useMemo(() => [...grouped].reverse(), [grouped]);
+  const withDates = useMemo(() => insertDateSeparators(grouped), [grouped]);
+  const reversed = useMemo(() => [...withDates].reverse(), [withDates]);
   const listRef = useRef<FlatList>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);

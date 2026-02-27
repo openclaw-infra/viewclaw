@@ -27,6 +27,9 @@ export default {
     transcribing: "转录中...",
     replyingTo: "回复",
     latestMessage: "最新消息",
+    dateToday: "今天",
+    dateYesterday: "昨天",
+    dateDaysAgo: "{{count}} 天前",
   },
   process: {
     thinking: "思考中",

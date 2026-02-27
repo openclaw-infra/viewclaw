@@ -27,6 +27,9 @@ export default {
     transcribing: "Transcribing...",
     replyingTo: "Replying to",
     latestMessage: "Latest",
+    dateToday: "Today",
+    dateYesterday: "Yesterday",
+    dateDaysAgo: "{{count}} days ago",
   },
   process: {
     thinking: "Thinking",
