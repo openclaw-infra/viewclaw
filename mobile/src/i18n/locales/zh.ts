@@ -26,6 +26,7 @@ export default {
     tapMicToFinish: "点击麦克风结束录音",
     transcribing: "转录中...",
     replyingTo: "回复",
+    latestMessage: "最新消息",
   },
   process: {
     thinking: "思考中",

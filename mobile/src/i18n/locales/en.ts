@@ -26,6 +26,7 @@ export default {
     tapMicToFinish: "Tap mic to finish",
     transcribing: "Transcribing...",
     replyingTo: "Replying to",
+    latestMessage: "Latest",
   },
   process: {
     thinking: "Thinking",

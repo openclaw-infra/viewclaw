@@ -1,9 +1,9 @@
 import { useRef, useEffect, useMemo, memo, useState, useCallback, createContext, useContext } from "react";
-import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet, type GestureResponderEvent } from "react-native";
+import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet, type GestureResponderEvent, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
-import { Forward, Reply } from "@tamagui/lucide-icons";
+import { ArrowDown, Forward, Reply } from "@tamagui/lucide-icons";
 import type { ChatMessage, ExecutionLog, ImageAttachment, StreamItem } from "../types/gateway";
 import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
@@ -13,6 +13,8 @@ import { useTheme } from "../theme/theme-context";
 type ChatStreamActions = {
   onForward?: (content: string) => void;
   onReply?: (content: string) => void;
+  scrollToQuote?: (quoteText: string) => void;
+  highlightedId?: string | null;
 };
 
 const ChatStreamActionsContext = createContext<ChatStreamActions>({});
@@ -116,15 +118,48 @@ const GeneratingLabel = () => {
   );
 };
 
+const REPLY_RE = /^\[Replying to:\s*([\s\S]*?)\]\s*\n\n([\s\S]*)$/;
+
+const parseReplyContent = (content: string): { quote: string; body: string } | null => {
+  const m = REPLY_RE.exec(content);
+  if (!m) return null;
+  return { quote: m[1].trim(), body: m[2] };
+};
+
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
-  const { onForward, onReply } = useContext(ChatStreamActionsContext);
+  const { onForward, onReply, scrollToQuote, highlightedId } = useContext(ChatStreamActionsContext);
   const isUser = item.role === "user";
   const time = new Date(item.createdAt).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const replyParsed = useMemo(() => (item.content ? parseReplyContent(item.content) : null), [item.content]);
+
+  const isHighlighted = highlightedId === item.id;
+  const highlightAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isHighlighted) {
+      highlightAnim.setValue(0);
+      return;
+    }
+    Animated.sequence([
+      Animated.timing(highlightAnim, { toValue: 1, duration: 300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(highlightAnim, { toValue: 0.2, duration: 300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(highlightAnim, { toValue: 1, duration: 300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      Animated.timing(highlightAnim, { toValue: 0, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+    ]).start();
+  }, [isHighlighted]);
+
+  const handleQuotePress = useCallback(() => {
+    if (replyParsed?.quote && scrollToQuote) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      scrollToQuote(replyParsed.quote);
+    }
+  }, [replyParsed?.quote, scrollToQuote]);
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [pressPoint, setPressPoint] = useState<{ x: number; y: number } | null>(null);
@@ -175,6 +210,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
       marginBottom={8}
     >
       <Pressable onLongPress={handleLongPress} delayLongPress={400}>
+          <View style={{ position: "relative" }}>
           <YStack
             maxWidth={Dimensions.get("window").width * 0.82}
             paddingHorizontal={14}
@@ -204,9 +240,34 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
               </XStack>
             ) : null}
 
-            {item.content ? (
+            {replyParsed && (
+              <Pressable onPress={handleQuotePress} style={{ alignSelf: "flex-start", maxWidth: Math.round((Dimensions.get("window").width - 24) * 0.5) }}>
+                <XStack
+                  backgroundColor={isUser ? "rgba(255,255,255,0.12)" : colors.bg.tertiary}
+                  borderRadius={8}
+                  paddingHorizontal={10}
+                  paddingVertical={6}
+                  marginBottom={2}
+                  alignItems="center"
+                  gap={6}
+                >
+                  <Reply size={11} color={isUser ? "rgba(255,255,255,0.55)" : colors.text.muted} style={{ flexShrink: 0 }} />
+                  <Text
+                    color={isUser ? "rgba(255,255,255,0.65)" : colors.text.muted}
+                    fontSize={12}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    flexShrink={1}
+                  >
+                    {replyParsed.quote}
+                  </Text>
+                </XStack>
+              </Pressable>
+            )}
+
+            {(replyParsed ? replyParsed.body : item.content) ? (
               <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
-                {item.content}
+                {replyParsed ? replyParsed.body : item.content}
               </MarkdownBody>
             ) : null}
 
@@ -227,6 +288,18 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
               </Text>
             )}
           </YStack>
+          {isHighlighted && (
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                ...StyleSheet.absoluteFillObject,
+                borderRadius: 18,
+                backgroundColor: colors.brand.blue,
+                opacity: highlightAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 0.15] }),
+              }}
+            />
+          )}
+          </View>
       </Pressable>
 
       <MessageContextMenu
@@ -373,23 +446,128 @@ const EmptyState = () => {
   );
 };
 
+const SCROLL_THRESHOLD = 200;
+
+const ScrollToBottomButton = memo(({ visible, onPress }: { visible: boolean; onPress: () => void }) => {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const opacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
+    } else if (mounted) {
+      Animated.timing(opacity, { toValue: 0, duration: 150, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(({ finished }) => {
+        if (finished) setMounted(false);
+      });
+    }
+  }, [visible]);
+
+  if (!mounted) return null;
+
+  return (
+    <Animated.View
+      style={{
+        position: "absolute",
+        bottom: 12,
+        alignSelf: "center",
+        opacity,
+        transform: [{
+          translateY: opacity.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }),
+        }],
+      }}
+    >
+      <Pressable onPress={onPress}>
+        <XStack
+          backgroundColor={colors.bg.secondary}
+          borderRadius={20}
+          paddingHorizontal={14}
+          paddingVertical={8}
+          alignItems="center"
+          gap={6}
+          borderWidth={1}
+          borderColor={colors.border.subtle}
+          shadowColor="#000"
+          shadowOffset={{ width: 0, height: 2 }}
+          shadowOpacity={0.12}
+          shadowRadius={6}
+          elevation={4}
+        >
+          <ArrowDown size={14} color={colors.brand.blue} />
+          <Text color={colors.brand.blue} fontSize={12} fontWeight="600">
+            {t("chat.latestMessage")}
+          </Text>
+        </XStack>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
 export const ChatStream = ({ stream, onForward, onReply }: Props) => {
   const grouped = useMemo(() => groupStreamItems(stream), [stream]);
   const reversed = useMemo(() => [...grouped].reverse(), [grouped]);
-  const actions = useMemo<ChatStreamActions>(() => ({ onForward, onReply }), [onForward, onReply]);
+  const listRef = useRef<FlatList>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const offsetY = e.nativeEvent.contentOffset.y;
+    setIsAtBottom(offsetY < SCROLL_THRESHOLD);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    listRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  const scrollToQuote = useCallback((quoteText: string) => {
+    const target = reversed.findIndex((di) => {
+      if (di.kind !== "message") return false;
+      const c = di.data.content;
+      if (c.startsWith("[Replying to:")) return false;
+      return c.includes(quoteText);
+    });
+    if (target === -1) return;
+    const targetItem = reversed[target];
+    listRef.current?.scrollToIndex({ index: target, animated: true, viewPosition: 0.5 });
+    if (targetItem.kind === "message") {
+      setHighlightedId(targetItem.id);
+      setTimeout(() => setHighlightedId(null), 1500);
+    }
+  }, [reversed]);
+
+  const handleScrollToIndexFailed = useCallback((info: { index: number }) => {
+    listRef.current?.scrollToOffset({ offset: info.index * 100, animated: true });
+    setTimeout(() => {
+      listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0.5 });
+    }, 300);
+  }, []);
+
+  const actions = useMemo<ChatStreamActions>(
+    () => ({ onForward, onReply, scrollToQuote, highlightedId }),
+    [onForward, onReply, scrollToQuote, highlightedId],
+  );
 
   return (
-    <ChatStreamActionsContext.Provider value={actions}>
-      <FlatList
-        inverted
-        data={reversed}
-        keyExtractor={getDisplayItemId}
-        renderItem={({ item }) => <RenderDisplayItem item={item} />}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={<EmptyState />}
-      />
-    </ChatStreamActionsContext.Provider>
+    <View style={{ flex: 1 }}>
+      <ChatStreamActionsContext.Provider value={actions}>
+        <FlatList
+          ref={listRef}
+          inverted
+          data={reversed}
+          keyExtractor={getDisplayItemId}
+          renderItem={({ item }) => <RenderDisplayItem item={item} />}
+          contentContainerStyle={{ paddingTop: 8, paddingBottom: 8 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={<EmptyState />}
+          onScroll={handleScroll}
+          scrollEventThrottle={100}
+          onScrollToIndexFailed={handleScrollToIndexFailed}
+        />
+      </ChatStreamActionsContext.Provider>
+      <ScrollToBottomButton visible={!isAtBottom} onPress={scrollToBottom} />
+    </View>
   );
 };

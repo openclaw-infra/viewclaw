@@ -3,7 +3,7 @@ import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing
 import { LinearGradient } from "expo-linear-gradient";
 import { Input, Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
-import { ImagePlus, Mic, Send, Square, X } from "@tamagui/lucide-icons";
+import { ImagePlus, Mic, Reply, Send, Square, X } from "@tamagui/lucide-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useTheme } from "../theme/theme-context";
 import { SlashCommandPanel } from "./slash-command-panel";
@@ -126,6 +126,31 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
   const isTranscribing = voice.status === "transcribing";
   const isVoiceBusy = isRecording || isTranscribing;
 
+  const replyAnim = useRef(new Animated.Value(0)).current;
+  const [replyMounted, setReplyMounted] = useState(false);
+  const hasReply = !!replyContent;
+
+  useEffect(() => {
+    if (hasReply) {
+      setReplyMounted(true);
+      Animated.timing(replyAnim, {
+        toValue: 1,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }).start();
+    } else if (replyMounted) {
+      Animated.timing(replyAnim, {
+        toValue: 0,
+        duration: 150,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setReplyMounted(false);
+      });
+    }
+  }, [hasReply]);
+
   const slashVisible = !!slashState?.active;
   const slashAnim = useRef(new Animated.Value(0)).current;
   const [slashMounted, setSlashMounted] = useState(false);
@@ -211,31 +236,6 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
         paddingVertical={10}
         gap={8}
       >
-        {replyContent && (
-          <XStack
-            backgroundColor={colors.bg.tertiary}
-            borderLeftWidth={3}
-            borderLeftColor={colors.brand.blue}
-            borderRadius={8}
-            paddingHorizontal={12}
-            paddingVertical={8}
-            alignItems="center"
-            gap={8}
-          >
-            <YStack flex={1} gap={2}>
-              <Text color={colors.brand.blue} fontSize={11} fontWeight="600">
-                {t("chat.replyingTo")}
-              </Text>
-              <Text color={colors.text.secondary} fontSize={13} numberOfLines={2}>
-                {replyContent}
-              </Text>
-            </YStack>
-            <Pressable onPress={onClearReply} hitSlop={8}>
-              <X size={14} color={colors.text.muted} />
-            </Pressable>
-          </XStack>
-        )}
-
         {attachedImages.length > 0 && (
           <ScrollView
             horizontal
@@ -264,102 +264,140 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
           </ScrollView>
         )}
 
-        <XStack
-          alignItems="center"
-          gap={6}
+        <YStack
           backgroundColor={colors.bg.tertiary}
           borderRadius={14}
           borderWidth={1}
           borderColor={
-            isRecording
-              ? colors.accent.red
-              : slashState?.active
-                ? colors.brand.blue
-                : colors.border.subtle
+            hasReply
+              ? colors.brand.blue + "60"
+              : isRecording
+                ? colors.accent.red
+                : slashState?.active
+                  ? colors.brand.blue
+                  : colors.border.subtle
           }
-          paddingLeft={5}
-          paddingRight={5}
-          paddingVertical={4}
+          overflow="hidden"
         >
-          <Pressable onPress={pickImage} disabled={isVoiceBusy || sending || attachedImages.length >= 4}>
-            <YStack
-              width={34}
-              height={34}
-              borderRadius={17}
-              backgroundColor={colors.bg.elevated}
-              alignItems="center"
-              justifyContent="center"
-              opacity={attachedImages.length >= 4 ? 0.4 : 1}
+          {replyMounted && (
+            <Animated.View
+              style={{
+                opacity: replyAnim,
+                transform: [{
+                  translateY: replyAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-4, 0],
+                  }),
+                }],
+              }}
             >
-              <ImagePlus size={18} color={colors.text.muted} />
-            </YStack>
-          </Pressable>
-
-          <Input
-            flex={1}
-            value={value}
-            onChangeText={setValue}
-            onSubmitEditing={submit}
-            placeholder={t("chat.placeholder")}
-            placeholderTextColor={colors.text.muted as any}
-            backgroundColor="transparent"
-            borderWidth={0}
-            color={colors.text.primary}
-            fontSize={15}
-            paddingHorizontal={2}
-            paddingVertical={8}
-            returnKeyType="send"
-            autoCorrect={false}
-            editable={!isVoiceBusy}
-          />
-
-          <Pressable
-            onPress={handleMicPress}
-            onLongPress={handleMicLongPress}
-            disabled={isTranscribing || sending}
-          >
-            <YStack
-              width={34}
-              height={34}
-              borderRadius={17}
-              backgroundColor={
-                isRecording
-                  ? colors.accent.red
-                  : colors.bg.elevated
-              }
-              alignItems="center"
-              justifyContent="center"
-              opacity={isTranscribing ? 0.5 : 1}
-            >
-              {isRecording ? (
-                <Square size={10} color="#FFFFFF" fill="#FFFFFF" />
-              ) : (
-                <Mic size={18} color={colors.text.muted} />
-              )}
-            </YStack>
-          </Pressable>
-
-          <Pressable onPress={submit} disabled={!canSend}>
-            {canSend ? (
-              <LinearGradient
-                colors={["#2CB5E8", "#8E2DE2"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={sendBtnStyles.gradient}
+              <XStack
+                paddingHorizontal={12}
+                paddingTop={8}
+                paddingBottom={6}
+                alignItems="center"
+                gap={6}
+                borderBottomWidth={StyleSheet.hairlineWidth}
+                borderBottomColor={colors.border.subtle}
               >
-                {sending ? (
-                  <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
+                <Reply size={12} color={colors.brand.blue} style={{ flexShrink: 0 }} />
+                <Text
+                  color={colors.text.muted}
+                  fontSize={12}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  flex={1}
+                >
+                  {replyContent}
+                </Text>
+                <Pressable onPress={onClearReply} hitSlop={8}>
+                  <X size={12} color={colors.text.muted} />
+                </Pressable>
+              </XStack>
+            </Animated.View>
+          )}
+
+          <XStack alignItems="center" gap={6} paddingLeft={5} paddingRight={5} paddingVertical={4}>
+            <Pressable onPress={pickImage} disabled={isVoiceBusy || sending || attachedImages.length >= 4}>
+              <YStack
+                width={34}
+                height={34}
+                borderRadius={17}
+                backgroundColor={colors.bg.elevated}
+                alignItems="center"
+                justifyContent="center"
+                opacity={attachedImages.length >= 4 ? 0.4 : 1}
+              >
+                <ImagePlus size={18} color={colors.text.muted} />
+              </YStack>
+            </Pressable>
+
+            <Input
+              flex={1}
+              value={value}
+              onChangeText={setValue}
+              onSubmitEditing={submit}
+              placeholder={t("chat.placeholder")}
+              placeholderTextColor={colors.text.muted as any}
+              backgroundColor="transparent"
+              borderWidth={0}
+              color={colors.text.primary}
+              fontSize={15}
+              paddingHorizontal={2}
+              paddingVertical={8}
+              returnKeyType="send"
+              autoCorrect={false}
+              editable={!isVoiceBusy}
+            />
+
+            <Pressable
+              onPress={handleMicPress}
+              onLongPress={handleMicLongPress}
+              disabled={isTranscribing || sending}
+            >
+              <YStack
+                width={34}
+                height={34}
+                borderRadius={17}
+                backgroundColor={
+                  isRecording
+                    ? colors.accent.red
+                    : colors.bg.elevated
+                }
+                alignItems="center"
+                justifyContent="center"
+                opacity={isTranscribing ? 0.5 : 1}
+              >
+                {isRecording ? (
+                  <Square size={10} color="#FFFFFF" fill="#FFFFFF" />
                 ) : (
-                  <Send size={16} color="#FFFFFF" />
+                  <Mic size={18} color={colors.text.muted} />
                 )}
-              </LinearGradient>
-            ) : (
-              <View style={[sendBtnStyles.inactive, { backgroundColor: colors.bg.elevated }]}>
-                <Send size={16} color={colors.text.muted} />
-              </View>
-            )}
-          </Pressable>
-        </XStack>
+              </YStack>
+            </Pressable>
+
+            <Pressable onPress={submit} disabled={!canSend}>
+              {canSend ? (
+                <LinearGradient
+                  colors={["#2CB5E8", "#8E2DE2"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={sendBtnStyles.gradient}
+                >
+                  {sending ? (
+                    <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
+                  ) : (
+                    <Send size={16} color="#FFFFFF" />
+                  )}
+                </LinearGradient>
+              ) : (
+                <View style={[sendBtnStyles.inactive, { backgroundColor: colors.bg.elevated }]}>
+                  <Send size={16} color={colors.text.muted} />
+                </View>
+              )}
+            </Pressable>
+          </XStack>
+        </YStack>
       </YStack>
     </YStack>
   );
