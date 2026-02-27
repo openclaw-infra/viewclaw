@@ -1,5 +1,5 @@
-import { memo, useCallback, useState, useRef, useEffect } from "react";
-import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing } from "react-native";
+import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
+import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
@@ -120,6 +120,60 @@ const SessionRow = memo(
   }
 );
 
+type SessionListItem =
+  | { kind: "session"; data: SessionInfo }
+  | { kind: "dateSeparator"; label: string; id: string };
+
+const startOfDay = (ts: number): number => {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+const buildSessionListItems = (sessions: SessionInfo[], t: (key: string, opts?: Record<string, unknown>) => string): SessionListItem[] => {
+  if (sessions.length === 0) return [];
+  const now = new Date();
+  const todayStart = startOfDay(now.getTime());
+  const result: SessionListItem[] = [];
+  let lastDayStart: number | null = null;
+
+  for (const s of sessions) {
+    const ts = s.createdAt ? new Date(s.createdAt).getTime() : 0;
+    const dayStart = startOfDay(ts);
+
+    if (dayStart !== lastDayStart) {
+      const diffDays = Math.round((todayStart - dayStart) / (1000 * 60 * 60 * 24));
+      let label: string;
+      if (diffDays === 0) label = t("chat.dateToday");
+      else if (diffDays === 1) label = t("chat.dateYesterday");
+      else if (diffDays <= 7) label = t("chat.dateDaysAgo", { count: diffDays });
+      else {
+        const d = new Date(ts);
+        label = d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: d.getFullYear() !== now.getFullYear() ? "numeric" : undefined });
+      }
+      result.push({ kind: "dateSeparator", label, id: `date-${dayStart}` });
+      lastDayStart = dayStart;
+    }
+    result.push({ kind: "session", data: s });
+  }
+  return result;
+};
+
+const SessionDateSeparator = memo(({ label }: { label: string }) => {
+  const { colors } = useTheme();
+  return (
+    <XStack paddingHorizontal={16} paddingTop={16} paddingBottom={6} alignItems="center" gap={10}>
+      <Text color={colors.text.muted} fontSize={11} fontWeight="600">
+        {label}
+      </Text>
+      <View style={{ flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border.subtle }} />
+    </XStack>
+  );
+});
+
+const getSessionListItemId = (item: SessionListItem): string =>
+  item.kind === "session" ? item.data.id : item.id;
+
 export const SessionListSheet = memo(
   ({
     visible,
@@ -132,6 +186,7 @@ export const SessionListSheet = memo(
   }: Props) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
+    const listItems = useMemo(() => buildSessionListItems(sessions, t), [sessions, t]);
     const [creating, setCreating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const screenHeight = Dimensions.get("window").height;
@@ -279,15 +334,19 @@ export const SessionListSheet = memo(
               </XStack>
 
               <FlatList
-                data={sessions}
-                keyExtractor={(s) => s.id}
-                renderItem={({ item }) => (
-                  <SessionRow
-                    item={item}
-                    isCurrent={item.id === currentSessionId}
-                    onSelect={handleSelect}
-                  />
-                )}
+                data={listItems}
+                keyExtractor={getSessionListItemId}
+                renderItem={({ item }) =>
+                  item.kind === "dateSeparator" ? (
+                    <SessionDateSeparator label={item.label} />
+                  ) : (
+                    <SessionRow
+                      item={item.data}
+                      isCurrent={item.data.id === currentSessionId}
+                      onSelect={handleSelect}
+                    />
+                  )
+                }
                 contentContainerStyle={{ paddingBottom: 40 }}
                 keyboardShouldPersistTaps="handled"
                 ListEmptyComponent={
