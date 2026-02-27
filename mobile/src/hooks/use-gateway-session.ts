@@ -68,12 +68,22 @@ export const useGatewaySession = ({
     bufferRef.current = [];
     setStream((prev) => {
       const typingIdx = prev.findIndex((item) => item.kind === "typing");
-      if (typingIdx === -1) {
-        return [...prev, ...buf].slice(-500);
+      if (typingIdx !== -1) {
+        const before = prev.slice(0, typingIdx);
+        const typing = prev[typingIdx];
+        return [...before, ...buf, typing].slice(-500);
       }
-      const before = prev.slice(0, typingIdx);
-      const typing = prev[typingIdx];
-      return [...before, ...buf, typing].slice(-500);
+
+      const streamingIdx = prev.findIndex(
+        (item) => item.kind === "message" && item.data.streaming
+      );
+      if (streamingIdx !== -1) {
+        const before = prev.slice(0, streamingIdx);
+        const after = prev.slice(streamingIdx);
+        return [...before, ...buf, ...after].slice(-500);
+      }
+
+      return [...prev, ...buf].slice(-500);
     });
   }, []);
 
