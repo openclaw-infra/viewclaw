@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   PanResponder,
+  StyleSheet,
+  View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
@@ -35,6 +37,9 @@ type EditingState = {
   label: string;
   url: string;
 };
+
+const DRAWER_WIDTH_RATIO = 0.85;
+const SWIPE_THRESHOLD = 60;
 
 const GatewayRow = memo(
   ({
@@ -302,7 +307,7 @@ const EditFormModal = memo(
       <Modal visible transparent animationType="none" onRequestClose={handleCancel}>
         <Animated.View
           style={{
-            ...{ position: "absolute" as const, inset: 0 },
+            ...StyleSheet.absoluteFillObject,
             backgroundColor: "rgba(0,0,0,0.55)",
             opacity: backdropAnim,
           }}
@@ -327,7 +332,6 @@ const EditFormModal = memo(
               paddingBottom={Platform.OS === "ios" ? 36 : 24}
               overflow="hidden"
             >
-              {/* Drag handle */}
               <YStack alignItems="center" paddingVertical={12}>
                 <YStack
                   width={40}
@@ -338,7 +342,6 @@ const EditFormModal = memo(
                 />
               </YStack>
 
-              {/* Header */}
               <XStack
                 alignItems="center"
                 justifyContent="space-between"
@@ -370,9 +373,7 @@ const EditFormModal = memo(
                 </Pressable>
               </XStack>
 
-              {/* Form fields */}
               <YStack paddingHorizontal={20} gap={20}>
-                {/* Label field */}
                 <YStack gap={8}>
                   <Text color={colors.text.secondary} fontSize={14} fontWeight="500">
                     {t("gateway.label")}
@@ -388,7 +389,6 @@ const EditFormModal = memo(
                   />
                 </YStack>
 
-                {/* URL field */}
                 <YStack gap={8}>
                   <Text color={colors.text.secondary} fontSize={14} fontWeight="500">
                     {t("gateway.websocketUrl")}
@@ -421,7 +421,6 @@ const EditFormModal = memo(
                   )}
                 </YStack>
 
-                {/* Action buttons */}
                 <XStack gap={12} paddingTop={4}>
                   <Pressable onPress={handleCancel} style={{ flex: 1 }}>
                     <YStack
@@ -501,30 +500,86 @@ export const GatewaySheet = memo(
     const { colors } = useTheme();
     const { t } = useTranslation();
     const [editing, setEditing] = useState<EditingState | null>(null);
-    const screenHeight = Dimensions.get("window").height;
-    const slideAnim = useRef(new Animated.Value(screenHeight)).current;
+
+    const screenWidth = Dimensions.get("window").width;
+    const drawerWidth = screenWidth * DRAWER_WIDTH_RATIO;
+    const slideAnim = useRef(new Animated.Value(drawerWidth)).current;
+    const backdropAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
       if (visible) {
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(backdropAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start();
       } else {
-        slideAnim.setValue(screenHeight);
+        slideAnim.setValue(drawerWidth);
+        backdropAnim.setValue(0);
       }
-    }, [visible, slideAnim, screenHeight]);
+    }, [visible, slideAnim, backdropAnim, drawerWidth]);
 
     const animatedClose = useCallback(() => {
-      Animated.timing(slideAnim, {
-        toValue: screenHeight,
-        duration: 250,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => onClose());
-    }, [slideAnim, screenHeight, onClose]);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: drawerWidth,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => onClose());
+    }, [slideAnim, backdropAnim, drawerWidth, onClose]);
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) && g.dx > 0,
+        onPanResponderMove: (_, g) => {
+          if (g.dx > 0) slideAnim.setValue(g.dx);
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dx > SWIPE_THRESHOLD || g.vx > 0.5) {
+            Animated.parallel([
+              Animated.timing(slideAnim, {
+                toValue: drawerWidth,
+                duration: 200,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 0,
+                duration: 200,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+              }),
+            ]).start(() => onClose());
+          } else {
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 120,
+              friction: 14,
+            }).start();
+          }
+        },
+      }),
+    ).current;
 
     const handleSelect = useCallback(
       (id: string) => {
@@ -571,34 +626,6 @@ export const GatewaySheet = memo(
       setEditing({ mode: "add", label: "", url: "ws://" });
     }, []);
 
-    const SWIPE_THRESHOLD = 80;
-    const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderMove: (_, g) => {
-          if (g.dy > 0) slideAnim.setValue(g.dy);
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > SWIPE_THRESHOLD || g.vy > 0.5) {
-            Animated.timing(slideAnim, {
-              toValue: screenHeight,
-              duration: 250,
-              easing: Easing.in(Easing.cubic),
-              useNativeDriver: true,
-            }).start(() => onClose());
-          } else {
-            Animated.spring(slideAnim, {
-              toValue: 0,
-              useNativeDriver: true,
-              tension: 120,
-              friction: 14,
-            }).start();
-          }
-        },
-      }),
-    ).current;
-
     return (
       <Modal
         visible={visible}
@@ -606,51 +633,46 @@ export const GatewaySheet = memo(
         transparent
         onRequestClose={animatedClose}
       >
-        <Pressable
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.6)",
-          }}
-          onPress={animatedClose}
-        />
+        <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
+          <Animated.View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              opacity: backdropAnim,
+            }}
+          >
+            <Pressable style={{ flex: 1 }} onPress={animatedClose} />
+          </Animated.View>
 
-        <Animated.View
-          style={{
-            flex: 1,
-            marginTop: 120,
-            transform: [{ translateY: slideAnim }],
-          }}
-          pointerEvents="box-none"
-        >
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              right: 0,
+              width: drawerWidth,
+              transform: [{ translateX: slideAnim }],
+            }}
+          >
           <YStack
             flex={1}
             backgroundColor={colors.bg.secondary}
             borderTopLeftRadius={24}
-            borderTopRightRadius={24}
+            borderBottomLeftRadius={24}
             overflow="hidden"
+            shadowColor="#000"
+            shadowOffset={{ width: -4, height: 0 }}
+            shadowOpacity={0.15}
+            shadowRadius={16}
+            elevation={8}
           >
-            {/* Drag handle */}
-            <Pressable onPress={animatedClose} {...panResponder.panHandlers}>
-              <YStack alignItems="center" paddingVertical={12}>
-                <YStack
-                  width={40}
-                  height={4}
-                  borderRadius={2}
-                  backgroundColor={colors.border.medium}
-                  opacity={0.6}
-                />
-              </YStack>
-            </Pressable>
+            <YStack paddingTop={60} />
 
             <XStack
               alignItems="center"
               justifyContent="space-between"
               paddingHorizontal={16}
-              paddingVertical={10}
+              paddingVertical={12}
             >
               <Text
                 color={colors.text.primary}
@@ -708,6 +730,7 @@ export const GatewaySheet = memo(
             />
           </YStack>
         </Animated.View>
+        </View>
 
         {editing && (
           <EditFormModal

@@ -1,7 +1,7 @@
 import "./src/i18n";
 import { useState, useCallback, useRef, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform } from "react-native";
+import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform, PanResponder, View } from "react-native";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
 import tamaguiConfig from "./tamagui.config";
 import { ChatComposer } from "./src/components/chat-composer";
@@ -85,6 +85,23 @@ function Main() {
 
   const themeName = isDark ? "dark" : "light";
 
+  const SWIPE_MIN = 50;
+
+  const swipePanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) =>
+        Math.abs(g.dx) > 15 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderRelease: (_, g) => {
+        if (g.dx > SWIPE_MIN) {
+          setSessionSheetVisible(true);
+        } else if (g.dx < -SWIPE_MIN) {
+          setGatewaySheetVisible(true);
+        }
+      },
+    }),
+  ).current;
+
   return (
     <Theme name={themeName}>
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg.primary }]}>
@@ -99,6 +116,7 @@ function Main() {
           />
         ) : (
           <>
+            <View style={styles.flex} {...swipePanResponder.panHandlers}>
             <KeyboardAvoidingView
               style={styles.flex}
               behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -136,6 +154,7 @@ function Main() {
                 />
               </YStack>
             </KeyboardAvoidingView>
+            </View>
 
             <SessionListSheet
               visible={sessionSheetVisible}

@@ -19,6 +19,9 @@ type Props = {
   onRefresh: () => Promise<void>;
 };
 
+const DRAWER_WIDTH_RATIO = 0.85;
+const SWIPE_THRESHOLD = 60;
+
 const formatDate = (iso: string, yesterdayLabel: string): string => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -207,30 +210,86 @@ export const SessionListSheet = memo(
     const [creating, setCreating] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [agentPickerVisible, setAgentPickerVisible] = useState(false);
-    const screenHeight = Dimensions.get("window").height;
-    const slideAnim = useRef(new Animated.Value(screenHeight)).current;
+
+    const screenWidth = Dimensions.get("window").width;
+    const drawerWidth = screenWidth * DRAWER_WIDTH_RATIO;
+    const slideAnim = useRef(new Animated.Value(-drawerWidth)).current;
+    const backdropAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
       if (visible) {
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+          Animated.timing(slideAnim, {
+            toValue: 0,
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(backdropAnim, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]).start();
       } else {
-        slideAnim.setValue(screenHeight);
+        slideAnim.setValue(-drawerWidth);
+        backdropAnim.setValue(0);
       }
-    }, [visible, slideAnim, screenHeight]);
+    }, [visible, slideAnim, backdropAnim, drawerWidth]);
 
     const animatedClose = useCallback(() => {
-      Animated.timing(slideAnim, {
-        toValue: screenHeight,
-        duration: 250,
-        easing: Easing.in(Easing.cubic),
-        useNativeDriver: true,
-      }).start(() => onClose());
-    }, [slideAnim, screenHeight, onClose]);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: -drawerWidth,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 250,
+          easing: Easing.in(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start(() => onClose());
+    }, [slideAnim, backdropAnim, drawerWidth, onClose]);
+
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) =>
+          Math.abs(g.dx) > 10 && Math.abs(g.dx) > Math.abs(g.dy) && g.dx < 0,
+        onPanResponderMove: (_, g) => {
+          if (g.dx < 0) slideAnim.setValue(g.dx);
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dx < -SWIPE_THRESHOLD || g.vx < -0.5) {
+            Animated.parallel([
+              Animated.timing(slideAnim, {
+                toValue: -drawerWidth,
+                duration: 200,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+              }),
+              Animated.timing(backdropAnim, {
+                toValue: 0,
+                duration: 200,
+                easing: Easing.in(Easing.cubic),
+                useNativeDriver: true,
+              }),
+            ]).start(() => onClose());
+          } else {
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 120,
+              friction: 14,
+            }).start();
+          }
+        },
+      }),
+    ).current;
 
     const handleCreateWithAgent = useCallback(async (agentId?: string) => {
       setAgentPickerVisible(false);
@@ -268,34 +327,6 @@ export const SessionListSheet = memo(
       [onSelect, animatedClose]
     );
 
-    const SWIPE_THRESHOLD = 80;
-    const panResponder = useRef(
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: (_, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
-        onPanResponderMove: (_, g) => {
-          if (g.dy > 0) slideAnim.setValue(g.dy);
-        },
-        onPanResponderRelease: (_, g) => {
-          if (g.dy > SWIPE_THRESHOLD || g.vy > 0.5) {
-            Animated.timing(slideAnim, {
-              toValue: screenHeight,
-              duration: 250,
-              easing: Easing.in(Easing.cubic),
-              useNativeDriver: true,
-            }).start(() => onClose());
-          } else {
-            Animated.spring(slideAnim, {
-              toValue: 0,
-              useNativeDriver: true,
-              tension: 120,
-              friction: 14,
-            }).start();
-          }
-        },
-      }),
-    ).current;
-
     return (
       <Modal
         visible={visible}
@@ -303,51 +334,46 @@ export const SessionListSheet = memo(
         transparent
         onRequestClose={animatedClose}
       >
-        <Pressable
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0,0,0,0.6)",
-          }}
-          onPress={animatedClose}
-        />
+        <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
+          <Animated.View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              opacity: backdropAnim,
+            }}
+          >
+            <Pressable style={{ flex: 1 }} onPress={animatedClose} />
+          </Animated.View>
 
-        <Animated.View
-          style={{
-            flex: 1,
-            marginTop: 80,
-            transform: [{ translateY: slideAnim }],
-          }}
-          pointerEvents="box-none"
-        >
+          <Animated.View
+            style={{
+              position: "absolute",
+              top: 0,
+              bottom: 0,
+              left: 0,
+              width: drawerWidth,
+              transform: [{ translateX: slideAnim }],
+            }}
+          >
           <YStack
             flex={1}
             backgroundColor={colors.bg.secondary}
-            borderTopLeftRadius={24}
             borderTopRightRadius={24}
+            borderBottomRightRadius={24}
             overflow="hidden"
+            shadowColor="#000"
+            shadowOffset={{ width: 4, height: 0 }}
+            shadowOpacity={0.15}
+            shadowRadius={16}
+            elevation={8}
           >
-            {/* Drag handle */}
-            <Pressable onPress={animatedClose} {...panResponder.panHandlers}>
-              <YStack alignItems="center" paddingVertical={12}>
-                <YStack
-                  width={40}
-                  height={4}
-                  borderRadius={2}
-                  backgroundColor={colors.border.medium}
-                  opacity={0.6}
-                />
-              </YStack>
-            </Pressable>
+            <YStack paddingTop={60} />
 
             <XStack
               alignItems="center"
               justifyContent="space-between"
               paddingHorizontal={16}
-              paddingVertical={10}
+              paddingVertical={12}
             >
               <Text
                 color={colors.text.primary}
@@ -434,6 +460,8 @@ export const SessionListSheet = memo(
             />
           </YStack>
         </Animated.View>
+        </View>
+
         {agentPickerVisible && (
           <Pressable
             style={StyleSheet.absoluteFill}
