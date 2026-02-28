@@ -1,5 +1,5 @@
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
-import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing, View } from "react-native";
+import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing, View, PanResponder } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
@@ -268,6 +268,34 @@ export const SessionListSheet = memo(
       [onSelect, animatedClose]
     );
 
+    const SWIPE_THRESHOLD = 80;
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderMove: (_, g) => {
+          if (g.dy > 0) slideAnim.setValue(g.dy);
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dy > SWIPE_THRESHOLD || g.vy > 0.5) {
+            Animated.timing(slideAnim, {
+              toValue: screenHeight,
+              duration: 250,
+              easing: Easing.in(Easing.cubic),
+              useNativeDriver: true,
+            }).start(() => onClose());
+          } else {
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 120,
+              friction: 14,
+            }).start();
+          }
+        },
+      }),
+    ).current;
+
     return (
       <Modal
         visible={visible}
@@ -276,24 +304,35 @@ export const SessionListSheet = memo(
         onRequestClose={animatedClose}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.6)",
+          }}
           onPress={animatedClose}
+        />
+
+        <Animated.View
+          style={{
+            flex: 1,
+            marginTop: 80,
+            transform: [{ translateY: slideAnim }],
+          }}
+          pointerEvents="box-none"
         >
-          <Animated.View
-            style={{ flex: 1, marginTop: 80, transform: [{ translateY: slideAnim }] }}
+          <YStack
+            flex={1}
+            backgroundColor={colors.bg.secondary}
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            overflow="hidden"
           >
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={(e) => e.stopPropagation?.()}
-            >
-            <YStack
-              flex={1}
-              backgroundColor={colors.bg.secondary}
-              borderTopLeftRadius={24}
-              borderTopRightRadius={24}
-              overflow="hidden"
-            >
-              <YStack alignItems="center" paddingVertical={10}>
+            {/* Drag handle */}
+            <Pressable onPress={animatedClose} {...panResponder.panHandlers}>
+              <YStack alignItems="center" paddingVertical={12}>
                 <YStack
                   width={40}
                   height={4}
@@ -302,100 +341,99 @@ export const SessionListSheet = memo(
                   opacity={0.6}
                 />
               </YStack>
+            </Pressable>
 
-              <XStack
-                alignItems="center"
-                justifyContent="space-between"
-                paddingHorizontal={16}
-                paddingVertical={10}
+            <XStack
+              alignItems="center"
+              justifyContent="space-between"
+              paddingHorizontal={16}
+              paddingVertical={10}
+            >
+              <Text
+                color={colors.text.primary}
+                fontSize={20}
+                fontWeight="700"
               >
-                <Text
-                  color={colors.text.primary}
-                  fontSize={20}
-                  fontWeight="700"
-                >
-                  {t("sessionList.title")}
-                </Text>
-                <XStack gap={8}>
-                  <Pressable onPress={handleRefresh} disabled={refreshing}>
-                    <YStack
-                      paddingHorizontal={12}
-                      paddingVertical={6}
-                      borderRadius={12}
-                      backgroundColor={colors.bg.tertiary}
-                      borderWidth={1}
-                      borderColor={colors.border.subtle}
-                    >
-                      <Text
-                        color={refreshing ? colors.text.muted : colors.text.secondary}
-                        fontSize={12}
-                        fontWeight="600"
-                      >
-                        {refreshing ? "..." : t("common.refresh")}
-                      </Text>
-                    </YStack>
-                  </Pressable>
-                  <Pressable onPress={handleCreatePress} disabled={creating}>
-                    <LinearGradient
-                      colors={["#2CB5E8", "#8E2DE2"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={btnStyles.newBtn}
-                    >
-                      <Text
-                        color={creating ? "rgba(255,255,255,0.5)" : "#FFFFFF"}
-                        fontSize={12}
-                        fontWeight="600"
-                      >
-                        {creating ? t("common.creating") : t("common.new")}
-                      </Text>
-                    </LinearGradient>
-                  </Pressable>
-                </XStack>
-              </XStack>
-
-              <XStack paddingHorizontal={16} paddingBottom={8}>
-                <Text color={colors.text.muted} fontSize={12}>
-                  {t("sessionList.sessionCount", { count: visibleSessions.length })}
-                </Text>
-              </XStack>
-
-              <FlatList
-                data={listItems}
-                keyExtractor={getSessionListItemId}
-                renderItem={({ item }) =>
-                  item.kind === "dateSeparator" ? (
-                    <SessionDateSeparator label={item.label} />
-                  ) : (
-                    <SessionRow
-                      item={item.data}
-                      isCurrent={item.data.id === currentSessionId}
-                      onSelect={handleSelect}
-                    />
-                  )
-                }
-                contentContainerStyle={{ paddingBottom: 40 }}
-                keyboardShouldPersistTaps="handled"
-                ListEmptyComponent={
+                {t("sessionList.title")}
+              </Text>
+              <XStack gap={8} alignItems="center">
+                <Pressable onPress={handleRefresh} disabled={refreshing}>
                   <YStack
-                    alignItems="center"
-                    justifyContent="center"
-                    paddingVertical="$10"
-                    gap={8}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={12}
+                    backgroundColor={colors.bg.tertiary}
+                    borderWidth={1}
+                    borderColor={colors.border.subtle}
                   >
-                    <Text color={colors.text.muted} fontSize={14}>
-                      {t("sessionList.noSessions")}
-                    </Text>
-                    <Text color={colors.text.muted} fontSize={12} opacity={0.7}>
-                      {t("sessionList.createToStart")}
+                    <Text
+                      color={refreshing ? colors.text.muted : colors.text.secondary}
+                      fontSize={12}
+                      fontWeight="600"
+                    >
+                      {refreshing ? "..." : t("common.refresh")}
                     </Text>
                   </YStack>
-                }
-              />
-            </YStack>
-            </Pressable>
-          </Animated.View>
-        </Pressable>
+                </Pressable>
+                <Pressable onPress={handleCreatePress} disabled={creating}>
+                  <LinearGradient
+                    colors={["#2CB5E8", "#8E2DE2"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={btnStyles.newBtn}
+                  >
+                    <Text
+                      color={creating ? "rgba(255,255,255,0.5)" : "#FFFFFF"}
+                      fontSize={12}
+                      fontWeight="600"
+                    >
+                      {creating ? t("common.creating") : t("common.new")}
+                    </Text>
+                  </LinearGradient>
+                </Pressable>
+              </XStack>
+            </XStack>
+
+            <XStack paddingHorizontal={16} paddingBottom={8}>
+              <Text color={colors.text.muted} fontSize={12}>
+                {t("sessionList.sessionCount", { count: visibleSessions.length })}
+              </Text>
+            </XStack>
+
+            <FlatList
+              data={listItems}
+              keyExtractor={getSessionListItemId}
+              renderItem={({ item }) =>
+                item.kind === "dateSeparator" ? (
+                  <SessionDateSeparator label={item.label} />
+                ) : (
+                  <SessionRow
+                    item={item.data}
+                    isCurrent={item.data.id === currentSessionId}
+                    onSelect={handleSelect}
+                  />
+                )
+              }
+              contentContainerStyle={{ paddingBottom: 40 }}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <YStack
+                  alignItems="center"
+                  justifyContent="center"
+                  paddingVertical="$10"
+                  gap={8}
+                >
+                  <Text color={colors.text.muted} fontSize={14}>
+                    {t("sessionList.noSessions")}
+                  </Text>
+                  <Text color={colors.text.muted} fontSize={12} opacity={0.7}>
+                    {t("sessionList.createToStart")}
+                  </Text>
+                </YStack>
+              }
+            />
+          </YStack>
+        </Animated.View>
         {agentPickerVisible && (
           <Pressable
             style={StyleSheet.absoluteFill}

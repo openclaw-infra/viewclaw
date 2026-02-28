@@ -10,6 +10,7 @@ import {
   Easing,
   KeyboardAvoidingView,
   Platform,
+  PanResponder,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Text, XStack, YStack } from "tamagui";
@@ -570,6 +571,34 @@ export const GatewaySheet = memo(
       setEditing({ mode: "add", label: "", url: "ws://" });
     }, []);
 
+    const SWIPE_THRESHOLD = 80;
+    const panResponder = useRef(
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: (_, g) => g.dy > 10 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderMove: (_, g) => {
+          if (g.dy > 0) slideAnim.setValue(g.dy);
+        },
+        onPanResponderRelease: (_, g) => {
+          if (g.dy > SWIPE_THRESHOLD || g.vy > 0.5) {
+            Animated.timing(slideAnim, {
+              toValue: screenHeight,
+              duration: 250,
+              easing: Easing.in(Easing.cubic),
+              useNativeDriver: true,
+            }).start(() => onClose());
+          } else {
+            Animated.spring(slideAnim, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 120,
+              friction: 14,
+            }).start();
+          }
+        },
+      }),
+    ).current;
+
     return (
       <Modal
         visible={visible}
@@ -578,24 +607,35 @@ export const GatewaySheet = memo(
         onRequestClose={animatedClose}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.6)",
+          }}
           onPress={animatedClose}
+        />
+
+        <Animated.View
+          style={{
+            flex: 1,
+            marginTop: 120,
+            transform: [{ translateY: slideAnim }],
+          }}
+          pointerEvents="box-none"
         >
-          <Animated.View
-            style={{ flex: 1, marginTop: 120, transform: [{ translateY: slideAnim }] }}
+          <YStack
+            flex={1}
+            backgroundColor={colors.bg.secondary}
+            borderTopLeftRadius={24}
+            borderTopRightRadius={24}
+            overflow="hidden"
           >
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={(e) => e.stopPropagation?.()}
-            >
-            <YStack
-              flex={1}
-              backgroundColor={colors.bg.secondary}
-              borderTopLeftRadius={24}
-              borderTopRightRadius={24}
-              overflow="hidden"
-            >
-              <YStack alignItems="center" paddingVertical={10}>
+            {/* Drag handle */}
+            <Pressable onPress={animatedClose} {...panResponder.panHandlers}>
+              <YStack alignItems="center" paddingVertical={12}>
                 <YStack
                   width={40}
                   height={4}
@@ -604,73 +644,70 @@ export const GatewaySheet = memo(
                   opacity={0.6}
                 />
               </YStack>
-
-              <XStack
-                alignItems="center"
-                justifyContent="space-between"
-                paddingHorizontal={16}
-                paddingVertical={10}
-              >
-                <Text
-                  color={colors.text.primary}
-                  fontSize={20}
-                  fontWeight="700"
-                >
-                  {t("gateway.title")}
-                </Text>
-                <Pressable onPress={openAddForm}>
-                  <YStack
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={12}
-                    backgroundColor={colors.brand.blue}
-                  >
-                    <Text color="#FFFFFF" fontSize={12} fontWeight="600">
-                      {t("common.add")}
-                    </Text>
-                  </YStack>
-                </Pressable>
-              </XStack>
-
-              <XStack paddingHorizontal={16} paddingBottom={8}>
-                <Text color={colors.text.muted} fontSize={12}>
-                  {t("gateway.gatewayCount", { count: gateways.length })}
-                </Text>
-              </XStack>
-
-              {/* List */}
-              <FlatList
-                data={gateways}
-                keyExtractor={(g) => g.id}
-                renderItem={({ item }) => (
-                  <GatewayRow
-                    item={item}
-                    isActive={item.id === activeId}
-                    onSelect={handleSelect}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                  />
-                )}
-                contentContainerStyle={{ paddingBottom: 20 }}
-                keyboardShouldPersistTaps="handled"
-                ListEmptyComponent={
-                  <YStack
-                    alignItems="center"
-                    justifyContent="center"
-                    paddingVertical="$10"
-                    gap="$2"
-                  >
-                    <Text color={colors.text.muted} fontSize={14}>
-                      {t("gateway.noGateways")}
-                    </Text>
-                  </YStack>
-                }
-              />
-
-            </YStack>
             </Pressable>
-          </Animated.View>
-        </Pressable>
+
+            <XStack
+              alignItems="center"
+              justifyContent="space-between"
+              paddingHorizontal={16}
+              paddingVertical={10}
+            >
+              <Text
+                color={colors.text.primary}
+                fontSize={20}
+                fontWeight="700"
+              >
+                {t("gateway.title")}
+              </Text>
+              <Pressable onPress={openAddForm}>
+                <YStack
+                  paddingHorizontal={12}
+                  paddingVertical={6}
+                  borderRadius={12}
+                  backgroundColor={colors.brand.blue}
+                >
+                  <Text color="#FFFFFF" fontSize={12} fontWeight="600">
+                    {t("common.add")}
+                  </Text>
+                </YStack>
+              </Pressable>
+            </XStack>
+
+            <XStack paddingHorizontal={16} paddingBottom={8}>
+              <Text color={colors.text.muted} fontSize={12}>
+                {t("gateway.gatewayCount", { count: gateways.length })}
+              </Text>
+            </XStack>
+
+            <FlatList
+              data={gateways}
+              keyExtractor={(g) => g.id}
+              renderItem={({ item }) => (
+                <GatewayRow
+                  item={item}
+                  isActive={item.id === activeId}
+                  onSelect={handleSelect}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
+              )}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              keyboardShouldPersistTaps="handled"
+              ListEmptyComponent={
+                <YStack
+                  alignItems="center"
+                  justifyContent="center"
+                  paddingVertical="$10"
+                  gap="$2"
+                >
+                  <Text color={colors.text.muted} fontSize={14}>
+                    {t("gateway.noGateways")}
+                  </Text>
+                </YStack>
+              }
+            />
+          </YStack>
+        </Animated.View>
 
         {editing && (
           <EditFormModal
