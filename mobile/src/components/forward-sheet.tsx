@@ -11,6 +11,7 @@ import {
 import { Text, XStack, YStack } from "tamagui";
 import { ArrowRight } from "@tamagui/lucide-icons";
 import * as Haptics from "expo-haptics";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
 import type { SessionInfo } from "../types/gateway";
@@ -85,6 +86,7 @@ export const ForwardSheet = memo(
   }: Props) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
+    const insets = useSafeAreaInsets();
     const screenHeight = Dimensions.get("window").height;
     const slideAnim = useRef(new Animated.Value(screenHeight)).current;
 
@@ -126,6 +128,7 @@ export const ForwardSheet = memo(
         visible={visible}
         animationType="none"
         transparent
+        statusBarTranslucent
         onRequestClose={animatedClose}
       >
         <Pressable
@@ -201,7 +204,7 @@ export const ForwardSheet = memo(
                   renderItem={({ item }) => (
                     <ForwardRow item={item} onSelect={handleSelect} />
                   )}
-                  contentContainerStyle={{ paddingBottom: 40 }}
+                  contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 12) + 12 }}
                   keyboardShouldPersistTaps="handled"
                   ListEmptyComponent={
                     <YStack

@@ -1,7 +1,9 @@
 import "./src/i18n";
 import { useState, useCallback, useRef, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaView, StyleSheet, KeyboardAvoidingView, Platform, PanResponder, View } from "react-native";
+import { StyleSheet, PanResponder, View } from "react-native";
+import { KeyboardProvider, KeyboardAvoidingView } from "react-native-keyboard-controller";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { TamaguiProvider, Theme, YStack } from "tamagui";
 import tamaguiConfig from "./tamagui.config";
 import { ChatComposer } from "./src/components/chat-composer";
@@ -21,6 +23,7 @@ type Page = "chat" | "settings";
 
 function Main() {
   const { isDark, colors, loaded } = useTheme();
+  const insets = useSafeAreaInsets();
   const [splashDone, setSplashDone] = useState(false);
   const onSplashFinish = useCallback(() => setSplashDone(true), []);
   const gateway = useGatewayManager();
@@ -104,23 +107,25 @@ function Main() {
 
   return (
     <Theme name={themeName}>
-      <SafeAreaView style={[styles.safe, { backgroundColor: colors.bg.primary }]}>
+      <View style={[styles.safe, { backgroundColor: colors.bg.primary, paddingTop: insets.top }]}>
         {currentPage === "settings" ? (
-          <SettingsScreen
-            sessions={session.sessions}
-            currentSessionId={session.currentSessionId}
-            gatewayHttpUrl={session.gatewayHttpUrl}
-            onBack={closeSettings}
-            onSessionDeleted={session.deleteSession}
-            onRefreshSessions={session.refreshSessions}
-          />
+          <View style={[styles.flex, { paddingBottom: insets.bottom }]}>
+            <SettingsScreen
+              sessions={session.sessions}
+              currentSessionId={session.currentSessionId}
+              gatewayHttpUrl={session.gatewayHttpUrl}
+              onBack={closeSettings}
+              onSessionDeleted={session.deleteSession}
+              onRefreshSessions={session.refreshSessions}
+            />
+          </View>
         ) : (
           <>
             <View style={styles.flex} {...swipePanResponder.panHandlers}>
             <KeyboardAvoidingView
               style={styles.flex}
-              behavior={Platform.OS === "ios" ? "padding" : undefined}
-              keyboardVerticalOffset={0}
+              behavior="padding"
+              keyboardVerticalOffset={insets.top - insets.bottom}
             >
               <YStack flex={1} backgroundColor={colors.bg.primary}>
                 <ChatHeader
@@ -188,7 +193,7 @@ function Main() {
             />
           </>
         )}
-      </SafeAreaView>
+      </View>
       <StatusBar style={isDark ? "light" : "dark"} />
       {!splashDone && (
         <SplashScreen ready={loaded} onFinish={onSplashFinish} />
@@ -199,11 +204,15 @@ function Main() {
 
 export default function App() {
   return (
-    <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
-      <AppThemeProvider>
-        <Main />
-      </AppThemeProvider>
-    </TamaguiProvider>
+    <SafeAreaProvider>
+      <KeyboardProvider statusBarTranslucent navigationBarTranslucent>
+        <TamaguiProvider config={tamaguiConfig} defaultTheme="dark">
+          <AppThemeProvider>
+            <Main />
+          </AppThemeProvider>
+        </TamaguiProvider>
+      </KeyboardProvider>
+    </SafeAreaProvider>
   );
 }
 

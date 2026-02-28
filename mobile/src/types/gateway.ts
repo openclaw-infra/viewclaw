@@ -32,6 +32,7 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
+  localStatus?: "sending" | "failed";
   thinking?: string;
   thinkingSummary?: string;
   streaming?: boolean;

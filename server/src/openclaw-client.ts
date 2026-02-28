@@ -5,6 +5,9 @@ import type { SessionInfo, AgentInfo } from "./types";
 
 const sessionKeyCache = new Map<string, string>();
 
+const looksLikeSessionKey = (value: string): boolean =>
+  value === "main" || value.startsWith("agent:") || value.startsWith("cron:") || value.startsWith("hook:") || value.startsWith("node-");
+
 export const getWorkspaceDir = async (): Promise<string> => {
   try {
     const configPath = join(OPENCLAW_HOME, "openclaw.json");
@@ -274,7 +277,7 @@ export const listSessions = async (agentId: string = "main"): Promise<SessionInf
     const res = await fetch(`${OPENCLAW_BASE_URL}/tools/invoke`, {
       method: "POST",
       headers: { "content-type": "application/json", ...authHeaders },
-      body: JSON.stringify({ tool: "sessions_list", action: "json", args: {} }),
+      body: JSON.stringify({ tool: "sessions_list", action: "json", args: { limit: 5000 } }),
       signal: AbortSignal.timeout(5000),
     });
     if (res.ok) {
@@ -359,8 +362,43 @@ export const getSessionJsonlPath = async (agentId: string, sessionId: string): P
   return join(OPENCLAW_HOME, "agents", agentId, "sessions", `${sessionId}.jsonl`);
 };
 
-export const resolveSessionKey = async (sessionId: string): Promise<string> => {
-  const cached = sessionKeyCache.get(sessionId);
+const resolveSessionKeyFromStore = async (sessionId: string, agentId?: string): Promise<string | null> => {
+  const candidateAgentIds = agentId ? [agentId] : [];
+  if (!agentId) {
+    try {
+      const agentsDir = join(OPENCLAW_HOME, "agents");
+      const entries = await readdir(agentsDir, { withFileTypes: true });
+      for (const entry of entries) {
+        if (entry.isDirectory()) candidateAgentIds.push(entry.name);
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  for (const aid of candidateAgentIds) {
+    try {
+      const storePath = join(OPENCLAW_HOME, "agents", aid, "sessions", "sessions.json");
+      const raw = await readFile(storePath, "utf8");
+      const parsed = JSON.parse(raw) as Record<string, { sessionId?: string } | undefined>;
+      for (const [key, value] of Object.entries(parsed)) {
+        if (value?.sessionId === sessionId) {
+          return key;
+        }
+      }
+    } catch {
+      // Try next agent store.
+    }
+  }
+
+  return null;
+};
+
+export const resolveSessionKey = async (sessionIdOrKey: string, agentId?: string): Promise<string | null> => {
+  if (!sessionIdOrKey) return null;
+  if (looksLikeSessionKey(sessionIdOrKey)) return sessionIdOrKey;
+
+  const cached = sessionKeyCache.get(sessionIdOrKey);
   if (cached) return cached;
 
   try {
@@ -368,7 +406,7 @@ export const resolveSessionKey = async (sessionId: string): Promise<string> => {
     const res = await fetch(`${OPENCLAW_BASE_URL}/tools/invoke`, {
       method: "POST",
       headers: { "content-type": "application/json", ...authHeaders },
-      body: JSON.stringify({ tool: "sessions_list", action: "json", args: {} }),
+      body: JSON.stringify({ tool: "sessions_list", action: "json", args: { limit: 5000 } }),
     });
     if (res.ok) {
       const data = await res.json() as {
@@ -382,7 +420,16 @@ export const resolveSessionKey = async (sessionId: string): Promise<string> => {
     }
   } catch { /* ignore */ }
 
-  return sessionKeyCache.get(sessionId) ?? "main";
+  const fromList = sessionKeyCache.get(sessionIdOrKey);
+  if (fromList) return fromList;
+
+  const fromStore = await resolveSessionKeyFromStore(sessionIdOrKey, agentId);
+  if (fromStore) {
+    sessionKeyCache.set(sessionIdOrKey, fromStore);
+    return fromStore;
+  }
+
+  return null;
 };
 
 export const getActiveSessionId = async (agentId: string = "main"): Promise<string | null> => {

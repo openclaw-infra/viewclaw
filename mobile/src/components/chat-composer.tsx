@@ -1,6 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Input, Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import { ImagePlus, Mic, Reply, Send, Square, X } from "@tamagui/lucide-icons";
@@ -40,6 +41,7 @@ const imgPreviewStyles = StyleSheet.create({
 export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearReply, onSend }: Props) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
   const [value, setValue] = useState("");
   const [attachedImages, setAttachedImages] = useState<ImageAttachment[]>([]);
   const canSend = (value.trim().length > 0 || attachedImages.length > 0) && !sending;
@@ -177,7 +179,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
   }, [slashVisible]);
 
   return (
-    <YStack>
+    <YStack paddingBottom={insets.bottom}>
       {slashMounted && (
         <Animated.View
           style={{

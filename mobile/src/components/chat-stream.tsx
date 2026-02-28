@@ -119,6 +119,11 @@ const GeneratingLabel = () => {
 };
 
 const REPLY_RE = /^\[Replying to:\s*([\s\S]*?)\]\s*\n\n([\s\S]*)$/;
+const INTERNAL_REPLY_MARKER_RE = /\[\[reply_to_current\]\]\s*/gi;
+const SHOW_INTERNAL_THINKING_SUMMARY = false;
+
+const sanitizeAssistantDisplayText = (content: string): string =>
+  content.replace(INTERNAL_REPLY_MARKER_RE, "").trimStart();
 
 const parseReplyContent = (content: string): { quote: string; body: string } | null => {
   const m = REPLY_RE.exec(content);
@@ -135,8 +140,19 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
     hour: "2-digit",
     minute: "2-digit",
   });
+  const statusLabel = isUser
+    ? item.localStatus === "sending"
+      ? t("chat.sending")
+      : item.localStatus === "failed"
+        ? t("chat.sendFailed")
+        : null
+    : null;
 
-  const replyParsed = useMemo(() => (item.content ? parseReplyContent(item.content) : null), [item.content]);
+  const displayContent = useMemo(
+    () => (isUser ? item.content : sanitizeAssistantDisplayText(item.content)),
+    [isUser, item.content],
+  );
+  const replyParsed = useMemo(() => (displayContent ? parseReplyContent(displayContent) : null), [displayContent]);
 
   const isHighlighted = highlightedId === item.id;
   const highlightAnim = useRef(new Animated.Value(0)).current;
@@ -231,7 +247,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
           >
             {item.images?.length ? <ImageGrid images={item.images} /> : null}
 
-            {item.thinkingSummary ? (
+            {SHOW_INTERNAL_THINKING_SUMMARY && item.thinkingSummary ? (
               <XStack alignItems="center" gap={4} marginBottom={2}>
                 <View style={[emptyStyles.thinkDot, { backgroundColor: colors.accent.yellow }]} />
                 <Text color={colors.accent.yellow} fontSize={11} opacity={0.85} fontWeight="500">
@@ -265,9 +281,9 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
               </Pressable>
             )}
 
-            {(replyParsed ? replyParsed.body : item.content) ? (
+            {(replyParsed ? replyParsed.body : displayContent) ? (
               <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
-                {replyParsed ? replyParsed.body : item.content}
+                {replyParsed ? replyParsed.body : displayContent}
               </MarkdownBody>
             ) : null}
 
@@ -279,13 +295,23 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
                 <StreamingCursor />
               </XStack>
             ) : (
-              <Text
-                color={isUser ? "rgba(255,255,255,0.45)" : colors.text.muted}
-                fontSize={10}
-                alignSelf={isUser ? "flex-end" : "flex-start"}
-              >
-                {time}
-              </Text>
+              <XStack alignItems="center" gap={6} alignSelf={isUser ? "flex-end" : "flex-start"}>
+                <Text
+                  color={isUser ? "rgba(255,255,255,0.45)" : colors.text.muted}
+                  fontSize={10}
+                >
+                  {time}
+                </Text>
+                {statusLabel && (
+                  <Text
+                    color={item.localStatus === "failed" ? "#FF6B6B" : isUser ? "rgba(255,255,255,0.6)" : colors.text.muted}
+                    fontSize={10}
+                    fontWeight="600"
+                  >
+                    {statusLabel}
+                  </Text>
+                )}
+              </XStack>
             )}
           </YStack>
           {isHighlighted && (
@@ -494,7 +520,7 @@ const EmptyState = () => {
       justifyContent="center"
       paddingVertical="$10"
       gap={12}
-      transform={[{ scaleY: -1 }]}
+      transform={[{ rotateX: "180deg" }]}
     >
       <Image source={logoIcon} style={{ width: 56, height: 56, opacity: 0.6 }} resizeMode="contain" />
       <Text color={colors.text.muted} fontSize={14} fontWeight="500">
@@ -586,7 +612,7 @@ export const ChatStream = ({ stream, onForward, onReply }: Props) => {
   const scrollToQuote = useCallback((quoteText: string) => {
     const target = reversed.findIndex((di) => {
       if (di.kind !== "message") return false;
-      const c = di.data.content;
+      const c = di.data.role === "assistant" ? sanitizeAssistantDisplayText(di.data.content) : di.data.content;
       if (c.startsWith("[Replying to:")) return false;
       return c.includes(quoteText);
     });

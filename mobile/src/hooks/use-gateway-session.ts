@@ -14,6 +14,7 @@ const FALLBACK_WS = "ws://127.0.0.1:3000";
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
+const ACK_TIMEOUT_MS = 12_000;
 
 type Options = {
   sessionId?: string;
@@ -68,6 +69,7 @@ export const useGatewaySession = ({
   const wsUrlRef = useRef(wsUrl);
   const httpUrlRef = useRef(httpUrl);
   const onMessageDoneRef = useRef(onMessageDone);
+  const pendingAckRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   currentSessionRef.current = currentSessionId;
   wsUrlRef.current = wsUrl;
@@ -166,6 +168,16 @@ export const useGatewaySession = ({
     );
   }, []);
 
+  const markLocalMessageStatus = useCallback((messageId: string, localStatus?: ChatMessage["localStatus"]) => {
+    setStream((prev) =>
+      prev.map((item) =>
+        item.kind === "message" && item.data.id === messageId
+          ? { kind: "message" as const, data: { ...item.data, localStatus } }
+          : item,
+      ),
+    );
+  }, []);
+
   const parseEvent = useCallback(
     (event: GatewayEvent) => {
       const p = event.payload;
@@ -231,7 +243,20 @@ export const useGatewaySession = ({
       if (event.type === "message") {
         const role = p.role === "assistant" ? "assistant" : "user";
         const content = String(p.content ?? "");
-        if (!content) return;
+        const imagePaths = Array.isArray(p.imagePaths)
+          ? (p.imagePaths as string[]).filter((x) => typeof x === "string" && x.length > 0)
+          : [];
+        const images: ImageAttachment[] | undefined = imagePaths.length > 0
+          ? imagePaths.map((path) => {
+              const normalized = path.startsWith("/") ? path : `/${path}`;
+              return {
+                uri: `${httpUrlRef.current}/api/images${normalized}`,
+                width: 200,
+                height: 200,
+              };
+            })
+          : undefined;
+        if (!content && !images?.length) return;
 
         if (role === "assistant") {
           if (streamingMsgRef.current || streamedDoneRef.current) return;
@@ -243,10 +268,23 @@ export const useGatewaySession = ({
           cleanContent = content.replace(/^\[\[reply_to_current\]\]\s*/i, "");
         }
 
+        const incomingId = event.messageId ?? `msg-${event.seq}`;
+        // Sender side already inserted local user bubble. Upgrade its status instead of duplicating.
+        if (role === "user" && seenRef.current.has(incomingId)) {
+          const pending = pendingAckRef.current.get(incomingId);
+          if (pending) {
+            clearTimeout(pending);
+            pendingAckRef.current.delete(incomingId);
+          }
+          markLocalMessageStatus(incomingId, undefined);
+          return;
+        }
+
         appendMessage({
-          id: event.messageId ?? `msg-${event.seq}`,
+          id: incomingId,
           role,
           content: cleanContent,
+          images,
           thinking: typeof p.thinking === "string" ? p.thinking : undefined,
           thinkingSummary: typeof p.thinkingSummary === "string" ? p.thinkingSummary : undefined,
           createdAt: event.ts,
@@ -310,6 +348,16 @@ export const useGatewaySession = ({
       }
 
       if (event.type === "error") {
+        if (event.messageId) {
+          const pending = pendingAckRef.current.get(event.messageId);
+          if (pending) {
+            clearTimeout(pending);
+            pendingAckRef.current.delete(event.messageId);
+          }
+          markLocalMessageStatus(event.messageId, "failed");
+          removeTyping();
+          setSending(false);
+        }
         appendLog({
           id: `log-${event.sessionId}-${event.seq}`,
           level: "error",
@@ -333,7 +381,7 @@ export const useGatewaySession = ({
         });
       }
     },
-    [appendMessage, appendLog, removeTyping, updateStreamingMessage, finalizeStreamingMessage]
+    [appendMessage, appendLog, removeTyping, updateStreamingMessage, finalizeStreamingMessage, markLocalMessageStatus]
   );
 
   const wsSend = useCallback((data: Record<string, unknown>) => {
@@ -411,7 +459,21 @@ export const useGatewaySession = ({
         return;
       }
 
-      if (parsed.type === "pong" || parsed.type === "ack") return;
+      if (parsed.type === "pong") return;
+
+      if (parsed.type === "ack") {
+        const ackMessageId = typeof parsed.messageId === "string" ? parsed.messageId : "";
+        if (ackMessageId) {
+          const pending = pendingAckRef.current.get(ackMessageId);
+          if (pending) {
+            clearTimeout(pending);
+            pendingAckRef.current.delete(ackMessageId);
+          }
+          markLocalMessageStatus(ackMessageId, undefined);
+          setSending(false);
+        }
+        return;
+      }
 
       if (parsed.type === "subscribed") {
         return;
@@ -460,7 +522,7 @@ export const useGatewaySession = ({
     };
 
     ws.onerror = () => setConnectionStatus("disconnected");
-  }, [appendLog, parseEvent, scheduleReconnect]);
+  }, [appendLog, parseEvent, scheduleReconnect, markLocalMessageStatus]);
 
   const loadHistory = useCallback(async (sessionId: string) => {
     try {
@@ -600,6 +662,8 @@ export const useGatewaySession = ({
       isUnmountedRef.current = true;
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
       if (pingRef.current) clearInterval(pingRef.current);
+      pendingAckRef.current.forEach((timer) => clearTimeout(timer));
+      pendingAckRef.current.clear();
       wsRef.current?.close();
     };
     // reconnect when wsUrl changes
@@ -648,6 +712,7 @@ export const useGatewaySession = ({
         id: messageId,
         role: "user",
         content: text,
+        localStatus: "sending",
         images: images?.length ? images : undefined,
         createdAt: Date.now(),
       };
@@ -701,9 +766,16 @@ export const useGatewaySession = ({
       }
 
       wsRef.current.send(JSON.stringify(wsPayload));
+      const ackTimer = setTimeout(() => {
+        pendingAckRef.current.delete(messageId);
+        markLocalMessageStatus(messageId, "failed");
+        removeTyping();
+        setSending(false);
+      }, ACK_TIMEOUT_MS);
+      pendingAckRef.current.set(messageId, ackTimer);
       setTimeout(() => setSending(false), 80);
     },
-    [uploadImage, finalizeStreamingMessage, removeTyping, getAgentId],
+    [uploadImage, finalizeStreamingMessage, removeTyping, getAgentId, markLocalMessageStatus],
   );
 
   const forwardMessage = useCallback(
@@ -736,6 +808,8 @@ export const useGatewaySession = ({
       streamingMsgRef.current = null;
       streamedDoneRef.current = false;
       typingIdRef.current = null;
+      pendingAckRef.current.forEach((timer) => clearTimeout(timer));
+      pendingAckRef.current.clear();
       lastSeqRef.current = 0;
       setCurrentSessionId(newSessionId);
 
@@ -771,6 +845,8 @@ export const useGatewaySession = ({
     streamingMsgRef.current = null;
     streamedDoneRef.current = false;
     typingIdRef.current = null;
+    pendingAckRef.current.forEach((timer) => clearTimeout(timer));
+    pendingAckRef.current.clear();
     lastSeqRef.current = 0;
 
     const oldSessionId = currentSessionRef.current;

@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../theme/theme-context";
@@ -241,6 +242,7 @@ const EditFormModal = memo(
   }) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
+    const insets = useSafeAreaInsets();
     const [label, setLabel] = useState(editing.label);
     const [url, setUrl] = useState(editing.url);
     const [focusedField, setFocusedField] = useState<"label" | "url" | null>(null);
@@ -304,7 +306,7 @@ const EditFormModal = memo(
     const saveEnabled = canSave && urlValid;
 
     return (
-      <Modal visible transparent animationType="none" onRequestClose={handleCancel}>
+      <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={handleCancel}>
         <Animated.View
           style={{
             ...StyleSheet.absoluteFillObject,
@@ -329,7 +331,7 @@ const EditFormModal = memo(
               backgroundColor={colors.bg.secondary}
               borderTopLeftRadius={24}
               borderTopRightRadius={24}
-              paddingBottom={Platform.OS === "ios" ? 36 : 24}
+              paddingBottom={Math.max(insets.bottom, 12) + 12}
               overflow="hidden"
             >
               <YStack alignItems="center" paddingVertical={12}>
@@ -499,6 +501,7 @@ export const GatewaySheet = memo(
   }: Props) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
+    const insets = useSafeAreaInsets();
     const [editing, setEditing] = useState<EditingState | null>(null);
 
     const screenWidth = Dimensions.get("window").width;
@@ -631,6 +634,7 @@ export const GatewaySheet = memo(
         visible={visible}
         animationType="none"
         transparent
+        statusBarTranslucent
         onRequestClose={animatedClose}
       >
         <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
@@ -666,7 +670,7 @@ export const GatewaySheet = memo(
             shadowRadius={16}
             elevation={8}
           >
-            <YStack paddingTop={60} />
+            <YStack paddingTop={insets.top + 8} />
 
             <XStack
               alignItems="center"

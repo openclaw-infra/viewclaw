@@ -21,6 +21,8 @@ export default {
   chat: {
     placeholder: "向 ClawFlow 提问...",
     generating: "生成中",
+    sending: "发送中...",
+    sendFailed: "发送失败",
     emptyTitle: "向 ClawFlow 发送任务",
     emptyHint: '输入 "/" 使用快捷指令',
     tapMicToFinish: "点击麦克风结束录音",

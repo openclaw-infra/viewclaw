@@ -21,6 +21,8 @@ export default {
   chat: {
     placeholder: "Ask ClawFlow...",
     generating: "Generating",
+    sending: "Sending...",
+    sendFailed: "Send failed",
     emptyTitle: "Send a task to ClawFlow",
     emptyHint: 'Type "/" for quick commands',
     tapMicToFinish: "Tap mic to finish",

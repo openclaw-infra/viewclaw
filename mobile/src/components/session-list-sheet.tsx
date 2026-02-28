@@ -1,6 +1,7 @@
 import { memo, useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { FlatList, Pressable, Modal, StyleSheet, Animated, Dimensions, Easing, View, PanResponder } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, XStack, YStack } from "tamagui";
 import { useTranslation } from "react-i18next";
 import { Bot, X } from "@tamagui/lucide-icons";
@@ -205,6 +206,7 @@ export const SessionListSheet = memo(
   }: Props) => {
     const { colors } = useTheme();
     const { t } = useTranslation();
+    const insets = useSafeAreaInsets();
     const visibleSessions = useMemo(() => sessions.filter((s) => !s.id.startsWith("pending-")), [sessions]);
     const listItems = useMemo(() => buildSessionListItems(visibleSessions, t), [visibleSessions, t]);
     const [creating, setCreating] = useState(false);
@@ -332,6 +334,7 @@ export const SessionListSheet = memo(
         visible={visible}
         animationType="none"
         transparent
+        statusBarTranslucent
         onRequestClose={animatedClose}
       >
         <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
@@ -367,7 +370,7 @@ export const SessionListSheet = memo(
             shadowRadius={16}
             elevation={8}
           >
-            <YStack paddingTop={60} />
+            <YStack paddingTop={insets.top + 8} />
 
             <XStack
               alignItems="center"

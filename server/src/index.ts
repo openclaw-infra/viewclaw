@@ -352,6 +352,16 @@ export const app = new Elysia()
     async ({ body }) => {
       const messageId = crypto.randomUUID();
       const sessionId = body.sessionId ?? "default";
+      const sessionKey = await resolveSessionKey(sessionId, body.agentId);
+      if (!sessionKey) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: `Session key not found for sessionId=${sessionId}. Please refresh sessions or create a new session.`,
+          }),
+          { status: 404, headers: { "content-type": "application/json" } },
+        );
+      }
 
       const prevController = activeRuns.get(sessionId);
       if (prevController) {
@@ -367,11 +377,24 @@ export const app = new Elysia()
       const abortController = new AbortController();
       activeRuns.set(sessionId, abortController);
 
+      if (body.content.trim() || body.imagePaths?.length) {
+        emitEvent({
+          type: "message",
+          sessionId,
+          messageId,
+          payload: {
+            role: "user",
+            content: body.content,
+            ...(body.imagePaths?.length ? { imagePaths: body.imagePaths } : {}),
+          },
+        });
+      }
+
       muteWatcher(sessionId);
 
-      const sessionKey = await resolveSessionKey(sessionId);
       const result = await sendMessage({
         content: body.content,
+        imagePaths: body.imagePaths,
         agentId: body.agentId,
         sessionKey,
         signal: abortController.signal,
@@ -399,6 +422,7 @@ export const app = new Elysia()
       body: t.Object({
         sessionId: t.Optional(t.String()),
         content: t.String(),
+        imagePaths: t.Optional(t.Array(t.String())),
         agentId: t.Optional(t.String()),
       }),
     }
@@ -613,6 +637,19 @@ export const app = new Elysia()
         const sessionId = body.sessionId ?? "default";
         const isNewSession = !!body.newSession;
         const agentId = body.agentId ?? "main";
+        const sessionKey = isNewSession ? undefined : await resolveSessionKey(sessionId, agentId);
+        if (!isNewSession && !sessionKey) {
+          ws.send(JSON.stringify({
+            type: "error",
+            sessionId,
+            messageId,
+            payload: {
+              message: `Session key not found for sessionId=${sessionId}. Please refresh sessions or create a new session.`,
+            },
+            ts: Date.now(),
+          }));
+          return;
+        }
 
         const prevController = activeRuns.get(sessionId);
         if (prevController) {
@@ -625,15 +662,6 @@ export const app = new Elysia()
           });
         }
 
-        ws.send(JSON.stringify({ type: "ack", sessionId, messageId, ts: Date.now() }));
-
-        const abortController = new AbortController();
-        activeRuns.set(sessionId, abortController);
-
-        if (!isNewSession) muteWatcher(sessionId);
-
-        const sessionKey = isNewSession ? undefined : await resolveSessionKey(sessionId);
-
         let streamSeq = 0;
         const emitStream = isNewSession
           ? (packet: { type: string; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
@@ -642,6 +670,26 @@ export const app = new Elysia()
           : (packet: { type: string; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
               emitEvent(packet);
             };
+
+        ws.send(JSON.stringify({ type: "ack", sessionId, messageId, ts: Date.now() }));
+
+        if (body.content.trim() || body.imagePaths?.length) {
+          emitStream({
+            type: "message",
+            sessionId,
+            messageId,
+            payload: {
+              role: "user",
+              content: body.content,
+              ...(body.imagePaths?.length ? { imagePaths: body.imagePaths } : {}),
+            },
+          });
+        }
+
+        const abortController = new AbortController();
+        activeRuns.set(sessionId, abortController);
+
+        if (!isNewSession) muteWatcher(sessionId);
 
         sendMessage({
           content: body.content,
