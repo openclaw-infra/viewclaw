@@ -92,6 +92,7 @@ export default {
     gatewayCount: "已配置 {{count}} 个网关",
     gatewayCount_other: "已配置 {{count}} 个网关",
     noGateways: "暂无网关配置",
+    urlFormatHint: "请输入有效的 WebSocket 地址（ws:// 或 wss://）",
     del: "删除",
   },
   contextMenu: {

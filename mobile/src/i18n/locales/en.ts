@@ -92,6 +92,7 @@ export default {
     gatewayCount: "{{count}} gateway configured",
     gatewayCount_other: "{{count}} gateways configured",
     noGateways: "No gateways configured",
+    urlFormatHint: "Enter a valid WebSocket URL (ws:// or wss://)",
     del: "Del",
   },
   contextMenu: {
