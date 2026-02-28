@@ -67,7 +67,7 @@ export const ChatHeader = ({
       borderBottomWidth={1}
       borderColor={colors.border.subtle}
     >
-      <YStack gap={4}>
+      <YStack gap={4} flex={1} overflow="hidden">
         <XStack alignItems="center" gap={6}>
           <Image source={logoIcon} style={{ width: 26, height: 26 }} resizeMode="contain" />
           <Text color={colors.brand.blue} fontSize={20} fontWeight="800" letterSpacing={-0.5}>
@@ -78,16 +78,15 @@ export const ChatHeader = ({
           </Text>
         </XStack>
         <XStack alignItems="center" gap={6}>
-          <Pressable onPress={onSessionPress}>
-            <XStack alignItems="center" gap={6}>
-              <Animated.View style={{ opacity: infoAnim }}>
+          <Pressable onPress={onSessionPress} style={{ flexShrink: 1 }}>
+            <XStack alignItems="center" gap={6} flexShrink={1}>
+              <Animated.View style={{ opacity: infoAnim, flexShrink: 1 }}>
                 {sessionTitle ? (
                   <Text
                     color={colors.text.secondary}
                     fontSize={12}
                     fontWeight="500"
                     numberOfLines={1}
-                    maxWidth={160}
                   >
                     {sessionTitle}
                   </Text>
@@ -103,6 +102,7 @@ export const ChatHeader = ({
                   paddingHorizontal={6}
                   paddingVertical={1}
                   borderRadius={4}
+                  flexShrink={0}
                 >
                   <Text color={colors.brand.blue} fontSize={10} fontWeight="600">
                     {agentId}
@@ -115,6 +115,7 @@ export const ChatHeader = ({
                   paddingHorizontal={6}
                   paddingVertical={1}
                   borderRadius={4}
+                  flexShrink={0}
                 >
                   <Text color={colors.text.muted} fontSize={10} fontWeight="600">
                     {sessionCount}
@@ -125,7 +126,7 @@ export const ChatHeader = ({
             </XStack>
           </Pressable>
           {context && (
-            <Animated.View style={{ opacity: infoAnim }}>
+            <Animated.View style={{ opacity: infoAnim, flexShrink: 0 }}>
               <XStack alignItems="center" gap={4} marginLeft={2}>
                 <Text color={colors.text.muted} fontSize={10} opacity={0.5}>·</Text>
                 <View style={[ctxStyles.bar, { backgroundColor: colors.bg.tertiary }]}>
@@ -151,7 +152,7 @@ export const ChatHeader = ({
         </XStack>
       </YStack>
 
-      <XStack alignItems="center" gap={8}>
+      <XStack alignItems="center" gap={8} flexShrink={0}>
         <Pressable onPress={onGatewayPress} hitSlop={8}>
           <XStack alignItems="center" gap={5}>
             <YStack
