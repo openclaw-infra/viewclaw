@@ -2,14 +2,27 @@ import { readdir, stat, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { UPLOAD_CLEANUP_INTERVAL_MIN, UPLOAD_MAX_AGE_MIN } from "./config";
 import { getWorkspaceDir } from "./openclaw-client";
+import { isPluginMode, getWorkspaceDirFromKernel, log } from "./kernel";
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
 const UPLOAD_SUBDIR = ".clawflow-uploads";
 
-async function cleanStaleUploads(): Promise<number> {
+/**
+ * In plugin mode, files are written directly to the workspace.
+ * The cleaner still runs to remove legacy temp files.
+ */
+export async function getUploadDir(): Promise<string> {
+  if (isPluginMode()) {
+    const ws = getWorkspaceDirFromKernel();
+    if (ws) return ws;
+  }
   const workspace = await getWorkspaceDir();
-  const uploadDir = join(workspace, UPLOAD_SUBDIR);
+  return join(workspace, UPLOAD_SUBDIR);
+}
+
+async function cleanStaleUploads(): Promise<number> {
+  const uploadDir = await getUploadDir();
 
   let entries: string[];
   try {
@@ -36,19 +49,19 @@ async function cleanStaleUploads(): Promise<number> {
   }
 
   if (removed > 0) {
-    console.log(`[upload-cleaner] removed ${removed} stale file(s) from ${uploadDir}`);
+    log.info(`[upload-cleaner] removed ${removed} stale file(s) from ${uploadDir}`);
   }
   return removed;
 }
 
 export function startUploadCleaner(): void {
   if (UPLOAD_CLEANUP_INTERVAL_MIN <= 0) {
-    console.log("[upload-cleaner] disabled (UPLOAD_CLEANUP_INTERVAL_MIN=0)");
+    log.info("[upload-cleaner] disabled (UPLOAD_CLEANUP_INTERVAL_MIN=0)");
     return;
   }
 
   const intervalMs = UPLOAD_CLEANUP_INTERVAL_MIN * 60_000;
-  console.log(
+  log.info(
     `[upload-cleaner] will clean files older than ${UPLOAD_MAX_AGE_MIN}min every ${UPLOAD_CLEANUP_INTERVAL_MIN}min`,
   );
 

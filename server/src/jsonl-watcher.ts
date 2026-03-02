@@ -1,6 +1,7 @@
 import { open, stat } from "node:fs/promises";
 import { JSONL_POLL_INTERVAL_MS } from "./config";
 import { emitEvent } from "./ws-manager";
+import { isPluginMode, log } from "./kernel";
 import type { OpenClawJsonlEntry, OpenClawMessage } from "./types";
 
 type Watcher = {
@@ -18,6 +19,28 @@ const streamingSessions = new Set<string>();
 
 export const muteWatcher = (sessionId: string) => { streamingSessions.add(sessionId); };
 export const unmuteWatcher = (sessionId: string) => { streamingSessions.delete(sessionId); };
+
+// ── Plugin-mode event bus bridge ────────────────────────────────────
+// In plugin mode, agent events arrive via OpenClaw lifecycle hooks
+// (registered in server/index.ts). The bridge flag prevents JSONL
+// watchers from being started for real-time monitoring.
+
+let eventBusBridgeActive = false;
+
+export const startEventBusBridge = (): boolean => {
+  if (!isPluginMode()) return false;
+  eventBusBridgeActive = true;
+  log.info("Event bus bridge active (JSONL watchers suppressed for real-time events)");
+  return true;
+};
+
+export const stopEventBusBridge = () => {
+  eventBusBridgeActive = false;
+};
+
+export const isEventBusBridgeActive = () => eventBusBridgeActive;
+
+// ── Entry classification (shared between watcher and history) ───────
 
 export const classifyEntry = (entry: OpenClawJsonlEntry): {
   eventType: "message" | "thought" | "action" | "observation" | "status" | "error";
@@ -143,6 +166,8 @@ const extractThinkingSummary = (content?: Array<{ type: string; thinkingSignatur
   }
   return undefined;
 };
+
+// ── JSONL file watcher (used for history + standalone real-time) ─────
 
 export const startWatcher = async (sessionId: string, logFile: string) => {
   if (watchers.has(sessionId)) return;

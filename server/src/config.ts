@@ -1,8 +1,15 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { isPluginMode, getPortFromKernel, getTokenFromKernel } from "./kernel";
 
-export const PORT = Number(process.env.PORT ?? 3000);
+export const PORT = (() => {
+  if (isPluginMode()) {
+    const kPort = getPortFromKernel();
+    if (kPort) return kPort;
+  }
+  return Number(process.env.PORT ?? 3000);
+})();
 
 export const OPENCLAW_HOME = process.env.OPENCLAW_HOME ?? join(homedir(), ".openclaw");
 export const OPENCLAW_BASE_URL = process.env.OPENCLAW_BASE_URL ?? "http://127.0.0.1:18789";
@@ -28,6 +35,11 @@ export const normalizeToken = (token?: string | null): string => {
 let cachedToken: string | null = null;
 
 export const getGatewayToken = async (): Promise<string> => {
+  if (isPluginMode()) {
+    const kToken = getTokenFromKernel();
+    if (kToken) return kToken;
+  }
+
   const envToken = normalizeToken(
     process.env.OPENCLAW_TOKEN ?? process.env.OPENCLAW_AUTH_TOKEN ?? process.env.OPENCLAW_GATEWAY_TOKEN
   );

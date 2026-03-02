@@ -1,0 +1,21 @@
+{
+  "id": "clawflow",
+  "name": "ClawFlow",
+  "description": "ClawFlow mobile companion — Elysia WebSocket/HTTP gateway for iOS app.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "port": {
+        "type": "number"
+      }
+    }
+  },
+  "uiHints": {
+    "port": {
+      "label": "Server Port",
+      "help": "Port for the ClawFlow Elysia gateway (default: 3000).",
+      "placeholder": "3000"
+    }
+  }
+}

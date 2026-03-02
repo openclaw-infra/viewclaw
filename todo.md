@@ -65,7 +65,7 @@
 - [x] **快捷指令面板动画**
   快捷指令弹出面板增加入场/退场动画（200ms 滑入淡入 / 150ms 滑出淡出），支持暗色/亮色模式自适应
 
-- [ ] **全局交互动画优化（@tamagui/animations-moti）**
+- [x] **全局交互动画优化（@tamagui/animations-moti）**
   引入 `@tamagui/animations-moti` 动画驱动，在 `tamagui.config.ts` 中注册语义化动画 Token（quick / bouncy / lazy / breathe），覆盖以下场景：
   - **全局等待：流线呼吸灯** — 用户发送指令后、首个节点返回前，使用品牌蓝紫渐变 opacity 0.4↔1.0 循环呼吸（breathe），替代传统 Spinner
   - **节点流转：时间轴动画** — 过程展示器中节点推进时，竖线高度从 0→100% 使用 bouncy 弹性生长，状态图标完成时 quick 微弹 scale 1.2→1.0 + 颜色平滑过渡
@@ -95,3 +95,37 @@
 
 - [x] **多语言国际化（i18n）**
   引入 i18next + react-i18next + expo-localization，抽离全部硬编码英文文案为语言包（约 80+ 条，涉及 12 个文件），支持 English / 简体中文 / 跟随系统 三种模式，设置页面新增 Language 切换区域（与主题切换同风格），语言偏好持久化至 AsyncStorage
+
+## P4 — OpenClaw 插件化集成
+
+- [x] **插件入口改造（ChannelPlugin 接口）**
+  将 `server/src/index.ts` 改造为导出符合 `ChannelPlugin` 接口的插件对象，包含 `id: "viewclaw"`、`gateway.startAccount`（启动 Elysia 服务）、`gateway.stopAccount`（停止服务），使 OpenClaw 直接管理服务器生命周期
+
+- [x] **接入内存事件总线（替代 jsonl-watcher）**
+  在 `startAccount` 中调用 `onAgentEvent` 订阅内存事件总线，实现内存级实时推送（替代磁盘 JSONL 轮询），获取完整中间状态和思考过程。废除 `jsonl-watcher.ts` 用于实时监听的逻辑，仅保留其读取历史记录的能力
+
+- [x] **废除 openclaw-client.ts（直调执行引擎）**
+  移除现有的 HTTP 请求转发层 `openclaw-client.ts`，改为直接调用 `commands/agent.ts` 中的 `agentCommand` 函数，消息直接进入执行引擎，消除网络层跳转开销，支持更复杂的上下文注入
+
+- [x] **废除自定义 Session 管理（接入内核会话）**
+  移除自定义的 Session 管理代码，改用 OpenClaw 内核的 `config/sessions.ts`（`loadSessionEntry` / `updateSessionStore`），与 TUI、WebUI 共享同一会话数据库，实现状态实时同步
+
+- [x] **废除配置硬编码（接入 loadConfig）**
+  移除服务端中硬编码的端口、路径等配置，改为直接调用 `config/config.ts` 中的 `loadConfig()` 读取 `~/.openclaw/openclaw.json` 用户设置（API Key、模型偏好、工作目录等）
+
+- [x] **废除自定义上传管理（工作空间写入）**
+  移除自定义的文件上传管理逻辑，改为将文件直接写入 `loadConfig().agents.defaults.workspace`，Agent 会自动在工作空间中发现并处理这些文件
+
+- [x] **插件安装与集成测试**
+  通过 `openclaw plugins install /path/to/viewclaw/server` 安装本地插件，验证完整链路：插件加载 → Elysia 启动 → 事件总线订阅 → 移动端 WebSocket 连接 → 实时消息推送 → 会话管理同步
+
+## P5 — npm 发布
+
+- [x] **发布元数据配置**
+  `package.json` name 改为 `clawflow`（用户安装命令 `openclaw plugins install clawflow`），elysia 版本锁定为 `^1.4.0`，添加 description/keywords/license/repository/files 等发布元数据，`openclaw.plugin.json` 和 `index.ts` 中 plugin id 同步更新为 `clawflow`
+
+- [x] **发布文件过滤**
+  创建 `.npmignore` 排除 `.env`、测试文件、`tsconfig.json`、`bun.lock` 等开发文件，`files` 白名单配合 `!src/*.test.ts` 排除测试文件
+
+- [x] **发布内容验证**
+  `npm pack --dry-run` 确认 tarball 仅包含 13 个必要文件（`index.ts`、`openclaw.plugin.json`、`src/` 核心源码），总大小 ~16KB

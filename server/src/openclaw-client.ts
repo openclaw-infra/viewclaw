@@ -1,6 +1,7 @@
 import { readdir, stat, readFile, access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { OPENCLAW_BASE_URL, OPENCLAW_HOME, getGatewayToken, normalizeToken } from "./config";
+import { isPluginMode, getWorkspaceDirFromKernel, log } from "./kernel";
 import type { SessionInfo, AgentInfo } from "./types";
 
 const sessionKeyCache = new Map<string, string>();
@@ -9,6 +10,10 @@ const looksLikeSessionKey = (value: string): boolean =>
   value === "main" || value.startsWith("agent:") || value.startsWith("cron:") || value.startsWith("hook:") || value.startsWith("node-");
 
 export const getWorkspaceDir = async (): Promise<string> => {
+  if (isPluginMode()) {
+    const ws = getWorkspaceDirFromKernel();
+    if (ws) return ws;
+  }
   try {
     const configPath = join(OPENCLAW_HOME, "openclaw.json");
     const raw = await readFile(configPath, "utf8");

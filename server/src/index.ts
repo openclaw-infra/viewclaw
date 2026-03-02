@@ -4,7 +4,7 @@ import { join, extname } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
 import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry, muteWatcher, unmuteWatcher } from "./jsonl-watcher";
-import type { OpenClawJsonlEntry, OpenClawMessage } from "./types";
+import type { OpenClawJsonlEntry, OpenClawMessage, EventType } from "./types";
 import {
   sendMessage,
   checkHealth,
@@ -14,7 +14,6 @@ import {
   getActiveSessionId,
   resolveSessionKey,
   createSession,
-  getWorkspaceDir,
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 
@@ -493,8 +492,8 @@ export const app = new Elysia()
       }
 
       try {
-        const workspace = await getWorkspaceDir();
-        const uploadDir = join(workspace, ".clawflow-uploads");
+        const { getUploadDir } = await import("./upload-cleaner");
+        const uploadDir = await getUploadDir();
         await mkdir(uploadDir, { recursive: true });
 
         const origName = (file as File).name ?? "image";
@@ -664,10 +663,10 @@ export const app = new Elysia()
 
         let streamSeq = 0;
         const emitStream = isNewSession
-          ? (packet: { type: string; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
+          ? (packet: { type: EventType; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
               ws.send(JSON.stringify({ ...packet, seq: ++streamSeq, ts: Date.now() }));
             }
-          : (packet: { type: string; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
+          : (packet: { type: EventType; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
               emitEvent(packet);
             };
 
@@ -695,7 +694,7 @@ export const app = new Elysia()
           content: body.content,
           imagePaths: body.imagePaths,
           agentId,
-          sessionKey,
+          sessionKey: sessionKey ?? undefined,
           signal: abortController.signal,
           onStream: (evt) => {
             emitStream({
@@ -754,6 +753,8 @@ export const app = new Elysia()
       }
     },
   });
+
+// ── Standalone mode (direct `bun run`) ──────────────────────────────
 
 if (import.meta.main) {
   app.listen(PORT);
