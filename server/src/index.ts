@@ -551,6 +551,17 @@ export const app = new Elysia()
     }
   )
 
+  .post("/_internal/event", async ({ body }) => {
+    const evt = body as any;
+    emitEvent({
+      type: evt.type ?? "status",
+      sessionId: evt.sessionId ?? evt.sessionKey ?? "",
+      messageId: evt.messageId,
+      payload: evt.payload ?? evt.data ?? {},
+    });
+    return { ok: true };
+  })
+
   .ws("/stream", {
     body: t.Union([
       t.Object({ type: t.Literal("ping") }),
@@ -757,7 +768,8 @@ export const app = new Elysia()
 // ── Standalone mode (direct `bun run`) ──────────────────────────────
 
 if (import.meta.main) {
-  app.listen(PORT);
+  const listenPort = Number(process.env.CLAWFLOW_PORT ?? PORT);
+  app.listen(listenPort);
   console.log(`ClawFlow Gateway running on http://${app.server?.hostname}:${app.server?.port}`);
   console.log(`  OpenClaw home: ${OPENCLAW_HOME}`);
   console.log(`  OpenClaw upstream: ${OPENCLAW_BASE_URL}`);

@@ -1,96 +1,165 @@
 /**
  * OpenClaw plugin entry point for ClawFlow.
  *
- * This file is loaded by the OpenClaw plugin registry. It must export
- * a default object conforming to OpenClawPluginDefinition.
- *
- * We avoid importing `openclaw/plugin-sdk` directly since this plugin
- * lives outside the OpenClaw node_modules tree. The `api` parameter
- * is injected at runtime by the OpenClaw loader.
+ * OpenClaw runs plugins in Node.js, but Elysia requires Bun for
+ * .listen() and WebSocket support. This entry spawns a Bun child
+ * process running src/index.ts and bridges plugin hook events via
+ * an internal HTTP endpoint on the Elysia server.
  */
+
+import { spawn, type ChildProcess } from "node:child_process";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 type PluginApi = {
   pluginConfig?: Record<string, unknown>;
   runtime: { config: { loadConfig: () => any } };
-  logger: { info: (msg: string) => void; warn: (msg: string) => void; error: (msg: string) => void };
-  registerService: (svc: { id: string; start: (ctx: any) => Promise<void>; stop?: (ctx: any) => Promise<void> }) => void;
+  logger: {
+    info: (msg: string) => void;
+    warn: (msg: string) => void;
+    error: (msg: string) => void;
+  };
+  registerService: (svc: {
+    id: string;
+    start: (ctx: any) => Promise<void>;
+    stop?: (ctx: any) => Promise<void>;
+  }) => void;
   on: (hook: string, handler: (...args: any[]) => any, opts?: any) => void;
 };
+
+let child: ChildProcess | null = null;
+let gatewayPort = 3000;
+
+async function postEvent(payload: Record<string, unknown>) {
+  try {
+    await fetch(`http://127.0.0.1:${gatewayPort}/_internal/event`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Server may not be ready yet or shutting down — silently ignore
+  }
+}
 
 const plugin = {
   id: "clawflow",
   name: "ClawFlow",
-  description: "ClawFlow mobile companion — Elysia WebSocket/HTTP gateway for iOS app.",
+  description:
+    "ClawFlow mobile companion — Elysia WebSocket/HTTP gateway for iOS app.",
 
   register(api: PluginApi) {
     const pluginCfg = api.pluginConfig ?? {};
-    const port = (pluginCfg as any).port ?? Number(process.env.PORT ?? 3000);
+    gatewayPort =
+      (pluginCfg as any).port ?? Number(process.env.PORT ?? 3000);
 
     api.registerService({
-      id: "viewclaw-gateway",
+      id: "clawflow-gateway",
 
       async start(ctx) {
-        const { bindPluginApi } = await import("./src/kernel.js");
-        bindPluginApi(api);
+        const entryScript = resolve(__dirname, "src", "index.ts");
 
-        const { app } = await import("./src/index.js");
-        app.listen(port);
-        ctx.logger.info(`ClawFlow Gateway listening on port ${port}`);
+        const env: Record<string, string> = {
+          ...process.env as any,
+          CLAWFLOW_PORT: String(gatewayPort),
+        };
 
-        const { startEventBusBridge } = await import("./src/jsonl-watcher.js");
-        startEventBusBridge();
+        try {
+          const config = api.runtime.config.loadConfig();
+          if (config?.gateway?.auth?.token) {
+            env.OPENCLAW_TOKEN = config.gateway.auth.token;
+          }
+        } catch {}
 
-        const { startUploadCleaner } = await import("./src/upload-cleaner.js");
-        startUploadCleaner();
+        child = spawn("bun", ["run", entryScript], {
+          cwd: __dirname,
+          env,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+
+        child.stdout?.on("data", (data: Buffer) => {
+          for (const line of data.toString().split("\n").filter(Boolean)) {
+            ctx.logger.info(`[clawflow] ${line}`);
+          }
+        });
+
+        child.stderr?.on("data", (data: Buffer) => {
+          for (const line of data.toString().split("\n").filter(Boolean)) {
+            ctx.logger.error(`[clawflow] ${line}`);
+          }
+        });
+
+        child.on("exit", (code) => {
+          if (code !== null && code !== 0) {
+            ctx.logger.error(
+              `[clawflow] Bun process exited with code ${code}`
+            );
+          }
+          child = null;
+        });
+
+        await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+        ctx.logger.info(
+          `ClawFlow Gateway spawned on port ${gatewayPort} (bun)`
+        );
       },
 
       async stop() {
-        const { stopEventBusBridge } = await import("./src/jsonl-watcher.js");
-        stopEventBusBridge();
-
-        const { stopUploadCleaner } = await import("./src/upload-cleaner.js");
-        stopUploadCleaner();
-
-        const { app } = await import("./src/index.js");
-        app.stop();
+        if (child) {
+          child.kill("SIGTERM");
+          await new Promise<void>((res) => {
+            const timeout = setTimeout(() => {
+              child?.kill("SIGKILL");
+              res();
+            }, 5000);
+            child?.on("exit", () => {
+              clearTimeout(timeout);
+              res();
+            });
+          });
+          child = null;
+        }
       },
     });
 
     api.on("after_tool_call", (event: any, ctx: any) => {
-      import("./src/kernel.js").then(({ broadcastAgentEvent }) => {
-        broadcastAgentEvent({
-          type: "observation",
-          sessionKey: ctx.sessionKey ?? "",
+      postEvent({
+        type: "observation",
+        sessionId: ctx.sessionKey ?? "",
+        payload: {
+          toolName: event.toolName,
+          result: event.result,
+          error: event.error,
+          durationMs: event.durationMs,
           agentId: ctx.agentId,
-          data: {
-            toolName: event.toolName,
-            result: event.result,
-            error: event.error,
-            durationMs: event.durationMs,
-          },
-        });
+        },
       });
     });
 
     api.on("session_start", (event: any, ctx: any) => {
-      import("./src/kernel.js").then(({ broadcastAgentEvent }) => {
-        broadcastAgentEvent({
-          type: "status",
-          sessionKey: ctx.sessionId ?? "",
+      postEvent({
+        type: "status",
+        sessionId: ctx.sessionId ?? "",
+        payload: {
+          subtype: "session_start",
+          sessionId: event.sessionId,
           agentId: ctx.agentId,
-          data: { subtype: "session_start", sessionId: event.sessionId },
-        });
+        },
       });
     });
 
     api.on("session_end", (event: any, ctx: any) => {
-      import("./src/kernel.js").then(({ broadcastAgentEvent }) => {
-        broadcastAgentEvent({
-          type: "status",
-          sessionKey: ctx.sessionId ?? "",
+      postEvent({
+        type: "status",
+        sessionId: ctx.sessionId ?? "",
+        payload: {
+          subtype: "session_end",
+          sessionId: event.sessionId,
+          messageCount: event.messageCount,
           agentId: ctx.agentId,
-          data: { subtype: "session_end", sessionId: event.sessionId, messageCount: event.messageCount },
-        });
+        },
       });
     });
   },
