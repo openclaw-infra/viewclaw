@@ -108,8 +108,79 @@ function Main() {
   return (
     <Theme name={themeName}>
       <View style={[styles.safe, { backgroundColor: colors.bg.primary, paddingTop: insets.top }]}>
-        {currentPage === "settings" ? (
-          <View style={[styles.flex, { paddingBottom: insets.bottom }]}>
+        <View style={styles.flex} {...swipePanResponder.panHandlers}>
+          <KeyboardAvoidingView
+            style={styles.flex}
+            behavior="padding"
+            keyboardVerticalOffset={insets.top - insets.bottom}
+          >
+            <YStack flex={1} backgroundColor={colors.bg.primary}>
+              <ChatHeader
+                sessionId={session.currentSessionId}
+                sessionTitle={currentSessionTitle}
+                agentId={currentAgentId}
+                status={session.connectionStatus}
+                sessionCount={session.sessions.length}
+                gatewayLabel={gateway.activeGateway?.label}
+                context={sessionContext.context}
+                onSessionPress={openSessionSheet}
+                onGatewayPress={openGatewaySheet}
+                onSettingsPress={openSettings}
+              />
+
+              <YStack flex={1}>
+                <ChatStream
+                  key={session.currentSessionId}
+                  stream={session.stream}
+                  onForward={handleForwardRequest}
+                  onReply={handleReplyRequest}
+                />
+              </YStack>
+
+              <ChatComposer
+                sending={session.sending}
+                gatewayHttpUrl={session.gatewayHttpUrl}
+                replyContent={replyContent}
+                onClearReply={clearReply}
+                onSend={(text, images) => session.sendMessage(text, images)}
+              />
+            </YStack>
+          </KeyboardAvoidingView>
+        </View>
+
+        <SessionListSheet
+          visible={sessionSheetVisible}
+          sessions={session.sessions}
+          agents={session.agents}
+          currentSessionId={session.currentSessionId}
+          onClose={closeSessionSheet}
+          onSelect={session.switchSession}
+          onCreate={session.createNewSession}
+          onRefresh={session.refreshSessions}
+        />
+
+        <GatewaySheet
+          visible={gatewaySheetVisible}
+          gateways={gateway.gateways}
+          activeId={gateway.activeId}
+          onClose={closeGatewaySheet}
+          onSwitch={gateway.switchGateway}
+          onAdd={gateway.addGateway}
+          onUpdate={gateway.updateGateway}
+          onRemove={gateway.removeGateway}
+        />
+
+        <ForwardSheet
+          visible={forwardContent !== null}
+          sessions={session.sessions}
+          currentSessionId={session.currentSessionId}
+          messagePreview={forwardContent ?? ""}
+          onClose={closeForwardSheet}
+          onSelect={handleForwardSelect}
+        />
+
+        {currentPage === "settings" && (
+          <View style={[StyleSheet.absoluteFill, { top: insets.top, paddingBottom: insets.bottom }]}>
             <SettingsScreen
               sessions={session.sessions}
               currentSessionId={session.currentSessionId}
@@ -119,79 +190,6 @@ function Main() {
               onRefreshSessions={session.refreshSessions}
             />
           </View>
-        ) : (
-          <>
-            <View style={styles.flex} {...swipePanResponder.panHandlers}>
-            <KeyboardAvoidingView
-              style={styles.flex}
-              behavior="padding"
-              keyboardVerticalOffset={insets.top - insets.bottom}
-            >
-              <YStack flex={1} backgroundColor={colors.bg.primary}>
-                <ChatHeader
-                  sessionId={session.currentSessionId}
-                  sessionTitle={currentSessionTitle}
-                  agentId={currentAgentId}
-                  status={session.connectionStatus}
-                  sessionCount={session.sessions.length}
-                  gatewayLabel={gateway.activeGateway?.label}
-                  context={sessionContext.context}
-                  onSessionPress={openSessionSheet}
-                  onGatewayPress={openGatewaySheet}
-                  onSettingsPress={openSettings}
-                />
-
-                <YStack flex={1}>
-                  <ChatStream
-                    key={session.currentSessionId}
-                    stream={session.stream}
-                    onForward={handleForwardRequest}
-                    onReply={handleReplyRequest}
-                  />
-                </YStack>
-
-                <ChatComposer
-                  sending={session.sending}
-                  gatewayHttpUrl={session.gatewayHttpUrl}
-                  replyContent={replyContent}
-                  onClearReply={clearReply}
-                  onSend={(text, images) => session.sendMessage(text, images)}
-                />
-              </YStack>
-            </KeyboardAvoidingView>
-            </View>
-
-            <SessionListSheet
-              visible={sessionSheetVisible}
-              sessions={session.sessions}
-              agents={session.agents}
-              currentSessionId={session.currentSessionId}
-              onClose={closeSessionSheet}
-              onSelect={session.switchSession}
-              onCreate={session.createNewSession}
-              onRefresh={session.refreshSessions}
-            />
-
-            <GatewaySheet
-              visible={gatewaySheetVisible}
-              gateways={gateway.gateways}
-              activeId={gateway.activeId}
-              onClose={closeGatewaySheet}
-              onSwitch={gateway.switchGateway}
-              onAdd={gateway.addGateway}
-              onUpdate={gateway.updateGateway}
-              onRemove={gateway.removeGateway}
-            />
-
-            <ForwardSheet
-              visible={forwardContent !== null}
-              sessions={session.sessions}
-              currentSessionId={session.currentSessionId}
-              messagePreview={forwardContent ?? ""}
-              onClose={closeForwardSheet}
-              onSelect={handleForwardSelect}
-            />
-          </>
         )}
       </View>
       <StatusBar style={isDark ? "light" : "dark"} />
