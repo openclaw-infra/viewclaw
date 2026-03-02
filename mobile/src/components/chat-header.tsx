@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
-import { Pressable, View, StyleSheet, Image, Animated } from "react-native";
-import { Text, XStack, YStack } from "tamagui";
+import { useEffect } from "react";
+import { Pressable, View, StyleSheet, Image } from "react-native";
+import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing as REasing, cancelAnimation } from "react-native-reanimated";
+import { Text, XStack, YStack, AnimatePresence } from "tamagui";
 import { Settings, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
 import type { ConnectionStatus, SessionContext } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
@@ -24,6 +25,49 @@ const ctxStyles = StyleSheet.create({
   bar: { width: 32, height: 3, borderRadius: 1.5, overflow: "hidden" },
   barFill: { height: 3, borderRadius: 1.5 },
 });
+
+const StatusDot = ({ color, pulsing }: { color: string; pulsing: boolean }) => {
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (pulsing) {
+      opacity.value = withRepeat(
+        withSequence(
+          withTiming(0.4, { duration: 800, easing: REasing.inOut(REasing.ease) }),
+          withTiming(1, { duration: 800, easing: REasing.inOut(REasing.ease) }),
+        ),
+        -1,
+      );
+      scale.value = withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 800, easing: REasing.inOut(REasing.ease) }),
+          withTiming(1, { duration: 800, easing: REasing.inOut(REasing.ease) }),
+        ),
+        -1,
+      );
+    } else {
+      cancelAnimation(opacity);
+      cancelAnimation(scale);
+      opacity.value = withTiming(1, { duration: 200 });
+      scale.value = withTiming(1, { duration: 200 });
+    }
+  }, [pulsing]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        { width: 8, height: 8, borderRadius: 4, backgroundColor: color },
+        animStyle,
+      ]}
+    />
+  );
+};
 
 const formatTokens = (n: number): string => {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -49,14 +93,6 @@ export const ChatHeader = ({
   const shortId = sessionId && !isPending ? sessionId.slice(0, 8) : "---";
 
   const showInfo = !isPending;
-  const infoAnim = useRef(new Animated.Value(showInfo ? 1 : 0)).current;
-  useEffect(() => {
-    Animated.timing(infoAnim, {
-      toValue: showInfo ? 1 : 0,
-      duration: 250,
-      useNativeDriver: true,
-    }).start();
-  }, [showInfo, infoAnim]);
 
   return (
     <XStack
@@ -80,22 +116,32 @@ export const ChatHeader = ({
         <XStack alignItems="center" gap={6}>
           <Pressable onPress={onSessionPress} style={{ flexShrink: 1 }}>
             <XStack alignItems="center" gap={6} flexShrink={1}>
-              <Animated.View style={{ opacity: infoAnim, flexShrink: 1 }}>
-                {sessionTitle ? (
-                  <Text
-                    color={colors.text.secondary}
-                    fontSize={12}
-                    fontWeight="500"
-                    numberOfLines={1}
+              <AnimatePresence>
+                {showInfo && (
+                  <YStack
+                    key="session-info"
+                    animation="lazy"
+                    enterStyle={{ opacity: 0 }}
+                    exitStyle={{ opacity: 0 }}
+                    flexShrink={1}
                   >
-                    {sessionTitle}
-                  </Text>
-                ) : !isPending ? (
-                  <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
-                    {shortId}
-                  </Text>
-                ) : null}
-              </Animated.View>
+                    {sessionTitle ? (
+                      <Text
+                        color={colors.text.secondary}
+                        fontSize={12}
+                        fontWeight="500"
+                        numberOfLines={1}
+                      >
+                        {sessionTitle}
+                      </Text>
+                    ) : !isPending ? (
+                      <Text color={colors.text.muted} fontSize={12} fontFamily="$mono">
+                        {shortId}
+                      </Text>
+                    ) : null}
+                  </YStack>
+                )}
+              </AnimatePresence>
               {agentId && (
                 <YStack
                   backgroundColor={colors.brand.blue + "18"}
@@ -125,42 +171,46 @@ export const ChatHeader = ({
               <ChevronDownIcon size={10} color={colors.text.muted} />
             </XStack>
           </Pressable>
-          {context && (
-            <Animated.View style={{ opacity: infoAnim, flexShrink: 0 }}>
-              <XStack alignItems="center" gap={4} marginLeft={2}>
-                <Text color={colors.text.muted} fontSize={10} opacity={0.5}>·</Text>
-                <View style={[ctxStyles.bar, { backgroundColor: colors.bg.tertiary }]}>
-                  <View
-                    style={[
-                      ctxStyles.barFill,
-                      {
-                        backgroundColor:
-                          context.percent > 85 ? colors.accent.red :
-                          context.percent > 65 ? colors.accent.yellow :
-                          colors.brand.blue,
-                        width: `${Math.min(context.percent, 100)}%` as any,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text color={colors.text.muted} fontSize={10} fontFamily="$mono">
-                  {formatTokens(context.usedTokens)}/{formatTokens(context.maxTokens)}
-                </Text>
-              </XStack>
-            </Animated.View>
-          )}
+          <AnimatePresence>
+            {context && showInfo && (
+              <YStack
+                key="context-bar"
+                animation="lazy"
+                enterStyle={{ opacity: 0 }}
+                exitStyle={{ opacity: 0 }}
+                flexShrink={0}
+              >
+                <XStack alignItems="center" gap={4} marginLeft={2}>
+                  <Text color={colors.text.muted} fontSize={10} opacity={0.5}>·</Text>
+                  <View style={[ctxStyles.bar, { backgroundColor: colors.bg.tertiary }]}>
+                    <YStack
+                      animation="lazy"
+                      style={[
+                        ctxStyles.barFill,
+                        {
+                          backgroundColor:
+                            context.percent > 85 ? colors.accent.red :
+                            context.percent > 65 ? colors.accent.yellow :
+                            colors.brand.blue,
+                          width: `${Math.min(context.percent, 100)}%` as any,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text color={colors.text.muted} fontSize={10} fontFamily="$mono">
+                    {formatTokens(context.usedTokens)}/{formatTokens(context.maxTokens)}
+                  </Text>
+                </XStack>
+              </YStack>
+            )}
+          </AnimatePresence>
         </XStack>
       </YStack>
 
       <XStack alignItems="center" gap={8} flexShrink={0}>
         <Pressable onPress={onGatewayPress} hitSlop={8}>
           <XStack alignItems="center" gap={5}>
-            <YStack
-              width={8}
-              height={8}
-              borderRadius={4}
-              backgroundColor={statusColor}
-            />
+            <StatusDot color={statusColor} pulsing={status === "connecting"} />
             {gatewayLabel && (
               <Text color={colors.text.muted} fontSize={11}>
                 {gatewayLabel}
@@ -168,7 +218,7 @@ export const ChatHeader = ({
             )}
           </XStack>
         </Pressable>
-        <Pressable onPress={onSettingsPress}>
+        <Pressable onPress={onSettingsPress} hitSlop={4}>
           <YStack
             width={32}
             height={32}

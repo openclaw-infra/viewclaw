@@ -94,10 +94,11 @@ export const ForwardSheet = memo(
 
     useEffect(() => {
       if (visible) {
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: 0,
-          duration: 300,
-          easing: Easing.out(Easing.cubic),
+          damping: 20,
+          mass: 1,
+          stiffness: 150,
           useNativeDriver: true,
         }).start();
       } else {
@@ -106,10 +107,10 @@ export const ForwardSheet = memo(
     }, [visible, slideAnim, screenHeight]);
 
     const animatedClose = useCallback(() => {
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: screenHeight,
-        duration: 250,
-        easing: Easing.in(Easing.cubic),
+        damping: 20,
+        stiffness: 250,
         useNativeDriver: true,
       }).start(() => onClose());
     }, [slideAnim, screenHeight, onClose]);

@@ -11,6 +11,7 @@
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
     "@ronradtke/react-native-markdown-display": "^8.1.0",
+    "@tamagui/animations-moti": "^2.0.0-rc.21",
     "@tamagui/babel-plugin": "2.0.0-rc.17",
     "@tamagui/config": "2.0.0-rc.17",
     "@tamagui/core": "2.0.0-rc.17",
@@ -25,6 +26,7 @@
     "expo-status-bar": "~3.0.9",
     "expo-video": "~3.0.16",
     "i18next": "^25.8.13",
+    "moti": "^0.30.0",
     "react": "19.1.0",
     "react-i18next": "^16.5.4",
     "react-native": "0.81.5",

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, View, Image, Easing } from "react-native";
+import { YStack } from "tamagui";
 import { useTheme } from "../theme/theme-context";
 
 const LOGO = require("../../assets/logo-icon.png");
 
-const BREATH_DURATION = 2000;
 const FADE_OUT_DURATION = 400;
 const MIN_DISPLAY_MS = 1500;
 
@@ -15,7 +15,6 @@ type Props = {
 
 export function SplashScreen({ ready, onFinish }: Props) {
   const { colors } = useTheme();
-  const breathAnim = useRef(new Animated.Value(0)).current;
   const fadeOut = useRef(new Animated.Value(1)).current;
   const [minTimePassed, setMinTimePassed] = useState(false);
 
@@ -23,19 +22,6 @@ export function SplashScreen({ ready, onFinish }: Props) {
     const timer = setTimeout(() => setMinTimePassed(true), MIN_DISPLAY_MS);
     return () => clearTimeout(timer);
   }, []);
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(breathAnim, {
-        toValue: 1,
-        duration: BREATH_DURATION,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true,
-      }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [breathAnim]);
 
   useEffect(() => {
     if (!ready || !minTimePassed) return;
@@ -47,16 +33,6 @@ export function SplashScreen({ ready, onFinish }: Props) {
     }).start(() => onFinish());
   }, [ready, minTimePassed, fadeOut, onFinish]);
 
-  const scale = breathAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [1, 1.06, 1],
-  });
-
-  const opacity = breathAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.85, 1, 0.85],
-  });
-
   return (
     <Animated.View
       style={[
@@ -65,28 +41,39 @@ export function SplashScreen({ ready, onFinish }: Props) {
       ]}
     >
       <View style={styles.content}>
-        <Animated.View style={{ transform: [{ scale }], opacity }}>
+        <YStack
+          animation="lazy"
+          scale={1}
+          opacity={1}
+          enterStyle={{ scale: 1.03, opacity: 0 }}
+        >
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
-        </Animated.View>
+        </YStack>
 
         <View style={styles.brandRow}>
-          <Animated.Text
-            style={[styles.brandText, { color: colors.brand.blue, opacity }]}
-          >
-            Claw
-          </Animated.Text>
-          <Animated.Text
-            style={[styles.brandText, { color: colors.brand.purple, opacity }]}
-          >
-            Flow
-          </Animated.Text>
+          <YStack animation="lazy" opacity={1} enterStyle={{ opacity: 0 }}>
+            <Animated.Text
+              style={[styles.brandText, { color: colors.brand.blue }]}
+            >
+              Claw
+            </Animated.Text>
+          </YStack>
+          <YStack animation="lazy" opacity={1} enterStyle={{ opacity: 0 }}>
+            <Animated.Text
+              style={[styles.brandText, { color: colors.brand.purple }]}
+            >
+              Flow
+            </Animated.Text>
+          </YStack>
         </View>
 
-        <Animated.Text
-          style={[styles.tagline, { color: colors.text.muted, opacity }]}
-        >
-          AI Agent, at your fingertips
-        </Animated.Text>
+        <YStack animation="lazy" opacity={1} enterStyle={{ opacity: 0 }}>
+          <Animated.Text
+            style={[styles.tagline, { color: colors.text.muted }]}
+          >
+            AI Agent, at your fingertips
+          </Animated.Text>
+        </YStack>
       </View>
     </Animated.View>
   );

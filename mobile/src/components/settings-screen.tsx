@@ -112,19 +112,20 @@ export const SettingsScreen = memo(
     const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
     useEffect(() => {
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: 0,
-        duration: 300,
-        easing: Easing.out(Easing.cubic),
+        damping: 20,
+        mass: 1,
+        stiffness: 180,
         useNativeDriver: true,
       }).start();
     }, [slideAnim]);
 
     const handleBack = useCallback(() => {
-      Animated.timing(slideAnim, {
+      Animated.spring(slideAnim, {
         toValue: SCREEN_WIDTH,
-        duration: 250,
-        easing: Easing.in(Easing.cubic),
+        damping: 20,
+        stiffness: 250,
         useNativeDriver: true,
       }).start(() => onBack());
     }, [slideAnim, onBack]);

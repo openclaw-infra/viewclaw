@@ -41,10 +41,11 @@ export const MessageContextMenu = memo(
     useEffect(() => {
       if (visible) {
         Animated.parallel([
-          Animated.timing(scale, {
+          Animated.spring(scale, {
             toValue: 1,
-            duration: MENU_ANIM_DURATION,
-            easing: Easing.out(Easing.back(1.4)),
+            damping: 18,
+            mass: 1,
+            stiffness: 200,
             useNativeDriver: true,
           }),
           Animated.timing(opacity, {
@@ -62,10 +63,10 @@ export const MessageContextMenu = memo(
 
     const dismiss = useCallback(() => {
       Animated.parallel([
-        Animated.timing(scale, {
+        Animated.spring(scale, {
           toValue: 0,
-          duration: 120,
-          easing: Easing.in(Easing.ease),
+          damping: 20,
+          stiffness: 250,
           useNativeDriver: true,
         }),
         Animated.timing(opacity, {

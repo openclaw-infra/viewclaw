@@ -221,16 +221,17 @@ export const SessionListSheet = memo(
     useEffect(() => {
       if (visible) {
         Animated.parallel([
-          Animated.timing(slideAnim, {
+          Animated.spring(slideAnim, {
             toValue: 0,
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
+            damping: 20,
+            mass: 1,
+            stiffness: 180,
             useNativeDriver: true,
           }),
-          Animated.timing(backdropAnim, {
+          Animated.spring(backdropAnim, {
             toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
+            damping: 20,
+            stiffness: 180,
             useNativeDriver: true,
           }),
         ]).start();
@@ -242,16 +243,16 @@ export const SessionListSheet = memo(
 
     const animatedClose = useCallback(() => {
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: -drawerWidth,
-          duration: 250,
-          easing: Easing.in(Easing.cubic),
+          damping: 20,
+          stiffness: 250,
           useNativeDriver: true,
         }),
-        Animated.timing(backdropAnim, {
+        Animated.spring(backdropAnim, {
           toValue: 0,
-          duration: 250,
-          easing: Easing.in(Easing.cubic),
+          damping: 20,
+          stiffness: 250,
           useNativeDriver: true,
         }),
       ]).start(() => onClose());
@@ -268,16 +269,16 @@ export const SessionListSheet = memo(
         onPanResponderRelease: (_, g) => {
           if (g.dx < -SWIPE_THRESHOLD || g.vx < -0.5) {
             Animated.parallel([
-              Animated.timing(slideAnim, {
+              Animated.spring(slideAnim, {
                 toValue: -drawerWidth,
-                duration: 200,
-                easing: Easing.in(Easing.cubic),
+                damping: 20,
+                stiffness: 250,
                 useNativeDriver: true,
               }),
-              Animated.timing(backdropAnim, {
+              Animated.spring(backdropAnim, {
                 toValue: 0,
-                duration: 200,
-                easing: Easing.in(Easing.cubic),
+                damping: 20,
+                stiffness: 250,
                 useNativeDriver: true,
               }),
             ]).start(() => onClose());

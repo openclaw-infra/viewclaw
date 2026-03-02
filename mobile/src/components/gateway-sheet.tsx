@@ -259,16 +259,17 @@ const EditFormModal = memo(
 
     useEffect(() => {
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: 0,
-          duration: 350,
-          easing: Easing.out(Easing.cubic),
+          damping: 20,
+          mass: 1,
+          stiffness: 150,
           useNativeDriver: true,
         }),
-        Animated.timing(backdropAnim, {
+        Animated.spring(backdropAnim, {
           toValue: 1,
-          duration: 350,
-          easing: Easing.out(Easing.cubic),
+          damping: 20,
+          stiffness: 150,
           useNativeDriver: true,
         }),
       ]).start();
@@ -277,16 +278,16 @@ const EditFormModal = memo(
     const animatedDismiss = useCallback(
       (cb: () => void) => {
         Animated.parallel([
-          Animated.timing(slideAnim, {
+          Animated.spring(slideAnim, {
             toValue: screenHeight,
-            duration: 280,
-            easing: Easing.in(Easing.cubic),
+            damping: 20,
+            stiffness: 250,
             useNativeDriver: true,
           }),
-          Animated.timing(backdropAnim, {
+          Animated.spring(backdropAnim, {
             toValue: 0,
-            duration: 280,
-            easing: Easing.in(Easing.cubic),
+            damping: 20,
+            stiffness: 250,
             useNativeDriver: true,
           }),
         ]).start(cb);
@@ -512,16 +513,17 @@ export const GatewaySheet = memo(
     useEffect(() => {
       if (visible) {
         Animated.parallel([
-          Animated.timing(slideAnim, {
+          Animated.spring(slideAnim, {
             toValue: 0,
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
+            damping: 20,
+            mass: 1,
+            stiffness: 180,
             useNativeDriver: true,
           }),
-          Animated.timing(backdropAnim, {
+          Animated.spring(backdropAnim, {
             toValue: 1,
-            duration: 300,
-            easing: Easing.out(Easing.cubic),
+            damping: 20,
+            stiffness: 180,
             useNativeDriver: true,
           }),
         ]).start();
@@ -533,16 +535,16 @@ export const GatewaySheet = memo(
 
     const animatedClose = useCallback(() => {
       Animated.parallel([
-        Animated.timing(slideAnim, {
+        Animated.spring(slideAnim, {
           toValue: drawerWidth,
-          duration: 250,
-          easing: Easing.in(Easing.cubic),
+          damping: 20,
+          stiffness: 250,
           useNativeDriver: true,
         }),
-        Animated.timing(backdropAnim, {
+        Animated.spring(backdropAnim, {
           toValue: 0,
-          duration: 250,
-          easing: Easing.in(Easing.cubic),
+          damping: 20,
+          stiffness: 250,
           useNativeDriver: true,
         }),
       ]).start(() => onClose());
@@ -559,16 +561,16 @@ export const GatewaySheet = memo(
         onPanResponderRelease: (_, g) => {
           if (g.dx > SWIPE_THRESHOLD || g.vx > 0.5) {
             Animated.parallel([
-              Animated.timing(slideAnim, {
+              Animated.spring(slideAnim, {
                 toValue: drawerWidth,
-                duration: 200,
-                easing: Easing.in(Easing.cubic),
+                damping: 20,
+                stiffness: 250,
                 useNativeDriver: true,
               }),
-              Animated.timing(backdropAnim, {
+              Animated.spring(backdropAnim, {
                 toValue: 0,
-                duration: 200,
-                easing: Easing.in(Easing.cubic),
+                damping: 20,
+                stiffness: 250,
                 useNativeDriver: true,
               }),
             ]).start(() => onClose());

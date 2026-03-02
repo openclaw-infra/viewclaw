@@ -1,15 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Pressable, View, StyleSheet, Animated, Easing, LayoutAnimation, Platform, UIManager } from "react-native";
-import { Text, XStack, YStack } from "tamagui";
+import { Pressable, View, StyleSheet } from "react-native";
+import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, Easing as REasing, FadeInDown } from "react-native-reanimated";
+import { Text, XStack, YStack, AnimatePresence } from "tamagui";
 import { useTranslation } from "react-i18next";
 import { MessageCircle, Zap, ClipboardList, X, Check, ChevronDown as ChevronDownIcon } from "@tamagui/lucide-icons";
 import type { ExecutionLog } from "../types/gateway";
 import { useTheme } from "../theme/theme-context";
 import type { ColorPalette } from "../theme/colors";
-
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 type Props = {
   logs: ExecutionLog[];
@@ -28,20 +25,33 @@ const NodeIcon = ({ level, color }: { level: string; color: string }) => {
   }
 };
 
-const SpinnerDot = ({ color }: { color: string }) => {
-  const opacity = useRef(new Animated.Value(0.3)).current;
+const PulseDot = ({ color, delay = 0 }: { color: string; delay?: number }) => {
+  const opacity = useSharedValue(0.35);
+
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.3, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 700, easing: REasing.inOut(REasing.ease) }),
+          withTiming(0.35, { duration: 700, easing: REasing.inOut(REasing.ease) }),
+        ),
+        -1,
+      ),
     );
-    anim.start();
-    return () => anim.stop();
-  }, [opacity]);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
   return (
-    <Animated.View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: color, opacity }} />
+    <Reanimated.View
+      style={[
+        { width: 3, height: 3, borderRadius: 1.5, backgroundColor: color },
+        animStyle,
+      ]}
+    />
   );
 };
 
@@ -77,9 +87,9 @@ const getHeaderInfo = (logs: ExecutionLog[], colors: ColorPalette, t: (key: stri
 };
 
 const ExpandChevron = ({ color, expanded }: { color: string; expanded: boolean }) => (
-  <View style={{ transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}>
+  <YStack animation="quick" rotate={expanded ? "180deg" : "0deg"}>
     <ChevronDownIcon size={12} color={color} />
-  </View>
+  </YStack>
 );
 
 const TimelineNode = ({
@@ -101,97 +111,112 @@ const TimelineNode = ({
   const nodeIsRunning = isRunning && isLast && log.level === "action" && !log.detail;
 
   const toggleDetail = useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setDetailExpanded((p) => !p);
   }, []);
 
+  const entering = FadeInDown.duration(250).damping(20).stiffness(200);
+
   return (
-    <XStack gap={10}>
-      {/* Timeline column: dot + line */}
-      <YStack alignItems="center" width={20}>
-        <View
-          style={[
-            styles.dot,
-            {
-              backgroundColor: meta.color + "20",
-              borderColor: meta.color,
-            },
-          ]}
-        >
-          <View style={{ transform: [{ scale: 0.7 }] }}>
-            <NodeIcon level={log.level} color={meta.color} />
-          </View>
-        </View>
-        {!isLast && (
-          <View
-            style={[
-              styles.line,
-              { backgroundColor: colors.border.subtle },
-            ]}
-          />
-        )}
-      </YStack>
-
-      {/* Content column */}
-      <YStack flex={1} paddingBottom={isLast ? 0 : 12} gap={3}>
-        <Pressable onPress={hasDetail ? toggleDetail : undefined}>
-          <XStack alignItems="center" gap={6}>
-            <Text
-              color={meta.color}
-              fontSize={11}
-              fontWeight="700"
-              textTransform="uppercase"
-              letterSpacing={0.5}
-            >
-              {log.toolName ?? meta.label}
-            </Text>
-            {nodeIsRunning && (
-              <XStack gap={3} alignItems="center">
-                <SpinnerDot color={meta.color} />
-                <SpinnerDot color={meta.color} />
-                <SpinnerDot color={meta.color} />
-              </XStack>
-            )}
-            {hasDetail && (
-              <XStack marginLeft="auto">
-                <ExpandChevron color={colors.text.muted} expanded={detailExpanded} />
-              </XStack>
-            )}
-          </XStack>
-        </Pressable>
-
-        <Text
-          color={colors.text.secondary}
-          fontSize={12}
-          fontFamily="$mono"
-          numberOfLines={detailExpanded ? undefined : 2}
-          lineHeight={17}
-        >
-          {log.text}
-        </Text>
-
-        {detailExpanded && log.detail ? (
+    <Reanimated.View entering={entering}>
+      <XStack gap={10}>
+        {/* Timeline column: dot + line */}
+        <YStack alignItems="center" width={20}>
           <YStack
-            marginTop={4}
-            padding={8}
-            backgroundColor={colors.bg.codeBlock + "80"}
-            borderRadius={6}
-            borderWidth={1}
-            borderColor={colors.border.subtle}
+            animation="quick"
+            scale={1}
+            enterStyle={{ scale: 1.2 }}
+            style={[
+              styles.dot,
+              {
+                backgroundColor: meta.color + "20",
+                borderColor: meta.color,
+              },
+            ]}
           >
-            <Text
-              color={colors.text.muted}
-              fontSize={11}
-              fontFamily="$mono"
-              numberOfLines={16}
-              lineHeight={16}
-            >
-              {log.detail}
-            </Text>
+            <View style={{ transform: [{ scale: 0.7 }] }}>
+              <NodeIcon level={log.level} color={meta.color} />
+            </View>
           </YStack>
-        ) : null}
-      </YStack>
-    </XStack>
+          {!isLast && (
+            <YStack
+              animation="bouncy"
+              opacity={1}
+              enterStyle={{ opacity: 0 }}
+              style={[
+                styles.line,
+                { backgroundColor: colors.border.subtle },
+              ]}
+            />
+          )}
+        </YStack>
+
+        {/* Content column */}
+        <YStack flex={1} paddingBottom={isLast ? 0 : 12} gap={3}>
+          <Pressable onPress={hasDetail ? toggleDetail : undefined}>
+            <XStack alignItems="center" gap={6}>
+              <Text
+                color={meta.color}
+                fontSize={11}
+                fontWeight="700"
+                textTransform="uppercase"
+                letterSpacing={0.5}
+              >
+                {log.toolName ?? meta.label}
+              </Text>
+              {nodeIsRunning && (
+                <XStack gap={3} alignItems="center">
+                  <PulseDot color={meta.color} delay={0} />
+                  <PulseDot color={meta.color} delay={150} />
+                  <PulseDot color={meta.color} delay={300} />
+                </XStack>
+              )}
+              {hasDetail && (
+                <XStack marginLeft="auto">
+                  <ExpandChevron color={colors.text.muted} expanded={detailExpanded} />
+                </XStack>
+              )}
+            </XStack>
+          </Pressable>
+
+          <Text
+            color={colors.text.secondary}
+            fontSize={12}
+            fontFamily="$mono"
+            numberOfLines={detailExpanded ? undefined : 2}
+            lineHeight={17}
+          >
+            {log.text}
+          </Text>
+
+          <AnimatePresence>
+            {detailExpanded && log.detail ? (
+              <YStack
+                key="detail"
+                animation="bouncy"
+                marginTop={4}
+                padding={8}
+                backgroundColor={colors.bg.codeBlock + "80"}
+                borderRadius={6}
+                borderWidth={1}
+                borderColor={colors.border.subtle}
+                enterStyle={{ opacity: 0, scale: 0.95, y: -10 }}
+                exitStyle={{ opacity: 0, scale: 0.95, y: -10 }}
+              >
+                <Text
+                  color={colors.text.muted}
+                  fontSize={11}
+                  fontFamily="$mono"
+                  numberOfLines={16}
+                  lineHeight={16}
+                >
+                  {log.detail}
+                </Text>
+              </YStack>
+            ) : null}
+          </AnimatePresence>
+        </YStack>
+      </XStack>
+    </Reanimated.View>
   );
 };
 
@@ -212,7 +237,6 @@ export const ProcessCard = ({ logs }: Props) => {
     if ((overallStatus === "success" || overallStatus === "error") && !autoCollapsed.current) {
       autoCollapsed.current = true;
       const timer = setTimeout(() => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setCollapsed(true);
       }, 600);
       return () => clearTimeout(timer);
@@ -220,7 +244,6 @@ export const ProcessCard = ({ logs }: Props) => {
   }, [overallStatus]);
 
   const toggleCollapse = useCallback(() => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setCollapsed((p) => !p);
   }, []);
 
@@ -228,6 +251,7 @@ export const ProcessCard = ({ logs }: Props) => {
 
   return (
     <YStack
+      animation="bouncy"
       marginHorizontal={12}
       marginBottom={6}
       borderRadius={16}
@@ -241,6 +265,7 @@ export const ProcessCard = ({ logs }: Props) => {
             : colors.border.subtle
       }
       overflow="hidden"
+      enterStyle={{ opacity: 0, scale: 0.95, y: -10 }}
     >
       {/* Header */}
       <Pressable onPress={toggleCollapse}>
@@ -259,13 +284,17 @@ export const ProcessCard = ({ logs }: Props) => {
         >
           {isRunning ? (
             <XStack gap={3} alignItems="center" width={14} justifyContent="center">
-              <SpinnerDot color={headerIconColor} />
-              <SpinnerDot color={headerIconColor} />
+              <PulseDot color={headerIconColor} delay={0} />
+              <PulseDot color={headerIconColor} delay={200} />
             </XStack>
           ) : overallStatus === "error" ? (
-            <X size={14} color={headerIconColor} />
+            <YStack animation="quick" scale={1} enterStyle={{ scale: 1.3 }}>
+              <X size={14} color={headerIconColor} />
+            </YStack>
           ) : (
-            <Check size={14} color={headerIconColor} />
+            <YStack animation="quick" scale={1} enterStyle={{ scale: 1.3 }}>
+              <Check size={14} color={headerIconColor} />
+            </YStack>
           )}
 
           <Text
@@ -289,26 +318,32 @@ export const ProcessCard = ({ logs }: Props) => {
       </Pressable>
 
       {/* Timeline body */}
-      {!collapsed && visibleLogs.length > 0 && (
-        <YStack
-          paddingHorizontal={14}
-          paddingTop={4}
-          paddingBottom={12}
-          borderTopWidth={1}
-          borderTopColor={colors.border.subtle + "60"}
-        >
-          {visibleLogs.map((log, idx) => (
-            <TimelineNode
-              key={log.id}
-              log={log}
-              isLast={idx === visibleLogs.length - 1}
-              isRunning={isRunning}
-              colors={colors}
-              nodeMeta={nodeMeta}
-            />
-          ))}
-        </YStack>
-      )}
+      <AnimatePresence>
+        {!collapsed && visibleLogs.length > 0 && (
+          <YStack
+            key="timeline"
+            animation="bouncy"
+            paddingHorizontal={14}
+            paddingTop={4}
+            paddingBottom={12}
+            borderTopWidth={1}
+            borderTopColor={colors.border.subtle + "60"}
+            enterStyle={{ opacity: 0, scale: 0.95, y: -10 }}
+            exitStyle={{ opacity: 0, scale: 0.95, y: -10 }}
+          >
+            {visibleLogs.map((log, idx) => (
+              <TimelineNode
+                key={log.id}
+                log={log}
+                isLast={idx === visibleLogs.length - 1}
+                isRunning={isRunning}
+                colors={colors}
+                nodeMeta={nodeMeta}
+              />
+            ))}
+          </YStack>
+        )}
+      </AnimatePresence>
     </YStack>
   );
 };

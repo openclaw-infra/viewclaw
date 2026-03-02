@@ -1,6 +1,7 @@
 import { useRef, useEffect, useMemo, memo, useState, useCallback, createContext, useContext } from "react";
 import { FlatList, Animated, Easing, Image, Pressable, Modal, Dimensions, View, StyleSheet, type GestureResponderEvent, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
-import { Text, XStack, YStack } from "tamagui";
+import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withDelay, Easing as REasing } from "react-native-reanimated";
+import { Text, XStack, YStack, AnimatePresence } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { ArrowDown, Forward, Reply } from "@tamagui/lucide-icons";
@@ -29,29 +30,34 @@ type Props = {
 
 const StreamingCursor = () => {
   const { colors } = useTheme();
-  const opacity = useRef(new Animated.Value(1)).current;
+  const opacity = useSharedValue(1);
 
   useEffect(() => {
-    const anim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.2, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ])
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.15, { duration: 600, easing: REasing.inOut(REasing.ease) }),
+        withTiming(1, { duration: 600, easing: REasing.inOut(REasing.ease) }),
+      ),
+      -1,
     );
-    anim.start();
-    return () => anim.stop();
-  }, [opacity]);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
 
   return (
-    <Animated.View
-      style={{
-        width: 2,
-        height: 16,
-        backgroundColor: colors.brand.blue,
-        borderRadius: 1,
-        opacity,
-        marginLeft: 1,
-      }}
+    <Reanimated.View
+      style={[
+        {
+          width: 2,
+          height: 16,
+          backgroundColor: colors.brand.blue,
+          borderRadius: 1,
+          marginLeft: 1,
+        },
+        animStyle,
+      ]}
     />
   );
 };
@@ -228,6 +234,8 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
       <Pressable onLongPress={handleLongPress} delayLongPress={400}>
           <View style={{ position: "relative" }}>
           <YStack
+            animation="bouncy"
+            enterStyle={{ opacity: 0, y: 8, scale: 0.97 }}
             maxWidth={Dimensions.get("window").width * 0.82}
             paddingHorizontal={14}
             paddingVertical={10}
@@ -339,31 +347,43 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
   );
 });
 
-const TypingIndicator = () => {
-  const { colors } = useTheme();
-  const dot1 = useRef(new Animated.Value(0.3)).current;
-  const dot2 = useRef(new Animated.Value(0.3)).current;
-  const dot3 = useRef(new Animated.Value(0.3)).current;
+const TypingDot = ({ color, delay }: { color: string; delay: number }) => {
+  const opacity = useSharedValue(0.35);
 
   useEffect(() => {
-    const animate = (dot: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(dot, { toValue: 1, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0.3, duration: 400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        ])
-      );
-    const a1 = animate(dot1, 0);
-    const a2 = animate(dot2, 150);
-    const a3 = animate(dot3, 300);
-    a1.start(); a2.start(); a3.start();
-    return () => { a1.stop(); a2.stop(); a3.stop(); };
-  }, [dot1, dot2, dot3]);
+    opacity.value = withDelay(
+      delay,
+      withRepeat(
+        withSequence(
+          withTiming(1, { duration: 700, easing: REasing.inOut(REasing.ease) }),
+          withTiming(0.35, { duration: 700, easing: REasing.inOut(REasing.ease) }),
+        ),
+        -1,
+      ),
+    );
+  }, []);
 
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        { width: 6, height: 6, borderRadius: 3, backgroundColor: color },
+        animStyle,
+      ]}
+    />
+  );
+};
+
+const TypingIndicator = () => {
+  const { colors } = useTheme();
   return (
     <XStack justifyContent="flex-start" paddingHorizontal={12} marginBottom={8}>
       <XStack
+        animation="bouncy"
+        enterStyle={{ opacity: 0, scale: 0.9, y: 6 }}
         paddingHorizontal={14}
         paddingVertical={12}
         backgroundColor={colors.bubble.assistant}
@@ -374,18 +394,9 @@ const TypingIndicator = () => {
         gap={5}
         alignItems="center"
       >
-        {[dot1, dot2, dot3].map((dot, i) => (
-          <Animated.View
-            key={i}
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: colors.brand.blue,
-              opacity: dot,
-            }}
-          />
-        ))}
+        <TypingDot color={colors.brand.blue} delay={0} />
+        <TypingDot color={colors.brand.blue} delay={160} />
+        <TypingDot color={colors.brand.blue} delay={320} />
       </XStack>
     </XStack>
   );
@@ -538,57 +549,44 @@ const SCROLL_THRESHOLD = 200;
 const ScrollToBottomButton = memo(({ visible, onPress }: { visible: boolean; onPress: () => void }) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
-  const opacity = useRef(new Animated.Value(0)).current;
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    if (visible) {
-      setMounted(true);
-      Animated.timing(opacity, { toValue: 1, duration: 200, easing: Easing.out(Easing.ease), useNativeDriver: true }).start();
-    } else if (mounted) {
-      Animated.timing(opacity, { toValue: 0, duration: 150, easing: Easing.in(Easing.ease), useNativeDriver: true }).start(({ finished }) => {
-        if (finished) setMounted(false);
-      });
-    }
-  }, [visible]);
-
-  if (!mounted) return null;
 
   return (
-    <Animated.View
-      style={{
-        position: "absolute",
-        bottom: 12,
-        alignSelf: "center",
-        opacity,
-        transform: [{
-          translateY: opacity.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }),
-        }],
-      }}
-    >
-      <Pressable onPress={onPress}>
-        <XStack
-          backgroundColor={colors.bg.secondary}
-          borderRadius={20}
-          paddingHorizontal={14}
-          paddingVertical={8}
-          alignItems="center"
-          gap={6}
-          borderWidth={1}
-          borderColor={colors.border.subtle}
-          shadowColor="#000"
-          shadowOffset={{ width: 0, height: 2 }}
-          shadowOpacity={0.12}
-          shadowRadius={6}
-          elevation={4}
+    <AnimatePresence>
+      {visible && (
+        <YStack
+          key="scroll-btn"
+          animation="quick"
+          position="absolute"
+          bottom={12}
+          alignSelf="center"
+          enterStyle={{ opacity: 0, y: 8 }}
+          exitStyle={{ opacity: 0, y: 8 }}
         >
-          <ArrowDown size={14} color={colors.brand.blue} />
-          <Text color={colors.brand.blue} fontSize={12} fontWeight="600">
-            {t("chat.latestMessage")}
-          </Text>
-        </XStack>
-      </Pressable>
-    </Animated.View>
+          <Pressable onPress={onPress}>
+            <XStack
+              backgroundColor={colors.bg.secondary}
+              borderRadius={20}
+              paddingHorizontal={14}
+              paddingVertical={8}
+              alignItems="center"
+              gap={6}
+              borderWidth={1}
+              borderColor={colors.border.subtle}
+              shadowColor="#000"
+              shadowOffset={{ width: 0, height: 2 }}
+              shadowOpacity={0.12}
+              shadowRadius={6}
+              elevation={4}
+            >
+              <ArrowDown size={14} color={colors.brand.blue} />
+              <Text color={colors.brand.blue} fontSize={12} fontWeight="600">
+                {t("chat.latestMessage")}
+              </Text>
+            </XStack>
+          </Pressable>
+        </YStack>
+      )}
+    </AnimatePresence>
   );
 });
 

@@ -65,6 +65,17 @@
 - [x] **快捷指令面板动画**
   快捷指令弹出面板增加入场/退场动画（200ms 滑入淡入 / 150ms 滑出淡出），支持暗色/亮色模式自适应
 
+- [ ] **全局交互动画优化（@tamagui/animations-moti）**
+  引入 `@tamagui/animations-moti` 动画驱动，在 `tamagui.config.ts` 中注册语义化动画 Token（quick / bouncy / lazy / breathe），覆盖以下场景：
+  - **全局等待：流线呼吸灯** — 用户发送指令后、首个节点返回前，使用品牌蓝紫渐变 opacity 0.4↔1.0 循环呼吸（breathe），替代传统 Spinner
+  - **节点流转：时间轴动画** — 过程展示器中节点推进时，竖线高度从 0→100% 使用 bouncy 弹性生长，状态图标完成时 quick 微弹 scale 1.2→1.0 + 颜色平滑过渡
+  - **过程降噪：弹性折叠** — Thought/Action/Observation 卡片展开/收起使用 AnimatePresence + bouncy，配合 enterStyle/exitStyle（opacity:0, scale:0.95, y:-10）实现带空间深度的弹性展开，避免高度突变截断感
+  - **流式打字机与光斑** — 文字逐字出现不加动画（防掉帧），末尾追加光标 View 赋予 breathe 动画实现频闪指示
+  - **按钮与输入框微交互** — 所有可交互组件配置 pressStyle={{ scale: 0.96 }} + animation="quick" 实现物理按压感；输入框聚焦时 focusStyle 泛起品牌色光晕 + animation="lazy"
+  - **条件渲染退场保障** — 错误面板、收起的过程卡片等条件渲染 UI 统一包裹 AnimatePresence，赋予 enterStyle/exitStyle 确保退场动画完整执行
+  - **性能底线** — 海量执行日志长列表（ScrollView/FlatList）中禁用列表项内部复杂 animation，优先保障滚动帧率
+  动画曲线：quick（damping:20, mass:1.2, stiffness:250）/ bouncy（damping:15, mass:0.9, stiffness:150）/ lazy（damping:20, stiffness:60）/ breathe（timing, 2000ms loop）
+
 ## P3 — 品牌 & 设置 & 美化
 
 - [x] **项目名称修改**

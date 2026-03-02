@@ -24,39 +24,36 @@ const CommandRow = memo(
 
     return (
       <Pressable onPress={() => onSelect(item)}>
-        {({ pressed }) => (
-          <XStack
-            paddingHorizontal={16}
-            paddingVertical={10}
-            gap={8}
-            alignItems="center"
-            backgroundColor={pressed ? colors.bg.elevated : "transparent"}
+        <XStack
+          paddingHorizontal={16}
+          paddingVertical={10}
+          gap={8}
+          alignItems="center"
+        >
+          <View style={[rowStyles.dot, { backgroundColor: catColor }]} />
+          <Text
+            color={colors.text.primary}
+            fontSize={14}
+            fontWeight="600"
+            fontFamily="$mono"
+            flexShrink={0}
           >
-            <View style={[rowStyles.dot, { backgroundColor: catColor }]} />
-            <Text
-              color={colors.text.primary}
-              fontSize={14}
-              fontWeight="600"
-              fontFamily="$mono"
-              flexShrink={0}
-            >
-              {item.command}
-            </Text>
-            <Text
-              color={colors.text.muted}
-              fontSize={12}
-              numberOfLines={1}
-              flex={1}
-            >
-              {item.description}
-            </Text>
-            {item.immediate && (
-              <View style={[rowStyles.badge, { backgroundColor: catColor + "18" }]}>
-                <CornerDownLeft size={14} color={catColor} />
-              </View>
-            )}
-          </XStack>
-        )}
+            {item.command}
+          </Text>
+          <Text
+            color={colors.text.muted}
+            fontSize={12}
+            numberOfLines={1}
+            flex={1}
+          >
+            {item.description}
+          </Text>
+          {item.immediate && (
+            <View style={[rowStyles.badge, { backgroundColor: catColor + "18" }]}>
+              <CornerDownLeft size={14} color={catColor} />
+            </View>
+          )}
+        </XStack>
       </Pressable>
     );
   }

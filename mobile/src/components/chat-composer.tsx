@@ -1,8 +1,9 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Pressable, Alert, View, StyleSheet, Image, ScrollView, Animated, Easing } from "react-native";
+import { Pressable, Alert, View, StyleSheet, Image, ScrollView } from "react-native";
+import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, Easing as REasing } from "react-native-reanimated";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Input, Text, XStack, YStack } from "tamagui";
+import { Input, Text, XStack, YStack, AnimatePresence } from "tamagui";
 import { useTranslation } from "react-i18next";
 import { ImagePlus, Mic, Reply, Send, Square, X } from "@tamagui/lucide-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -37,6 +38,42 @@ const imgPreviewStyles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
 });
+
+const RecordingPulse = ({ color }: { color: string }) => {
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.4, { duration: 900, easing: REasing.inOut(REasing.ease) }),
+        withTiming(1, { duration: 900, easing: REasing.inOut(REasing.ease) }),
+      ),
+      -1,
+    );
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 900, easing: REasing.inOut(REasing.ease) }),
+        withTiming(1, { duration: 900, easing: REasing.inOut(REasing.ease) }),
+      ),
+      -1,
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Reanimated.View
+      style={[
+        { width: 8, height: 8, borderRadius: 4, backgroundColor: color },
+        animStyle,
+      ]}
+    />
+  );
+};
 
 export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearReply, onSend }: Props) => {
   const { colors } = useTheme();
@@ -128,107 +165,69 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
   const isTranscribing = voice.status === "transcribing";
   const isVoiceBusy = isRecording || isTranscribing;
 
-  const replyAnim = useRef(new Animated.Value(0)).current;
-  const [replyMounted, setReplyMounted] = useState(false);
   const hasReply = !!replyContent;
-
-  useEffect(() => {
-    if (hasReply) {
-      setReplyMounted(true);
-      Animated.timing(replyAnim, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start();
-    } else if (replyMounted) {
-      Animated.timing(replyAnim, {
-        toValue: 0,
-        duration: 150,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setReplyMounted(false);
-      });
-    }
-  }, [hasReply]);
-
   const slashVisible = !!slashState?.active;
-  const slashAnim = useRef(new Animated.Value(0)).current;
-  const [slashMounted, setSlashMounted] = useState(false);
-
-  useEffect(() => {
-    if (slashVisible) {
-      setSlashMounted(true);
-      Animated.timing(slashAnim, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start();
-    } else if (slashMounted) {
-      Animated.timing(slashAnim, {
-        toValue: 0,
-        duration: 150,
-        easing: Easing.in(Easing.ease),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setSlashMounted(false);
-      });
-    }
-  }, [slashVisible]);
 
   return (
     <YStack paddingBottom={insets.bottom}>
-      {slashMounted && (
-        <Animated.View
-          style={{
-            opacity: slashAnim,
-            transform: [{
-              translateY: slashAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [20, 0],
-              }),
-            }],
-          }}
-        >
-          <SlashCommandPanel filter={slashState?.filter ?? ""} onSelect={handleSelect} />
-        </Animated.View>
-      )}
+      <AnimatePresence>
+        {slashVisible && (
+          <YStack
+            key="slash-panel"
+            animation="quick"
+            enterStyle={{ opacity: 0, y: 20 }}
+            exitStyle={{ opacity: 0, y: 20 }}
+          >
+            <SlashCommandPanel filter={slashState?.filter ?? ""} onSelect={handleSelect} />
+          </YStack>
+        )}
+      </AnimatePresence>
 
-      {isRecording && (
-        <XStack
-          backgroundColor={colors.bg.secondary}
-          paddingHorizontal={16}
-          paddingVertical={8}
-          alignItems="center"
-          justifyContent="center"
-          gap={8}
-        >
-          <YStack width={8} height={8} borderRadius={4} backgroundColor={colors.accent.red} />
-          <Text color={colors.accent.red} fontSize={13} fontWeight="600" fontFamily="$mono">
-            {formatDuration(voice.durationMs)}
-          </Text>
-          <Text color={colors.text.muted} fontSize={12}>
-            {t("chat.tapMicToFinish")}
-          </Text>
-        </XStack>
-      )}
+      <AnimatePresence>
+        {isRecording && (
+          <XStack
+            key="recording-bar"
+            animation="quick"
+            enterStyle={{ opacity: 0, y: -8 }}
+            exitStyle={{ opacity: 0, y: -8 }}
+            backgroundColor={colors.bg.secondary}
+            paddingHorizontal={16}
+            paddingVertical={8}
+            alignItems="center"
+            justifyContent="center"
+            gap={8}
+          >
+            <RecordingPulse color={colors.accent.red} />
+            <Text color={colors.accent.red} fontSize={13} fontWeight="600" fontFamily="$mono">
+              {formatDuration(voice.durationMs)}
+            </Text>
+            <Text color={colors.text.muted} fontSize={12}>
+              {t("chat.tapMicToFinish")}
+            </Text>
+          </XStack>
+        )}
+      </AnimatePresence>
 
-      {isTranscribing && (
-        <XStack
-          backgroundColor={colors.bg.secondary}
-          paddingHorizontal={16}
-          paddingVertical={8}
-          alignItems="center"
-          justifyContent="center"
-          gap={8}
-        >
-          <Text color={colors.brand.blue} fontSize={13} fontWeight="600">
-            {t("chat.transcribing")}
-          </Text>
-        </XStack>
-      )}
+      <AnimatePresence>
+        {isTranscribing && (
+          <XStack
+            key="transcribing-bar"
+            animation="quick"
+            enterStyle={{ opacity: 0, y: -8 }}
+            exitStyle={{ opacity: 0, y: -8 }}
+            backgroundColor={colors.bg.secondary}
+            paddingHorizontal={16}
+            paddingVertical={8}
+            alignItems="center"
+            justifyContent="center"
+            gap={8}
+          >
+            <Text color={colors.brand.blue} fontSize={13} fontWeight="600">
+              {t("chat.transcribing")}
+            </Text>
+          </XStack>
+        )}
+      </AnimatePresence>
 
       <YStack
         backgroundColor={colors.bg.secondary}
@@ -267,6 +266,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
         )}
 
         <YStack
+          animation="lazy"
           backgroundColor={colors.bg.tertiary}
           borderRadius={14}
           borderWidth={1}
@@ -281,43 +281,40 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
           }
           overflow="hidden"
         >
-          {replyMounted && (
-            <Animated.View
-              style={{
-                opacity: replyAnim,
-                transform: [{
-                  translateY: replyAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-4, 0],
-                  }),
-                }],
-              }}
-            >
-              <XStack
-                paddingHorizontal={12}
-                paddingTop={8}
-                paddingBottom={6}
-                alignItems="center"
-                gap={6}
-                borderBottomWidth={StyleSheet.hairlineWidth}
-                borderBottomColor={colors.border.subtle}
+          <AnimatePresence>
+            {hasReply && (
+              <YStack
+                key="reply-preview"
+                animation="quick"
+                enterStyle={{ opacity: 0, y: -4 }}
+                exitStyle={{ opacity: 0, y: -4 }}
               >
-                <Reply size={12} color={colors.brand.blue} style={{ flexShrink: 0 }} />
-                <Text
-                  color={colors.text.muted}
-                  fontSize={12}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  flex={1}
+                <XStack
+                  paddingHorizontal={12}
+                  paddingTop={8}
+                  paddingBottom={6}
+                  alignItems="center"
+                  gap={6}
+                  borderBottomWidth={StyleSheet.hairlineWidth}
+                  borderBottomColor={colors.border.subtle}
                 >
-                  {replyContent}
-                </Text>
-                <Pressable onPress={onClearReply} hitSlop={8}>
-                  <X size={12} color={colors.text.muted} />
-                </Pressable>
-              </XStack>
-            </Animated.View>
-          )}
+                  <Reply size={12} color={colors.brand.blue} style={{ flexShrink: 0 }} />
+                  <Text
+                    color={colors.text.muted}
+                    fontSize={12}
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    flex={1}
+                  >
+                    {replyContent}
+                  </Text>
+                  <Pressable onPress={onClearReply} hitSlop={8}>
+                    <X size={12} color={colors.text.muted} />
+                  </Pressable>
+                </XStack>
+              </YStack>
+            )}
+          </AnimatePresence>
 
           <XStack alignItems="center" gap={6} paddingLeft={5} paddingRight={5} paddingVertical={4}>
             <Pressable onPress={pickImage} disabled={isVoiceBusy || sending || attachedImages.length >= 4}>
@@ -380,18 +377,20 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
 
             <Pressable onPress={submit} disabled={!canSend}>
               {canSend ? (
-                <LinearGradient
-                  colors={["#2CB5E8", "#8E2DE2"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={sendBtnStyles.gradient}
-                >
-                  {sending ? (
-                    <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
-                  ) : (
-                    <Send size={16} color="#FFFFFF" />
-                  )}
-                </LinearGradient>
+                <YStack>
+                  <LinearGradient
+                    colors={["#2CB5E8", "#8E2DE2"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={sendBtnStyles.gradient}
+                  >
+                    {sending ? (
+                      <Text color="#FFFFFF" fontSize={14} fontWeight="700">...</Text>
+                    ) : (
+                      <Send size={16} color="#FFFFFF" />
+                    )}
+                  </LinearGradient>
+                </YStack>
               ) : (
                 <View style={[sendBtnStyles.inactive, { backgroundColor: colors.bg.elevated }]}>
                   <Send size={16} color={colors.text.muted} />
