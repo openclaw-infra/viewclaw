@@ -1,7 +1,8 @@
 import { readdir, stat, readFile, access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { OPENCLAW_BASE_URL, OPENCLAW_HOME, getGatewayToken, normalizeToken } from "./config";
-import { isPluginMode, getWorkspaceDirFromKernel, log } from "./kernel";
+import { isPluginMode, getWorkspaceDirFromKernel, getLoadedConfig } from "./kernel";
+import { sendBridgeRequest } from "./plugin-bridge";
 import type { SessionInfo, AgentInfo } from "./types";
 
 const sessionKeyCache = new Map<string, string>();
@@ -72,6 +73,40 @@ export const sendMessage = async (body: {
     input: finalContent,
     stream: streaming,
   };
+
+  if (process.env.CLAWFLOW_PLUGIN_MODE === "1") {
+    if (body.signal?.aborted) return { ok: true, aborted: true };
+    try {
+      const run = sendBridgeRequest<{ content?: string; responseId?: string }>("send_message", {
+        content: finalContent,
+        agentId,
+        sessionKey: body.sessionKey ?? null,
+        forceNewSession: !body.sessionKey,
+      });
+      const result = body.signal
+        ? await Promise.race([
+            run,
+            new Promise<never>((_, reject) => {
+              body.signal!.addEventListener("abort", () => reject(new Error("AbortError")), { once: true });
+            }),
+          ])
+        : await run;
+
+      if (streaming) {
+        const msgId = `stream-msg-${Date.now()}`;
+        body.onStream!({ type: "message_start", messageId: msgId });
+        if (result.content) {
+          body.onStream!({ type: "message_delta", messageId: msgId, delta: result.content });
+        }
+        body.onStream!({ type: "message_done", messageId: msgId, content: result.content ?? "" });
+      }
+      return { ok: true, status: 200, responseId: result.responseId };
+    } catch (error) {
+      const message = (error as Error).message;
+      if (message === "AbortError" || body.signal?.aborted) return { ok: true, aborted: true };
+      return { ok: false, error: message };
+    }
+  }
 
   try {
     const response = await fetch(url, {
@@ -164,6 +199,9 @@ export const checkHealth = async (): Promise<{
   status?: number;
   error?: string;
 }> => {
+  if (isPluginMode()) {
+    return { ok: true, reachable: true, status: 200 };
+  }
   try {
     const response = await fetch(`${OPENCLAW_BASE_URL}/`, {
       method: "HEAD",
@@ -276,64 +314,72 @@ const populateTitles = async (sessions: SessionInfo[]): Promise<SessionInfo[]> =
   return results;
 };
 
-export const listSessions = async (agentId: string = "main"): Promise<SessionInfo[]> => {
+type SessionStoreEntry = {
+  sessionId?: string;
+  updatedAt?: number;
+  sessionFile?: string;
+};
+
+const getKnownAgentIds = async (): Promise<string[]> => {
+  const configured = getLoadedConfig()?.agents?.list;
+  if (Array.isArray(configured) && configured.length > 0) {
+    return configured
+      .map((a) => (typeof a?.id === "string" ? a.id : ""))
+      .filter((id) => id.length > 0);
+  }
+
   try {
-    const authHeaders = await buildAuthHeaders();
-    const res = await fetch(`${OPENCLAW_BASE_URL}/tools/invoke`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders },
-      body: JSON.stringify({ tool: "sessions_list", action: "json", args: { limit: 5000 } }),
-      signal: AbortSignal.timeout(5000),
+    const entries = await readdir(join(OPENCLAW_HOME, "agents"), { withFileTypes: true });
+    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+  } catch {
+    return [];
+  }
+};
+
+const readSessionStore = async (agentId: string): Promise<Record<string, SessionStoreEntry>> => {
+  try {
+    const raw = await readFile(join(OPENCLAW_HOME, "agents", agentId, "sessions", "sessions.json"), "utf8");
+    return JSON.parse(raw) as Record<string, SessionStoreEntry>;
+  } catch {
+    return {};
+  }
+};
+
+const resolveStoreJsonlPath = async (
+  agentId: string,
+  sessionId: string,
+  sessionFile?: string,
+): Promise<string | null> => {
+  const fallback = join(OPENCLAW_HOME, "agents", agentId, "sessions", `${sessionId}.jsonl`);
+  if (sessionFile && sessionFile.trim().length > 0) {
+    const candidate = isAbsolute(sessionFile) ? sessionFile : join(OPENCLAW_HOME, sessionFile);
+    const exists = await access(candidate).then(() => true, () => false);
+    if (exists) return candidate;
+  }
+  const fallbackExists = await access(fallback).then(() => true, () => false);
+  return fallbackExists ? fallback : null;
+};
+
+export const listSessions = async (agentId: string = "main"): Promise<SessionInfo[]> => {
+  const store = await readSessionStore(agentId);
+  const sessionsFromStore: SessionInfo[] = [];
+  for (const [key, value] of Object.entries(store)) {
+    if (!value?.sessionId) continue;
+    const jsonlPath = await resolveStoreJsonlPath(agentId, value.sessionId, value.sessionFile);
+    if (!jsonlPath) continue;
+    sessionKeyCache.set(value.sessionId, key);
+    sessionsFromStore.push({
+      id: value.sessionId,
+      agentId,
+      sessionKey: key,
+      jsonlPath,
+      createdAt: value.updatedAt ? new Date(value.updatedAt).toISOString() : "",
     });
-    if (res.ok) {
-      const data = await res.json() as {
-        ok: boolean;
-        result?: {
-          details?: {
-            sessions?: Array<{
-              key: string;
-              sessionId: string;
-              updatedAt?: number;
-              transcriptPath?: string;
-              channel?: string;
-            }>;
-          };
-        };
-      };
-      const raw = data.result?.details?.sessions ?? [];
-      const sessions: SessionInfo[] = [];
-      for (const s of raw) {
-        if (!s.sessionId) continue;
-        sessionKeyCache.set(s.sessionId, s.key);
-
-        const keyAgentMatch = s.key?.match(/^agent:([^:]+):/);
-        const realAgentId = keyAgentMatch?.[1] ?? agentId;
-
-        if (realAgentId !== agentId) continue;
-
-        const defaultPath = join(OPENCLAW_HOME, "agents", realAgentId, "sessions", `${s.sessionId}.jsonl`);
-        let resolvedPath = defaultPath;
-        if (typeof s.transcriptPath === "string" && s.transcriptPath.trim().length > 0) {
-          const candidate = isAbsolute(s.transcriptPath) ? s.transcriptPath : join(OPENCLAW_HOME, s.transcriptPath);
-          const exists = await access(candidate).then(() => true, () => false);
-          resolvedPath = exists ? candidate : defaultPath;
-        }
-
-        const jsonlExists = await access(resolvedPath).then(() => true, () => false);
-        if (!jsonlExists) continue;
-
-        sessions.push({
-          id: s.sessionId,
-          agentId: realAgentId,
-          sessionKey: s.key,
-          jsonlPath: resolvedPath,
-          createdAt: s.updatedAt ? new Date(s.updatedAt).toISOString() : "",
-        });
-      }
-      sessions.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-      if (sessions.length > 0) return populateTitles(sessions);
-    }
-  } catch { /* fallback to filesystem */ }
+  }
+  if (sessionsFromStore.length > 0) {
+    sessionsFromStore.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return populateTitles(sessionsFromStore);
+  }
 
   const sessionsDir = join(OPENCLAW_HOME, "agents", agentId, "sessions");
   try {
@@ -368,31 +414,14 @@ export const getSessionJsonlPath = async (agentId: string, sessionId: string): P
 };
 
 const resolveSessionKeyFromStore = async (sessionId: string, agentId?: string): Promise<string | null> => {
-  const candidateAgentIds = agentId ? [agentId] : [];
-  if (!agentId) {
-    try {
-      const agentsDir = join(OPENCLAW_HOME, "agents");
-      const entries = await readdir(agentsDir, { withFileTypes: true });
-      for (const entry of entries) {
-        if (entry.isDirectory()) candidateAgentIds.push(entry.name);
-      }
-    } catch {
-      return null;
-    }
-  }
+  const candidateAgentIds = agentId ? [agentId] : await getKnownAgentIds();
 
   for (const aid of candidateAgentIds) {
-    try {
-      const storePath = join(OPENCLAW_HOME, "agents", aid, "sessions", "sessions.json");
-      const raw = await readFile(storePath, "utf8");
-      const parsed = JSON.parse(raw) as Record<string, { sessionId?: string } | undefined>;
-      for (const [key, value] of Object.entries(parsed)) {
-        if (value?.sessionId === sessionId) {
-          return key;
-        }
+    const parsed = await readSessionStore(aid);
+    for (const [key, value] of Object.entries(parsed)) {
+      if (value?.sessionId === sessionId) {
+        return key;
       }
-    } catch {
-      // Try next agent store.
     }
   }
 
@@ -406,28 +435,6 @@ export const resolveSessionKey = async (sessionIdOrKey: string, agentId?: string
   const cached = sessionKeyCache.get(sessionIdOrKey);
   if (cached) return cached;
 
-  try {
-    const authHeaders = await buildAuthHeaders();
-    const res = await fetch(`${OPENCLAW_BASE_URL}/tools/invoke`, {
-      method: "POST",
-      headers: { "content-type": "application/json", ...authHeaders },
-      body: JSON.stringify({ tool: "sessions_list", action: "json", args: { limit: 5000 } }),
-    });
-    if (res.ok) {
-      const data = await res.json() as {
-        ok: boolean;
-        result?: { details?: { sessions?: Array<{ sessionId: string; key: string }> } };
-      };
-      const sessions = data.result?.details?.sessions ?? [];
-      for (const s of sessions) {
-        if (s.sessionId) sessionKeyCache.set(s.sessionId, s.key);
-      }
-    }
-  } catch { /* ignore */ }
-
-  const fromList = sessionKeyCache.get(sessionIdOrKey);
-  if (fromList) return fromList;
-
   const fromStore = await resolveSessionKeyFromStore(sessionIdOrKey, agentId);
   if (fromStore) {
     sessionKeyCache.set(sessionIdOrKey, fromStore);
@@ -438,6 +445,16 @@ export const resolveSessionKey = async (sessionIdOrKey: string, agentId?: string
 };
 
 export const getActiveSessionId = async (agentId: string = "main"): Promise<string | null> => {
+  const store = await readSessionStore(agentId);
+  let active: { id: string; updatedAt: number } | null = null;
+  for (const value of Object.values(store)) {
+    if (!value?.sessionId) continue;
+    const ts = typeof value.updatedAt === "number" ? value.updatedAt : 0;
+    if (!active || ts > active.updatedAt) {
+      active = { id: value.sessionId, updatedAt: ts };
+    }
+  }
+  if (active?.id) return active.id;
   const sessions = await listSessions(agentId);
   return sessions.length > 0 ? sessions[0].id : null;
 };
@@ -497,36 +514,24 @@ export const createSession = async (body: {
   error?: string;
 }> => {
   const agentId = body.agentId ?? "main";
-  const authHeaders = await buildAuthHeaders(body.overrideToken);
   const input = body.initialMessage || "hello";
   const startedAt = Date.now();
   const before = await listSessions(agentId);
   const beforeIds = new Set(before.map((s) => s.id));
 
   try {
-    const res = await fetch(`${OPENCLAW_BASE_URL}/v1/responses`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...authHeaders,
-        "x-openclaw-agent-id": agentId,
-      },
-      body: JSON.stringify({
-        model: `openclaw:${agentId}`,
-        input,
-        stream: false,
-      }),
+    const data = await sendMessage({
+      content: input,
+      agentId,
+      signal: undefined,
     });
-
-    if (!res.ok) {
-      return { ok: false, error: await res.text() };
+    if (!data.ok) {
+      return { ok: false, error: data.error ?? "Failed to create session" };
     }
-
-    const data = await res.json() as { id?: string };
     const created = await matchCreatedSession({
       agentId,
       baselineSessionIds: beforeIds,
-      responseId: data.id,
+      responseId: data.responseId,
       notBeforeMs: startedAt,
     });
     if (created) {

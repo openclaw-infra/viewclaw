@@ -119,6 +119,18 @@
 - [x] **插件安装与集成测试**
   通过 `openclaw plugins install /path/to/viewclaw/server` 安装本地插件，验证完整链路：插件加载 → Elysia 启动 → 事件总线订阅 → 移动端 WebSocket 连接 → 实时消息推送 → 会话管理同步
 
+- [x] **消息发送链路迁移到插件内核（替代 `/v1/responses`）**
+  将 `openclaw-client.ts` 的 `sendMessage/createSession` 从 HTTP 转发改为插件内置执行路径（内核调用），统一覆盖 `POST /api/message` 与 WS `send_message`，消除网络层转发依赖
+
+- [x] **会话管理迁移到内核 Session Store（替代 `sessions_list`）**
+  将 `listSessions/resolveSessionKey/getActiveSessionId/getSessionJsonlPath` 改为直接读取 OpenClaw 内核会话存储，移除 `POST /tools/invoke` 依赖与文件系统兜底逻辑
+
+- [x] **实时事件全量迁移到插件事件总线（替代 `_internal/event` + JSONL watcher）**
+  将实时流统一到插件事件总线回调（如 `onAgentEvent`），下线 `_internal/event` 桥接与 watcher 轮询实时分支，仅保留历史读取能力
+
+- [x] **健康检查改为插件运行态探测（替代 upstream HEAD）**
+  `/healthz` 在插件模式下不再探测 `OPENCLAW_BASE_URL`，改为检查插件运行态、网关服务状态与事件总线订阅状态；仅在 standalone 模式保留 upstream 探测
+
 ## P5 — npm 发布
 
 - [x] **发布元数据配置**

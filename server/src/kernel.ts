@@ -12,7 +12,7 @@ import { emitEvent } from "./ws-manager";
 // dependency on the SDK package (it only exists inside OpenClaw runtime).
 let pluginApi: any = null;
 
-export const isPluginMode = () => pluginApi !== null;
+export const isPluginMode = () => pluginApi !== null || process.env.CLAWFLOW_PLUGIN_MODE === "1";
 
 export const bindPluginApi = (api: any) => {
   pluginApi = api;
@@ -23,12 +23,14 @@ export const getPluginApi = () => pluginApi;
 // ── Config ──────────────────────────────────────────────────────────
 
 export const getLoadedConfig = (): any | null => {
-  if (!pluginApi) return null;
-  try {
-    return pluginApi.runtime.config.loadConfig();
-  } catch {
-    return pluginApi.config ?? null;
+  if (pluginApi) {
+    try {
+      return pluginApi.runtime.config.loadConfig();
+    } catch {
+      return pluginApi.config ?? null;
+    }
   }
+  return null;
 };
 
 export const getWorkspaceDirFromKernel = (): string | null => {

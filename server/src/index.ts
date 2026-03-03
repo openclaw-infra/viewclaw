@@ -3,8 +3,9 @@ import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
 import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
-import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry, muteWatcher, unmuteWatcher } from "./jsonl-watcher";
+import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry, muteWatcher, unmuteWatcher, isEventBusBridgeActive, startEventBusBridge } from "./jsonl-watcher";
 import type { OpenClawJsonlEntry, OpenClawMessage, EventType } from "./types";
+import { initPluginBridge } from "./plugin-bridge";
 import {
   sendMessage,
   checkHealth,
@@ -17,11 +18,23 @@ import {
   matchCreatedSession,
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
+import { isPluginMode } from "./kernel";
 
 const activeRuns = new Map<string, AbortController>();
 const pendingSessionCreates = new Map<string, { agentId: string; startedAt: number }>();
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+if (process.env.CLAWFLOW_PLUGIN_MODE === "1") {
+  initPluginBridge((evt) => {
+    emitEvent({
+      type: (evt.type ?? "status") as EventType,
+      sessionId: evt.sessionId ?? evt.sessionKey ?? "",
+      messageId: evt.messageId,
+      payload: evt.payload ?? evt.data ?? {},
+    });
+  });
+}
 
 const CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-5.3-codex": 200_000,
@@ -68,11 +81,15 @@ export const app = new Elysia()
     return {
       ok: true,
       now: Date.now(),
+      mode: isPluginMode() ? "plugin" : "standalone",
       openclawHome: OPENCLAW_HOME,
-      upstream: {
-        url: OPENCLAW_BASE_URL,
-        ...upstream,
-      },
+      upstream: isPluginMode()
+        ? undefined
+        : {
+            url: OPENCLAW_BASE_URL,
+            ...upstream,
+          },
+      eventBusBridge: isEventBusBridgeActive(),
       activeWatchers: getActiveWatchers(),
     };
   })
@@ -610,10 +627,13 @@ export const app = new Elysia()
       if (body.type === "subscribe_session") {
         const agentId = body.agentId ?? "main";
         subscribeSession(body.sessionId, ws);
+        let jsonlPath = "";
 
-        const jsonlPath = await getSessionJsonlPath(agentId, body.sessionId);
-        if (!isWatching(body.sessionId)) {
-          await startWatcher(body.sessionId, jsonlPath);
+        if (!isEventBusBridgeActive()) {
+          jsonlPath = await getSessionJsonlPath(agentId, body.sessionId);
+          if (!isWatching(body.sessionId)) {
+            await startWatcher(body.sessionId, jsonlPath);
+          }
         }
 
         ws.send(
@@ -823,6 +843,7 @@ export const app = new Elysia()
 // ── Standalone mode (direct `bun run`) ──────────────────────────────
 
 if (import.meta.main) {
+  startEventBusBridge();
   const listenPort = Number(process.env.CLAWFLOW_PORT ?? PORT);
   app.listen(listenPort);
   console.log(`ClawFlow Gateway running on http://${app.server?.hostname}:${app.server?.port}`);
