@@ -11,7 +11,6 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createRequire } from "node:module";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -36,7 +35,6 @@ let child: ChildProcess | null = null;
 let gatewayPort = 3000;
 let childStdoutBuffer = "";
 let cachedGetReplyFromConfig: null | ((ctx: any, opts?: any, configOverride?: any) => Promise<any>) = null;
-const require = createRequire(import.meta.url);
 
 const REQ_PREFIX = "__CF_REQ__";
 const RES_PREFIX = "__CF_RES__";
@@ -93,16 +91,9 @@ const handleBridgeRequest = async (
       });
     } else {
       if (!cachedGetReplyFromConfig) {
-        // Prefer package resolution. process.argv[1] may point to a bin shim in some deployments.
-        let entry = "";
-        try {
-          entry = require.resolve("openclaw");
-        } catch {
-          entry = process.argv[1] ?? "";
-        }
+        const entry = process.argv[1];
         if (!entry) throw new Error("Unable to locate OpenClaw runtime entry");
-        const asUrl = entry.startsWith("file://") ? entry : `file://${entry}`;
-        const mod = await import(asUrl) as Record<string, unknown>;
+        const mod = await import(`file://${entry}`) as Record<string, unknown>;
         const fn = mod.getReplyFromConfig;
         if (typeof fn !== "function") throw new Error("getReplyFromConfig is unavailable");
         cachedGetReplyFromConfig = fn as (ctx: any, opts?: any, configOverride?: any) => Promise<any>;
