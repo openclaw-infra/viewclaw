@@ -30,6 +30,7 @@ type WsIncoming =
 const DEFAULT_AGENT_ID = "main";
 const PENDING_PREFIX = "pending-";
 const isPendingSession = (id: string) => id.startsWith(PENDING_PREFIX);
+const isSessionKeyNotFoundError = (msg: string) => msg.includes("Session key not found");
 
 export const useGatewaySession = ({
   sessionId: initialSessionId,
@@ -70,6 +71,7 @@ export const useGatewaySession = ({
   const httpUrlRef = useRef(httpUrl);
   const onMessageDoneRef = useRef(onMessageDone);
   const pendingAckRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const blockAutoFallbackRef = useRef(false);
 
   currentSessionRef.current = currentSessionId;
   wsUrlRef.current = wsUrl;
@@ -348,6 +350,10 @@ export const useGatewaySession = ({
       }
 
       if (event.type === "error") {
+        const errorText = typeof p.message === "string" ? p.message : "Error";
+        if (isSessionKeyNotFoundError(errorText)) {
+          blockAutoFallbackRef.current = true;
+        }
         if (event.messageId) {
           const pending = pendingAckRef.current.get(event.messageId);
           if (pending) {
@@ -361,7 +367,7 @@ export const useGatewaySession = ({
         appendLog({
           id: `log-${event.sessionId}-${event.seq}`,
           level: "error",
-          text: typeof p.message === "string" ? p.message : "Error",
+          text: errorText,
           createdAt: event.ts,
         });
         return;
@@ -486,6 +492,7 @@ export const useGatewaySession = ({
         const realId = parsed.sessionId as string;
         const realAgent = (parsed.agentId as string) ?? DEFAULT_AGENT_ID;
         if (pendingId && realId) {
+          blockAutoFallbackRef.current = false;
           const title = sessionsRef.current.find((s) => s.id === pendingId)?.title || "";
           setSessions((prev) =>
             prev.map((s) => s.id === pendingId ? { ...s, id: realId, agentId: realAgent, title } : s)
@@ -643,7 +650,7 @@ export const useGatewaySession = ({
       setSessions(allSessions);
       sessionsRef.current = allSessions;
 
-      if (!currentSessionRef.current && allSessions.length > 0) {
+      if (!currentSessionRef.current && allSessions.length > 0 && !blockAutoFallbackRef.current) {
         const active = firstActive ?? allSessions[0]?.id;
         if (active) {
           setCurrentSessionId(active);
@@ -797,6 +804,7 @@ export const useGatewaySession = ({
 
   const switchSession = useCallback(
     (newSessionId: string) => {
+      blockAutoFallbackRef.current = false;
       const oldSessionId = currentSessionRef.current;
       if (oldSessionId && !isPendingSession(oldSessionId)) {
         unsubscribeFromSession(oldSessionId);
@@ -826,6 +834,7 @@ export const useGatewaySession = ({
   }, [fetchSessions]);
 
   const createNewSession = useCallback(async (agentId?: string) => {
+    blockAutoFallbackRef.current = false;
     const resolvedAgent = agentId ?? getAgentId();
     const pendingId = `${PENDING_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const pendingSession: SessionInfo = {

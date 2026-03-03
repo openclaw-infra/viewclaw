@@ -14,10 +14,14 @@ import {
   getActiveSessionId,
   resolveSessionKey,
   createSession,
+  matchCreatedSession,
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 
 const activeRuns = new Map<string, AbortController>();
+const pendingSessionCreates = new Map<string, { agentId: string; startedAt: number }>();
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 const CONTEXT_WINDOWS: Record<string, number> = {
   "gpt-5.3-codex": 200_000,
@@ -647,6 +651,31 @@ export const app = new Elysia()
         const sessionId = body.sessionId ?? "default";
         const isNewSession = !!body.newSession;
         const agentId = body.agentId ?? "main";
+        if (isNewSession) {
+          const pending = pendingSessionCreates.get(sessionId);
+          if (pending) {
+            ws.send(JSON.stringify({
+              type: "error",
+              sessionId,
+              messageId,
+              payload: {
+                message: "New session is still initializing. Please wait a moment before sending another message.",
+              },
+              ts: Date.now(),
+            }));
+            return;
+          }
+          pendingSessionCreates.set(sessionId, { agentId, startedAt: Date.now() });
+        }
+        const sessionLookupStartedAt = Date.now();
+        let baselineSessionIds: Set<string> | null = null;
+        if (isNewSession) {
+          try {
+            baselineSessionIds = new Set((await listSessions(agentId)).map((s) => s.id));
+          } catch {
+            baselineSessionIds = null;
+          }
+        }
         const sessionKey = isNewSession ? undefined : await resolveSessionKey(sessionId, agentId);
         if (!isNewSession && !sessionKey) {
           ws.send(JSON.stringify({
@@ -719,27 +748,53 @@ export const app = new Elysia()
             });
           },
         })
-          .then(async () => {
+          .then(async (result) => {
             if (isNewSession) {
+              if (!result.ok || result.aborted) {
+                pendingSessionCreates.delete(sessionId);
+                return;
+              }
               try {
-                const sessions = await listSessions(agentId);
-                const newest = sessions[0];
-                if (newest) {
+                let created = null;
+                for (let i = 0; i < 8; i++) {
+                  created = await matchCreatedSession({
+                    agentId,
+                    baselineSessionIds: baselineSessionIds ?? undefined,
+                    responseId: result.responseId,
+                    notBeforeMs: sessionLookupStartedAt,
+                  });
+                  if (created) break;
+                  await sleep(750);
+                }
+                if (created) {
                   ws.send(JSON.stringify({
                     type: "session_created",
                     pendingSessionId: sessionId,
-                    sessionId: newest.id,
+                    sessionId: created.id,
                     agentId,
                     ts: Date.now(),
                   }));
 
-                  subscribeSession(newest.id, ws);
-                  const jsonlPath = await getSessionJsonlPath(agentId, newest.id);
-                  if (!isWatching(newest.id)) {
-                    await startWatcher(newest.id, jsonlPath);
+                  subscribeSession(created.id, ws);
+                  const jsonlPath = await getSessionJsonlPath(agentId, created.id);
+                  if (!isWatching(created.id)) {
+                    await startWatcher(created.id, jsonlPath);
                   }
+                } else {
+                  ws.send(JSON.stringify({
+                    type: "error",
+                    sessionId,
+                    messageId,
+                    payload: {
+                      message: "New session created but not yet mapped. Please refresh sessions and reselect this chat.",
+                    },
+                    ts: Date.now(),
+                  }));
                 }
               } catch { /* ignore */ }
+              finally {
+                pendingSessionCreates.delete(sessionId);
+              }
             }
           })
           .catch(() => {})

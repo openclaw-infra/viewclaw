@@ -442,6 +442,50 @@ export const getActiveSessionId = async (agentId: string = "main"): Promise<stri
   return sessions.length > 0 ? sessions[0].id : null;
 };
 
+type MatchCreatedSessionParams = {
+  agentId?: string;
+  baselineSessionIds?: Iterable<string>;
+  responseId?: string;
+  notBeforeMs?: number;
+};
+
+export const matchCreatedSession = async ({
+  agentId = "main",
+  baselineSessionIds,
+  responseId,
+  notBeforeMs,
+}: MatchCreatedSessionParams): Promise<SessionInfo | null> => {
+  const sessions = await listSessions(agentId);
+  const baseline = new Set(baselineSessionIds ?? []);
+
+  const byBaseline = sessions.filter((s) => !baseline.has(s.id));
+  if (byBaseline.length === 1) return byBaseline[0];
+
+  let candidates = byBaseline;
+  if (candidates.length === 0 && typeof notBeforeMs === "number") {
+    candidates = sessions.filter((s) => {
+      const t = Date.parse(s.createdAt);
+      return Number.isFinite(t) && t >= notBeforeMs - 2_000;
+    });
+    if (candidates.length === 1) return candidates[0];
+  }
+
+  if (responseId && candidates.length > 0) {
+    const matched: SessionInfo[] = [];
+    for (const candidate of candidates) {
+      try {
+        const raw = await readFile(candidate.jsonlPath, "utf8");
+        if (raw.includes(responseId)) matched.push(candidate);
+      } catch {
+        // ignore unreadable candidate
+      }
+    }
+    if (matched.length === 1) return matched[0];
+  }
+
+  return null;
+};
+
 export const createSession = async (body: {
   agentId?: string;
   initialMessage?: string;
@@ -455,6 +499,9 @@ export const createSession = async (body: {
   const agentId = body.agentId ?? "main";
   const authHeaders = await buildAuthHeaders(body.overrideToken);
   const input = body.initialMessage || "hello";
+  const startedAt = Date.now();
+  const before = await listSessions(agentId);
+  const beforeIds = new Set(before.map((s) => s.id));
 
   try {
     const res = await fetch(`${OPENCLAW_BASE_URL}/v1/responses`, {
@@ -475,12 +522,15 @@ export const createSession = async (body: {
       return { ok: false, error: await res.text() };
     }
 
-    await res.json();
-
-    const sessions = await listSessions(agentId);
-    if (sessions.length > 0) {
-      const newest = sessions[0];
-      return { ok: true, sessionId: newest.id, sessionKey: newest.sessionKey };
+    const data = await res.json() as { id?: string };
+    const created = await matchCreatedSession({
+      agentId,
+      baselineSessionIds: beforeIds,
+      responseId: data.id,
+      notBeforeMs: startedAt,
+    });
+    if (created) {
+      return { ok: true, sessionId: created.id, sessionKey: created.sessionKey };
     }
 
     return { ok: true };
