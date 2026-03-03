@@ -34,7 +34,6 @@ type PluginApi = {
 let child: ChildProcess | null = null;
 let gatewayPort = 3000;
 let childStdoutBuffer = "";
-let cachedGetReplyFromConfig: null | ((ctx: any, opts?: any, configOverride?: any) => Promise<any>) = null;
 
 const REQ_PREFIX = "__CF_REQ__";
 const RES_PREFIX = "__CF_RES__";
@@ -73,10 +72,62 @@ const handleBridgeRequest = async (
     const runtimeSessionKey = sessionKey ?? (forceNewSession ? `agent:${agentId}:${randomUUID()}` : undefined);
 
     const chunks: string[] = [];
+    const appendPayloadText = (payload: unknown) => {
+      if (typeof payload === "string" && payload.length > 0) {
+        chunks.push(payload);
+        return;
+      }
+      if (!payload || typeof payload !== "object") return;
+
+      const obj = payload as Record<string, unknown>;
+      const directText = obj.text;
+      if (typeof directText === "string" && directText.length > 0) {
+        chunks.push(directText);
+      }
+
+      const message = obj.message;
+      if (message && typeof message === "object") {
+        const messageText = (message as Record<string, unknown>).text;
+        if (typeof messageText === "string" && messageText.length > 0) {
+          chunks.push(messageText);
+        }
+      }
+
+      const contentField = obj.content;
+      if (typeof contentField === "string" && contentField.length > 0) {
+        chunks.push(contentField);
+        return;
+      }
+      if (Array.isArray(contentField)) {
+        for (const item of contentField) {
+          if (!item || typeof item !== "object") continue;
+          const textValue = (item as Record<string, unknown>).text;
+          if (typeof textValue === "string" && textValue.length > 0) {
+            chunks.push(textValue);
+          }
+        }
+      }
+    };
     const chatId = runtimeSessionKey ?? `clawflow-${agentId}-${forceNewSession ? randomUUID() : "main"}`;
-    const runtimeReply = (api.runtime?.channel?.reply as { handleInboundMessage?: (params: unknown) => Promise<unknown> } | undefined)?.handleInboundMessage;
-    if (typeof runtimeReply === "function") {
-      await runtimeReply({
+    const runtimeReply = api.runtime?.channel?.reply as {
+      handleInboundMessage?: (params: unknown) => Promise<unknown>;
+      createReplyDispatcherWithTyping?: (params: unknown) => {
+        dispatcher: {
+          waitForIdle: () => Promise<void>;
+          markComplete: () => void;
+        };
+        replyOptions?: Record<string, unknown>;
+        markDispatchIdle?: () => void;
+      };
+      dispatchReplyFromConfig?: (params: {
+        ctx: Record<string, unknown>;
+        cfg: Record<string, unknown>;
+        dispatcher: unknown;
+        replyOptions?: Record<string, unknown>;
+      }) => Promise<unknown>;
+    } | undefined;
+    if (typeof runtimeReply?.handleInboundMessage === "function") {
+      await runtimeReply.handleInboundMessage({
         channel: "clawflow",
         accountId: "mobile",
         senderId: "mobile",
@@ -85,22 +136,16 @@ const handleBridgeRequest = async (
         text: content,
         agentId,
         ...(sessionKey ? { sessionKey } : {}),
-        reply: async (text: string) => {
-          chunks.push(text);
+        reply: async (payload: unknown) => {
+          appendPayloadText(payload);
         },
       });
-    } else {
-      if (!cachedGetReplyFromConfig) {
-        const entry = process.argv[1];
-        if (!entry) throw new Error("Unable to locate OpenClaw runtime entry");
-        const mod = await import(`file://${entry}`) as Record<string, unknown>;
-        const fn = mod.getReplyFromConfig;
-        if (typeof fn !== "function") throw new Error("getReplyFromConfig is unavailable");
-        cachedGetReplyFromConfig = fn as (ctx: any, opts?: any, configOverride?: any) => Promise<any>;
-      }
-
-      const cfg = api.runtime?.config?.loadConfig?.() ?? api.config;
-      const msgContext = {
+    } else if (
+      typeof runtimeReply?.dispatchReplyFromConfig === "function"
+      && typeof runtimeReply?.createReplyDispatcherWithTyping === "function"
+    ) {
+      const cfg = api.runtime?.config?.loadConfig?.() ?? api.config ?? {};
+      const msgContext: Record<string, unknown> = {
         Body: content,
         BodyForAgent: content,
         RawBody: content,
@@ -116,29 +161,34 @@ const handleBridgeRequest = async (
         SenderName: "mobile",
         CommandAuthorized: true,
       };
-      const appendPayloadText = (payload: any) => {
-        if (typeof payload?.text === "string" && payload.text.length > 0) {
-          chunks.push(payload.text);
-        }
-      };
-
-      const reply = await cachedGetReplyFromConfig(
-        msgContext,
-        {
-          runId: randomUUID(),
-          onPartialReply: async (payload: any) => appendPayloadText(payload),
-          onReasoningStream: async (_payload: any) => {},
-          onBlockReply: async (payload: any) => appendPayloadText(payload),
-          onToolResult: async (_payload: any) => {},
+      const dispatchState = runtimeReply.createReplyDispatcherWithTyping({
+        deliver: async (payload: unknown) => {
+          appendPayloadText(payload);
         },
-        cfg,
-      );
-
-      if (Array.isArray(reply)) {
-        for (const payload of reply) appendPayloadText(payload);
-      } else {
-        appendPayloadText(reply);
+      }) ?? {};
+      const dispatcher = (dispatchState as { dispatcher?: unknown }).dispatcher;
+      if (!dispatcher) {
+        throw new Error("createReplyDispatcherWithTyping returned no dispatcher");
       }
+
+      await runtimeReply.dispatchReplyFromConfig({
+        ctx: msgContext,
+        cfg,
+        dispatcher,
+        replyOptions: {
+          ...((dispatchState as { replyOptions?: Record<string, unknown> }).replyOptions ?? {}),
+          runId: randomUUID(),
+        },
+      });
+
+      (dispatchState as { markDispatchIdle?: () => void }).markDispatchIdle?.();
+      await (dispatcher as { waitForIdle?: () => Promise<void> }).waitForIdle?.();
+      (dispatcher as { markComplete?: () => void }).markComplete?.();
+    } else {
+      const keys = runtimeReply && typeof runtimeReply === "object" ? Object.keys(runtimeReply) : [];
+      throw new Error(
+        `No supported reply runtime API. availableKeys=${JSON.stringify(keys)}`
+      );
     }
 
     sendBridgeResponse(reqId, true, { content: chunks.join("") });
@@ -184,6 +234,14 @@ const plugin = {
 
       async start(ctx) {
         const entryScript = resolve(__dirname, "src", "index.ts");
+        try {
+          const replyRuntime = api.runtime?.channel?.reply;
+          const keys = replyRuntime && typeof replyRuntime === "object" ? Object.keys(replyRuntime) : [];
+          const handleType = typeof (replyRuntime as { handleInboundMessage?: unknown } | undefined)?.handleInboundMessage;
+          ctx.logger.info(`[clawflow] runtime.channel.reply keys=${JSON.stringify(keys)} handleInboundMessage=${handleType}`);
+        } catch (error) {
+          ctx.logger.warn(`[clawflow] failed to inspect runtime.channel.reply: ${(error as Error).message}`);
+        }
 
         const env: Record<string, string> = {
           ...process.env as any,
