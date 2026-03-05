@@ -11,6 +11,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildClawflowChannelPlugin } from "./src/channel-plugin";
+import { createRuntimeAdapter } from "./src/runtime-adapter";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -34,6 +36,9 @@ type PluginApi = {
 let child: ChildProcess | null = null;
 let gatewayPort = 3000;
 let childStdoutBuffer = "";
+let gatewayLastStartAt: number | null = null;
+let gatewayLastStopAt: number | null = null;
+let gatewayLastError: string | null = null;
 
 const REQ_PREFIX = "__CF_REQ__";
 const RES_PREFIX = "__CF_RES__";
@@ -70,128 +75,19 @@ const handleBridgeRequest = async (
     const sessionKey = typeof req.payload?.sessionKey === "string" ? req.payload.sessionKey : undefined;
     const forceNewSession = req.payload?.forceNewSession === true;
     const runtimeSessionKey = sessionKey ?? (forceNewSession ? `agent:${agentId}:${randomUUID()}` : undefined);
+    const runtimeAdapter = createRuntimeAdapter({
+      runtime: api.runtime,
+      config: api.config,
+    });
+    const result = await runtimeAdapter.dispatchInboundMessage({
+      content,
+      agentId,
+      sessionKey: runtimeSessionKey,
+      forceNewSession,
+      onReply: async () => {},
+    });
 
-    const chunks: string[] = [];
-    const appendPayloadText = (payload: unknown) => {
-      if (typeof payload === "string" && payload.length > 0) {
-        chunks.push(payload);
-        return;
-      }
-      if (!payload || typeof payload !== "object") return;
-
-      const obj = payload as Record<string, unknown>;
-      const directText = obj.text;
-      if (typeof directText === "string" && directText.length > 0) {
-        chunks.push(directText);
-      }
-
-      const message = obj.message;
-      if (message && typeof message === "object") {
-        const messageText = (message as Record<string, unknown>).text;
-        if (typeof messageText === "string" && messageText.length > 0) {
-          chunks.push(messageText);
-        }
-      }
-
-      const contentField = obj.content;
-      if (typeof contentField === "string" && contentField.length > 0) {
-        chunks.push(contentField);
-        return;
-      }
-      if (Array.isArray(contentField)) {
-        for (const item of contentField) {
-          if (!item || typeof item !== "object") continue;
-          const textValue = (item as Record<string, unknown>).text;
-          if (typeof textValue === "string" && textValue.length > 0) {
-            chunks.push(textValue);
-          }
-        }
-      }
-    };
-    const chatId = runtimeSessionKey ?? `clawflow-${agentId}-${forceNewSession ? randomUUID() : "main"}`;
-    const runtimeReply = api.runtime?.channel?.reply as {
-      handleInboundMessage?: (params: unknown) => Promise<unknown>;
-      createReplyDispatcherWithTyping?: (params: unknown) => {
-        dispatcher: {
-          waitForIdle: () => Promise<void>;
-          markComplete: () => void;
-        };
-        replyOptions?: Record<string, unknown>;
-        markDispatchIdle?: () => void;
-      };
-      dispatchReplyFromConfig?: (params: {
-        ctx: Record<string, unknown>;
-        cfg: Record<string, unknown>;
-        dispatcher: unknown;
-        replyOptions?: Record<string, unknown>;
-      }) => Promise<unknown>;
-    } | undefined;
-    if (typeof runtimeReply?.handleInboundMessage === "function") {
-      await runtimeReply.handleInboundMessage({
-        channel: "clawflow",
-        accountId: "mobile",
-        senderId: "mobile",
-        chatType: "direct",
-        chatId,
-        text: content,
-        agentId,
-        ...(sessionKey ? { sessionKey } : {}),
-        reply: async (payload: unknown) => {
-          appendPayloadText(payload);
-        },
-      });
-    } else if (
-      typeof runtimeReply?.dispatchReplyFromConfig === "function"
-      && typeof runtimeReply?.createReplyDispatcherWithTyping === "function"
-    ) {
-      const cfg = api.runtime?.config?.loadConfig?.() ?? api.config ?? {};
-      const msgContext: Record<string, unknown> = {
-        Body: content,
-        BodyForAgent: content,
-        RawBody: content,
-        CommandBody: content,
-        BodyForCommands: content,
-        ...(runtimeSessionKey ? { SessionKey: runtimeSessionKey } : {}),
-        From: "clawflow-mobile",
-        To: chatId,
-        Provider: "clawflow",
-        Surface: "clawflow",
-        ChatType: "direct",
-        SenderId: "mobile",
-        SenderName: "mobile",
-        CommandAuthorized: true,
-      };
-      const dispatchState = runtimeReply.createReplyDispatcherWithTyping({
-        deliver: async (payload: unknown) => {
-          appendPayloadText(payload);
-        },
-      }) ?? {};
-      const dispatcher = (dispatchState as { dispatcher?: unknown }).dispatcher;
-      if (!dispatcher) {
-        throw new Error("createReplyDispatcherWithTyping returned no dispatcher");
-      }
-
-      await runtimeReply.dispatchReplyFromConfig({
-        ctx: msgContext,
-        cfg,
-        dispatcher,
-        replyOptions: {
-          ...((dispatchState as { replyOptions?: Record<string, unknown> }).replyOptions ?? {}),
-          runId: randomUUID(),
-        },
-      });
-
-      (dispatchState as { markDispatchIdle?: () => void }).markDispatchIdle?.();
-      await (dispatcher as { waitForIdle?: () => Promise<void> }).waitForIdle?.();
-      (dispatcher as { markComplete?: () => void }).markComplete?.();
-    } else {
-      const keys = runtimeReply && typeof runtimeReply === "object" ? Object.keys(runtimeReply) : [];
-      throw new Error(
-        `No supported reply runtime API. availableKeys=${JSON.stringify(keys)}`
-      );
-    }
-
-    sendBridgeResponse(reqId, true, { content: chunks.join("") });
+    sendBridgeResponse(reqId, true, { content: result.content });
   } catch (error) {
     sendBridgeResponse(reqId, false, undefined, (error as Error).message);
   }
@@ -229,16 +125,69 @@ const plugin = {
     gatewayPort =
       (pluginCfg as any).port ?? Number(process.env.PORT ?? 3000);
 
+    const channelPlugin = buildClawflowChannelPlugin({
+      getGatewayState: () => ({
+        running: child !== null,
+        port: gatewayPort,
+        lastStartAt: gatewayLastStartAt,
+        lastStopAt: gatewayLastStopAt,
+        lastError: gatewayLastError,
+      }),
+      getLogger: () => api.logger ?? null,
+      notifyPairingApproved: async ({ id }) => {
+        await postEvent({
+          type: "status",
+          payload: {
+            subtype: "pairing_approved",
+            channel: "clawflow",
+            senderId: id,
+          },
+        });
+      },
+      sendOutbound: async ({ to, text, mediaUrl, accountId, replyToId, threadId }) => {
+        const messageId = randomUUID();
+        await postEvent({
+          type: "message",
+          sessionId: to,
+          messageId,
+          payload: {
+            role: "assistant",
+            content: text,
+            channel: "clawflow",
+            accountId: accountId ?? undefined,
+            mediaUrl: mediaUrl ?? undefined,
+            replyToId: replyToId ?? undefined,
+            threadId: threadId ?? undefined,
+          },
+        });
+        return { id: messageId };
+      },
+    });
+    if (typeof (api as any).registerChannel === "function") {
+      try {
+        (api as any).registerChannel({ plugin: channelPlugin });
+        api.logger.info("[clawflow] ChannelPlugin facade registered (hybrid service+channel mode)");
+      } catch (error) {
+        api.logger.warn(`[clawflow] ChannelPlugin registration skipped: ${(error as Error).message}`);
+      }
+    } else {
+      api.logger.info("[clawflow] registerChannel() unavailable; running service mode only");
+    }
+
     api.registerService({
       id: "clawflow-gateway",
 
       async start(ctx) {
         const entryScript = resolve(__dirname, "src", "index.ts");
         try {
-          const replyRuntime = api.runtime?.channel?.reply;
-          const keys = replyRuntime && typeof replyRuntime === "object" ? Object.keys(replyRuntime) : [];
-          const handleType = typeof (replyRuntime as { handleInboundMessage?: unknown } | undefined)?.handleInboundMessage;
-          ctx.logger.info(`[clawflow] runtime.channel.reply keys=${JSON.stringify(keys)} handleInboundMessage=${handleType}`);
+          const runtimeAdapter = createRuntimeAdapter({
+            runtime: api.runtime,
+            config: api.config,
+          });
+          const inspected = runtimeAdapter.inspectReplyApi();
+          ctx.logger.info(
+            `[clawflow] runtime.channel.reply keys=${JSON.stringify(inspected.keys)} handleInboundMessage=${inspected.hasHandleInboundMessage ? "function" : "none"} dispatcherPair=${inspected.hasDispatcherPair}`,
+          );
         } catch (error) {
           ctx.logger.warn(`[clawflow] failed to inspect runtime.channel.reply: ${(error as Error).message}`);
         }
@@ -261,6 +210,8 @@ const plugin = {
           env,
           stdio: ["pipe", "pipe", "pipe"],
         });
+        gatewayLastStartAt = Date.now();
+        gatewayLastError = null;
 
         child.stdout?.on("data", (data: Buffer) => {
           handleChildStdoutData(api, ctx, data);
@@ -274,10 +225,12 @@ const plugin = {
 
         child.on("exit", (code) => {
           if (code !== null && code !== 0) {
+            gatewayLastError = `bun process exited with code ${code}`;
             ctx.logger.error(
               `[clawflow] Bun process exited with code ${code}`
             );
           }
+          gatewayLastStopAt = Date.now();
           child = null;
         });
 
@@ -301,6 +254,7 @@ const plugin = {
             });
           });
           child = null;
+          gatewayLastStopAt = Date.now();
         }
       },
     });

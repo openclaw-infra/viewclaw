@@ -5,8 +5,28 @@ const nextSeq = () => ++seq;
 
 const socketBySession = new Map<string, Set<any>>();
 const socketMeta = new WeakMap<any, { sessions: Set<string> }>();
+const dedupeWindowByKey = new Map<string, number>();
+const DEDUPE_TTL_MS = 2_000;
+const DEDUPE_TYPES = new Set(["message_start", "message_done", "thought", "action", "observation", "status", "error"]);
+
+const shouldDropDuplicate = (event: Omit<StreamEvent, "seq" | "ts">): boolean => {
+  if (!event.messageId || !DEDUPE_TYPES.has(event.type)) return false;
+  const key = `${event.sessionId}|${event.type}|${event.messageId}`;
+  const now = Date.now();
+  const prev = dedupeWindowByKey.get(key);
+  dedupeWindowByKey.set(key, now);
+
+  if (dedupeWindowByKey.size > 5000) {
+    const cutoff = now - DEDUPE_TTL_MS;
+    for (const [k, ts] of dedupeWindowByKey) {
+      if (ts < cutoff) dedupeWindowByKey.delete(k);
+    }
+  }
+  return prev != null && now - prev < DEDUPE_TTL_MS;
+};
 
 export const emitEvent = (event: Omit<StreamEvent, "seq" | "ts">) => {
+  if (shouldDropDuplicate(event)) return;
   const packet: StreamEvent = {
     ...event,
     seq: nextSeq(),

@@ -141,3 +141,41 @@
 
 - [x] **发布内容验证**
   `npm pack --dry-run` 确认 tarball 仅包含 13 个必要文件（`index.ts`、`openclaw.plugin.json`、`src/` 核心源码），总大小 ~16KB
+
+## P6 — 对齐 Discord/Telegram 插件能力（Server 参考项）
+
+- [x] **插件形态对齐（Service → ChannelPlugin）**
+  已实现 hybrid 形态：保留现有 `registerService`（Elysia 网关子进程）并新增 `registerChannel` facade（`server/src/channel-plugin.ts`），暴露 `capabilities/config/security/gateway/status` 骨架；当运行时不支持 `registerChannel` 时自动回退 service-only，避免兼容性中断
+
+- [x] **运行时适配层标准化（runtime adapter）**
+  已新增 `server/src/runtime-adapter.ts`，统一封装 `runtime.channel.reply` 能力探测与入站消息派发（`handleInboundMessage` / `dispatchReplyFromConfig` 双路径）；`server/index.ts` 改为通过 adapter 调度并输出统一诊断日志，移除入口文件中的重复分支和内联探测逻辑
+
+- [x] **配置与账号模型补齐（configSchema + accounts）**
+  `server/src/channel-plugin.ts` 已补齐 ClawFlow channel 的配置 schema 与账号模型（默认账号 `mobile` + 可选 `accounts` 多账号字段）；实现 `setAccountEnabled/deleteAccount/setup` 等账号操作，并加入 legacy 根字段到默认账号的兼容迁移逻辑，支持平滑从旧配置过渡
+
+- [x] **安全策略补齐（DM policy / allowFrom / group policy）**
+  已在 `server/src/channel-plugin.ts` 增加 `security.resolveDmPolicy` 与 `collectWarnings`：支持 `pairing/open/allowlist` 的 DM 策略、`allowFrom` 白名单路径、群聊 `groupPolicy + requireMention` 策略，并补齐高风险配置告警文案（open、空 allowlist、群聊过宽触发）
+
+- [x] **配对与授权流补齐（pairing）**
+  已在 `server/src/channel-plugin.ts` 增加 `pairing` 适配（`idLabel/normalizeAllowEntry/notifyApproval`）；审批通过后通过 `server/index.ts` 的 bridge 事件链路发出 `pairing_approved` 状态事件，打通 OpenClaw pairing 与移动端状态反馈
+
+- [x] **消息出站能力对齐（outbound + threading）**
+  已完善 `server/src/channel-plugin.ts` 的 `outbound.sendText/sendMedia`：支持 `to/text/media/replyTo/thread/accountId` 语义并通过 `server/index.ts` 的 bridge 事件推送到 ClawFlow 网关（WS 下发）；`threading.resolveReplyToMode` 已接入配置模型，统一 `off/first/all`
+
+- [x] **目录与目标解析能力（directory + resolver）**
+  已在 `server/src/channel-plugin.ts` 增加 `directory/self/listPeers/listGroups` 与 `resolver.resolveTargets`：支持从 `allowFrom` + `channels.clawflow.directory` 读取目标目录，并统一返回 `input/resolved/id/note` 结构用于目标合法性校验
+
+- [x] **状态探测与审计能力（status/probe/audit）**
+  已在 `server/src/channel-plugin.ts` 的 `status` 适配中补齐 `probeAccount/auditAccount/buildAccountSnapshot/collectStatusIssues`，输出网关运行态、最近错误与审计问题（网关未运行、allowlist 为空、群聊策略过宽），用于插件状态面板与健康检查汇总
+
+- [x] **实时事件链路收敛（event bus / JSONL fallback）**
+  已固化“event bus 优先”边界：`startWatcher()` 在 bridge 激活时强制跳过；`/_internal/event` 在 bridge 模式下返回 ignored；`ws-manager.emitEvent` 增加短窗去重（按 session/type/messageId）降低重复事件与乱序风险
+
+- [x] **会话与新建映射稳定性增强**
+  已增强 `server/src/index.ts` 的 `newSession + matchCreatedSession`：增加 pending 过期清理（TTL）、并发冲突提示（含剩余超时信息）、可配置重试次数/间隔（环境变量），以及映射失败后的明确错误文案，降低慢响应与并发场景下的映射丢失风险
+
+- [x] **插件模式回归测试矩阵**
+  已新增回归测试文件：`server/src/channel-plugin.test.ts`、`server/src/runtime-adapter.test.ts`、`server/src/ws-manager.test.ts`，覆盖 channel facade、runtime 双派发路径、WS 事件去重；并验证既有 `index.test.ts` 健康接口/会话/消息接口用例，`bun test` 全量通过（15/15）
+
+- [x] **迁移文档与运维手册更新**
+  已更新 `OPENCLAW_PLUGIN.md`，补充 Discord/Telegram 能力对照、已实现/待完善清单、`channels.clawflow` 配置示例、故障排查步骤与发布前回归 checklist

@@ -170,6 +170,10 @@ const extractThinkingSummary = (content?: Array<{ type: string; thinkingSignatur
 // ── JSONL file watcher (used for history + standalone real-time) ─────
 
 export const startWatcher = async (sessionId: string, logFile: string) => {
+  if (eventBusBridgeActive) {
+    log.debug(`skip startWatcher(${sessionId}) because event bus bridge is active`);
+    return;
+  }
   if (watchers.has(sessionId)) return;
 
   const initial = await stat(logFile).catch(() => null);

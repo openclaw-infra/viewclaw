@@ -22,8 +22,20 @@ import { isPluginMode } from "./kernel";
 
 const activeRuns = new Map<string, AbortController>();
 const pendingSessionCreates = new Map<string, { agentId: string; startedAt: number }>();
+const NEW_SESSION_PENDING_TTL_MS = Number(process.env.CLAWFLOW_NEW_SESSION_PENDING_TTL_MS ?? 45_000);
+const NEW_SESSION_MATCH_RETRIES = Number(process.env.CLAWFLOW_NEW_SESSION_MATCH_RETRIES ?? 12);
+const NEW_SESSION_MATCH_RETRY_DELAY_MS = Number(process.env.CLAWFLOW_NEW_SESSION_MATCH_RETRY_DELAY_MS ?? 750);
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const pruneStalePendingSessionCreates = () => {
+  const now = Date.now();
+  for (const [sessionId, pending] of pendingSessionCreates) {
+    if (now - pending.startedAt > NEW_SESSION_PENDING_TTL_MS) {
+      pendingSessionCreates.delete(sessionId);
+    }
+  }
+};
 
 if (process.env.CLAWFLOW_PLUGIN_MODE === "1") {
   initPluginBridge((evt) => {
@@ -573,6 +585,9 @@ export const app = new Elysia()
   )
 
   .post("/_internal/event", async ({ body }) => {
+    if (isEventBusBridgeActive()) {
+      return { ok: true, ignored: true, reason: "event_bus_bridge_active" };
+    }
     const evt = body as any;
     emitEvent({
       type: evt.type ?? "status",
@@ -667,6 +682,7 @@ export const app = new Elysia()
       }
 
       if (body.type === "send_message") {
+        pruneStalePendingSessionCreates();
         const messageId = body.messageId ?? crypto.randomUUID();
         const sessionId = body.sessionId ?? "default";
         const isNewSession = !!body.newSession;
@@ -674,12 +690,14 @@ export const app = new Elysia()
         if (isNewSession) {
           const pending = pendingSessionCreates.get(sessionId);
           if (pending) {
+            const age = Date.now() - pending.startedAt;
+            const ttlLeft = Math.max(0, Math.ceil((NEW_SESSION_PENDING_TTL_MS - age) / 1000));
             ws.send(JSON.stringify({
               type: "error",
               sessionId,
               messageId,
               payload: {
-                message: "New session is still initializing. Please wait a moment before sending another message.",
+                message: `New session is still initializing (${Math.floor(age / 1000)}s elapsed, ~${ttlLeft}s before auto-timeout). Please retry shortly.`,
               },
               ts: Date.now(),
             }));
@@ -776,7 +794,7 @@ export const app = new Elysia()
               }
               try {
                 let created = null;
-                for (let i = 0; i < 8; i++) {
+                for (let i = 0; i < NEW_SESSION_MATCH_RETRIES; i++) {
                   created = await matchCreatedSession({
                     agentId,
                     baselineSessionIds: baselineSessionIds ?? undefined,
@@ -784,7 +802,7 @@ export const app = new Elysia()
                     notBeforeMs: sessionLookupStartedAt,
                   });
                   if (created) break;
-                  await sleep(750);
+                  await sleep(NEW_SESSION_MATCH_RETRY_DELAY_MS);
                 }
                 if (created) {
                   ws.send(JSON.stringify({
@@ -806,7 +824,7 @@ export const app = new Elysia()
                     sessionId,
                     messageId,
                     payload: {
-                      message: "New session created but not yet mapped. Please refresh sessions and reselect this chat.",
+                      message: `New session was accepted but mapping is delayed after ${NEW_SESSION_MATCH_RETRIES} retries. Refresh sessions and reselect this chat.`,
                     },
                     ts: Date.now(),
                   }));
