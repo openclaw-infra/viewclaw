@@ -5,15 +5,16 @@ import { Text, XStack, YStack, AnimatePresence } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { ArrowDown, Forward, Reply } from "@tamagui/lucide-icons";
-import type { ChatMessage, ExecutionLog, ImageAttachment, StreamItem } from "../types/gateway";
+import type { ChatMessage, ExecutionLog, ImageAttachment, ReplyPreview, StreamItem } from "../types/gateway";
 import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
 import { MessageContextMenu, type MenuAction } from "./message-context-menu";
 import { useTheme } from "../theme/theme-context";
+import { sanitizeAssistantDisplayText } from "../utils/message-sanitizer";
 
 type ChatStreamActions = {
   onForward?: (content: string) => void;
-  onReply?: (content: string) => void;
+  onReply?: (reply: ReplyPreview) => void;
   scrollToQuote?: (quoteText: string) => void;
   highlightedId?: string | null;
 };
@@ -25,7 +26,7 @@ const logoIcon = require("../../assets/logo-icon.png");
 type Props = {
   stream: StreamItem[];
   onForward?: (content: string) => void;
-  onReply?: (content: string) => void;
+  onReply?: (reply: ReplyPreview) => void;
 };
 
 const StreamingCursor = () => {
@@ -124,18 +125,7 @@ const GeneratingLabel = () => {
   );
 };
 
-const REPLY_RE = /^\[Replying to:\s*([\s\S]*?)\]\s*\n\n([\s\S]*)$/;
-const INTERNAL_REPLY_MARKER_RE = /\[\[reply_to_current\]\]\s*/gi;
 const SHOW_INTERNAL_THINKING_SUMMARY = false;
-
-const sanitizeAssistantDisplayText = (content: string): string =>
-  content.replace(INTERNAL_REPLY_MARKER_RE, "").trimStart();
-
-const parseReplyContent = (content: string): { quote: string; body: string } | null => {
-  const m = REPLY_RE.exec(content);
-  if (!m) return null;
-  return { quote: m[1].trim(), body: m[2] };
-};
 
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const { colors, isDark } = useTheme();
@@ -158,7 +148,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
     () => (isUser ? item.content : sanitizeAssistantDisplayText(item.content)),
     [isUser, item.content],
   );
-  const replyParsed = useMemo(() => (displayContent ? parseReplyContent(displayContent) : null), [displayContent]);
+  const replyPreview = item.replyTo;
 
   const isHighlighted = highlightedId === item.id;
   const highlightAnim = useRef(new Animated.Value(0)).current;
@@ -177,11 +167,11 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
   }, [isHighlighted]);
 
   const handleQuotePress = useCallback(() => {
-    if (replyParsed?.quote && scrollToQuote) {
+    if (replyPreview?.body && scrollToQuote) {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      scrollToQuote(replyParsed.quote);
+      scrollToQuote(replyPreview.body);
     }
-  }, [replyParsed?.quote, scrollToQuote]);
+  }, [replyPreview?.body, scrollToQuote]);
 
   const [menuVisible, setMenuVisible] = useState(false);
   const [pressPoint, setPressPoint] = useState<{ x: number; y: number } | null>(null);
@@ -207,7 +197,11 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
         icon: <Reply size={16} color={colors.text.primary} />,
         onPress: () => {
           handleMenuClose();
-          onReply(item.content);
+          onReply({
+            messageId: item.id,
+            body: displayContent,
+            senderName: item.role === "user" ? "You" : "Assistant",
+          });
         },
       });
     }
@@ -223,7 +217,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
       });
     }
     return actions;
-  }, [onForward, onReply, t, colors.text.primary, handleMenuClose, item.content]);
+  }, [onForward, onReply, t, colors.text.primary, handleMenuClose, item.id, item.role, item.content, displayContent]);
 
   return (
     <XStack
@@ -264,7 +258,7 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
               </XStack>
             ) : null}
 
-            {replyParsed && (
+            {replyPreview && (
               <Pressable onPress={handleQuotePress} style={{ alignSelf: "flex-start", maxWidth: Math.round((Dimensions.get("window").width - 24) * 0.5) }}>
                 <XStack
                   backgroundColor={isUser ? "rgba(255,255,255,0.12)" : colors.bg.tertiary}
@@ -283,15 +277,15 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
                     ellipsizeMode="tail"
                     flexShrink={1}
                   >
-                    {replyParsed.quote}
+                    {replyPreview.body}
                   </Text>
                 </XStack>
               </Pressable>
             )}
 
-            {(replyParsed ? replyParsed.body : displayContent) ? (
+            {displayContent ? (
               <MarkdownBody color={isUser ? "#FFFFFF" : colors.text.primary}>
-                {replyParsed ? replyParsed.body : displayContent}
+                {displayContent}
               </MarkdownBody>
             ) : null}
 
@@ -611,7 +605,6 @@ export const ChatStream = ({ stream, onForward, onReply }: Props) => {
     const target = reversed.findIndex((di) => {
       if (di.kind !== "message") return false;
       const c = di.data.role === "assistant" ? sanitizeAssistantDisplayText(di.data.content) : di.data.content;
-      if (c.startsWith("[Replying to:")) return false;
       return c.includes(quoteText);
     });
     if (target === -1) return;

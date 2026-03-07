@@ -417,6 +417,9 @@ export const app = new Elysia()
           payload: {
             role: "user",
             content: body.content,
+            ...(body.replyToId ? { replyToId: body.replyToId } : {}),
+            ...(body.replyToBody ? { replyToBody: body.replyToBody } : {}),
+            ...(body.replyToSender ? { replyToSender: body.replyToSender } : {}),
             ...(body.imagePaths?.length ? { imagePaths: body.imagePaths } : {}),
           },
         });
@@ -429,6 +432,10 @@ export const app = new Elysia()
         imagePaths: body.imagePaths,
         agentId: body.agentId,
         sessionKey,
+        replyToId: body.replyToId,
+        replyToBody: body.replyToBody,
+        replyToSender: body.replyToSender,
+        threadId: body.threadId,
         signal: abortController.signal,
         onStream: (evt) => {
           emitEvent({
@@ -456,6 +463,10 @@ export const app = new Elysia()
         content: t.String(),
         imagePaths: t.Optional(t.Array(t.String())),
         agentId: t.Optional(t.String()),
+        replyToId: t.Optional(t.String()),
+        replyToBody: t.Optional(t.String()),
+        replyToSender: t.Optional(t.String()),
+        threadId: t.Optional(t.String()),
       }),
     }
   )
@@ -609,6 +620,10 @@ export const app = new Elysia()
         imagePaths: t.Optional(t.Array(t.String())),
         agentId: t.Optional(t.String()),
         newSession: t.Optional(t.Boolean()),
+        replyToId: t.Optional(t.String()),
+        replyToBody: t.Optional(t.String()),
+        replyToSender: t.Optional(t.String()),
+        threadId: t.Optional(t.String()),
       }),
       t.Object({
         type: t.Literal("subscribe_session"),
@@ -758,6 +773,9 @@ export const app = new Elysia()
             payload: {
               role: "user",
               content: body.content,
+              ...(body.replyToId ? { replyToId: body.replyToId } : {}),
+              ...(body.replyToBody ? { replyToBody: body.replyToBody } : {}),
+              ...(body.replyToSender ? { replyToSender: body.replyToSender } : {}),
               ...(body.imagePaths?.length ? { imagePaths: body.imagePaths } : {}),
             },
           });
@@ -773,6 +791,10 @@ export const app = new Elysia()
           imagePaths: body.imagePaths,
           agentId,
           sessionKey: sessionKey ?? undefined,
+          replyToId: body.replyToId,
+          replyToBody: body.replyToBody,
+          replyToSender: body.replyToSender,
+          threadId: body.threadId,
           signal: abortController.signal,
           onStream: (evt) => {
             emitStream({

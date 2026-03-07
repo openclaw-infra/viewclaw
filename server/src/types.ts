@@ -30,6 +30,10 @@ export type ClientMessage =
       imagePaths?: string[];
       agentId?: string;
       newSession?: boolean;
+      replyToId?: string;
+      replyToBody?: string;
+      replyToSender?: string;
+      threadId?: string;
     }
   | {
       type: "subscribe_session";

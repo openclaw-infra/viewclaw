@@ -43,6 +43,10 @@ export const sendMessage = async (body: {
   imagePaths?: string[];
   agentId?: string;
   sessionKey?: string;
+  replyToId?: string;
+  replyToBody?: string;
+  replyToSender?: string;
+  threadId?: string;
   overrideToken?: string;
   onStream?: StreamCallback;
   signal?: AbortSignal;
@@ -82,6 +86,10 @@ export const sendMessage = async (body: {
         agentId,
         sessionKey: body.sessionKey ?? null,
         forceNewSession: !body.sessionKey,
+        replyToId: body.replyToId ?? null,
+        replyToBody: body.replyToBody ?? null,
+        replyToSender: body.replyToSender ?? null,
+        threadId: body.threadId ?? null,
       });
       const result = body.signal
         ? await Promise.race([

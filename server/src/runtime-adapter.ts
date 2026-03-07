@@ -7,12 +7,25 @@ type DispatchParams = {
   agentId: string;
   sessionKey?: string;
   forceNewSession?: boolean;
+  replyToId?: string;
+  replyToBody?: string;
+  replyToSender?: string;
+  threadId?: string | number;
   onReply: ReplyCallback;
 };
 
 type RuntimeAdapterParams = {
   runtime: any;
   config?: any;
+};
+
+const buildUntrustedMetadataBlock = (
+  label: string,
+  value: Record<string, unknown>,
+): string | undefined => {
+  const entries = Object.entries(value).filter(([, v]) => v != null && v !== "");
+  if (entries.length === 0) return undefined;
+  return `${label} (untrusted metadata):\n${JSON.stringify(Object.fromEntries(entries), null, 2)}`;
 };
 
 const appendPayloadText = (chunks: string[], payload: unknown) => {
@@ -74,6 +87,19 @@ export const createRuntimeAdapter = ({ runtime, config }: RuntimeAdapterParams) 
       const chatId =
         params.sessionKey ??
         `clawflow-${params.agentId}-${params.forceNewSession ? randomUUID() : "main"}`;
+      const conversationLabel = params.threadId != null ? `mobile thread:${params.threadId}` : "mobile";
+      const untrustedContext = [
+        buildUntrustedMetadataBlock("Conversation info", {
+          sender_id: "mobile",
+          sender: "mobile",
+          thread_id: params.threadId ?? undefined,
+        }),
+        buildUntrustedMetadataBlock("Sender", {
+          label: "mobile",
+          id: "mobile",
+          name: "mobile",
+        }),
+      ].filter((entry): entry is string => Boolean(entry));
 
       const onReply: ReplyCallback = async (payload) => {
         appendPayloadText(chunks, payload);
@@ -87,9 +113,15 @@ export const createRuntimeAdapter = ({ runtime, config }: RuntimeAdapterParams) 
           senderId: "mobile",
           chatType: "direct",
           chatId,
+          conversationLabel,
           text: params.content,
           agentId: params.agentId,
           ...(params.sessionKey ? { sessionKey: params.sessionKey } : {}),
+          ...(params.replyToId ? { replyToId: params.replyToId } : {}),
+          ...(params.replyToBody ? { replyToBody: params.replyToBody } : {}),
+          ...(params.replyToSender ? { replyToSender: params.replyToSender } : {}),
+          ...(params.threadId != null ? { messageThreadId: params.threadId } : {}),
+          ...(untrustedContext.length > 0 ? { untrustedContext } : {}),
           reply: onReply,
         });
         return { content: chunks.join("") };
@@ -109,8 +141,14 @@ export const createRuntimeAdapter = ({ runtime, config }: RuntimeAdapterParams) 
           Provider: "clawflow",
           Surface: "clawflow",
           ChatType: "direct",
+          ConversationLabel: conversationLabel,
           SenderId: "mobile",
           SenderName: "mobile",
+          ...(params.replyToId ? { ReplyToId: params.replyToId } : {}),
+          ...(params.replyToBody ? { ReplyToBody: params.replyToBody } : {}),
+          ...(params.replyToSender ? { ReplyToSender: params.replyToSender } : {}),
+          ...(params.threadId != null ? { MessageThreadId: params.threadId } : {}),
+          ...(untrustedContext.length > 0 ? { UntrustedContext: untrustedContext } : {}),
           CommandAuthorized: true,
         };
 

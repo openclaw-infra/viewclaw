@@ -6,9 +6,11 @@ import type {
   ExecutionLog,
   GatewayEvent,
   ImageAttachment,
+  ReplyPreview,
   SessionInfo,
   StreamItem,
 } from "../types/gateway";
+import { sanitizeAssistantDisplayText } from "../utils/message-sanitizer";
 
 const FALLBACK_WS = "ws://127.0.0.1:3000";
 
@@ -160,7 +162,7 @@ export const useGatewaySession = ({
             kind: "message" as const,
             data: {
               ...item.data,
-              content: finalContent.replace(/^\[\[reply_to_current\]\]\s*/i, ""),
+              content: sanitizeAssistantDisplayText(finalContent),
               streaming: false,
             },
           };
@@ -267,7 +269,7 @@ export const useGatewaySession = ({
 
         let cleanContent = content;
         if (role === "assistant") {
-          cleanContent = content.replace(/^\[\[reply_to_current\]\]\s*/i, "");
+          cleanContent = sanitizeAssistantDisplayText(content);
         }
 
         const incomingId = event.messageId ?? `msg-${event.seq}`;
@@ -286,6 +288,14 @@ export const useGatewaySession = ({
           id: incomingId,
           role,
           content: cleanContent,
+          replyTo:
+            typeof p.replyToBody === "string"
+              ? {
+                  messageId: typeof p.replyToId === "string" ? p.replyToId : undefined,
+                  body: p.replyToBody,
+                  senderName: typeof p.replyToSender === "string" ? p.replyToSender : undefined,
+                }
+              : undefined,
           images,
           thinking: typeof p.thinking === "string" ? p.thinking : undefined,
           thinkingSummary: typeof p.thinkingSummary === "string" ? p.thinkingSummary : undefined,
@@ -564,6 +574,14 @@ export const useGatewaySession = ({
             id: m.id,
             role: m.role === "user" ? "user" : "assistant",
             content: m.content ?? "",
+            replyTo:
+              m.replyToBody
+                ? {
+                    messageId: typeof m.replyToId === "string" ? m.replyToId : undefined,
+                    body: m.replyToBody,
+                    senderName: typeof m.replyToSender === "string" ? m.replyToSender : undefined,
+                  }
+                : undefined,
             thinking: m.thinking,
             thinkingSummary: m.thinkingSummary,
             images,
@@ -705,7 +723,7 @@ export const useGatewaySession = ({
   );
 
   const sendMessage = useCallback(
-    async (content: string, images?: ImageAttachment[]) => {
+    async (content: string, images?: ImageAttachment[], reply?: ReplyPreview | null) => {
       const text = content.trim();
       if ((!text && !images?.length) || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
@@ -720,6 +738,7 @@ export const useGatewaySession = ({
         role: "user",
         content: text,
         localStatus: "sending",
+        replyTo: reply ?? undefined,
         images: images?.length ? images : undefined,
         createdAt: Date.now(),
       };
@@ -770,6 +789,15 @@ export const useGatewaySession = ({
       }
       if (imagePaths?.length) {
         wsPayload.imagePaths = imagePaths;
+      }
+      if (reply?.messageId) {
+        wsPayload.replyToId = reply.messageId;
+      }
+      if (reply?.body) {
+        wsPayload.replyToBody = reply.body;
+      }
+      if (reply?.senderName) {
+        wsPayload.replyToSender = reply.senderName;
       }
 
       wsRef.current.send(JSON.stringify(wsPayload));

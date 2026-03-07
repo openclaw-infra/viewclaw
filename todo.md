@@ -179,3 +179,38 @@
 
 - [x] **迁移文档与运维手册更新**
   已更新 `OPENCLAW_PLUGIN.md`，补充 Discord/Telegram 能力对照、已实现/待完善清单、`channels.clawflow` 配置示例、故障排查步骤与发布前回归 checklist
+
+## P7 — 元信息能力对齐（参考 Discord / Telegram）
+
+- [x] **现状盘点：ClawFlow 上下文字段映射表**
+  已新增 `P7_METADATA_ALIGNMENT.md`，对齐 Discord/Telegram 的 `finalizeInboundContext` 语义，梳理 ClawFlow 当前字段覆盖、缺失字段与优先级，并给出执行顺序（transport/runtime/UI）
+
+- [x] **回复语义补齐：ReplyTo / 引用回复**
+  已补齐结构化回复语义：移动端 reply 不再把引用内容写进正文，而是单独传 `ReplyToId/ReplyToBody/ReplyToSender`；server 的 HTTP/WS/bridge/runtime-adapter 全链路透传，移动端本地气泡与实时事件也支持 reply 预览
+
+- [ ] **线程语义补齐：Thread / Topic 会话路由**
+  对齐 Telegram forum topic 与 Discord thread 的思路，补齐 `MessageThreadId` 与会话键映射策略，确保同一会话下不同线程不会串上下文
+
+- [ ] **会话标签语义补齐：ConversationLabel / GroupSubject**
+  统一会话展示标签生成规则（直聊/群聊/线程），兼容 `ConversationLabel`、`GroupSubject`、`GroupChannel`，并用于服务端路由与日志诊断
+
+- [x] **非可信元信息注入规范（UntrustedContext）**
+  已参考内核 `appendUntrustedContext` 在 `runtime-adapter` 中补齐 ClawFlow 的 `Conversation info` / `Sender` 非可信元信息注入，并统一设置 `ConversationLabel`；相关内容仅进入模型上下文，移动端渲染层会清洗掉，不作为用户正文展示
+
+- [x] **用户可见输出隔离：元信息不出现在聊天气泡**
+  已在移动端渲染边界落地隔离：assistant 文本统一经过 `sanitizeAssistantDisplayText` 清洗，去除 `Conversation info (untrusted metadata)`、`Sender (untrusted metadata)` 与 `Untrusted context (...)` 段落，避免直接展示给用户
+
+- [x] **消息渲染清洗规则**
+  已新增统一清洗器 `mobile/src/utils/message-sanitizer.ts`，并接入 `chat-stream` 与 `use-gateway-session`（流式结束与普通 message 事件），统一剥离内部回复标记与非可信元信息块
+
+- [x] **出站回复链路对齐（replyTo/threadId 透传）**
+  已打通 server 透传骨架：`/api/message`、WS `send_message`、`openclaw-client` bridge 请求、`runtime-adapter` 统一支持 `replyToId/threadId`，并映射到 runtime 入站上下文（`replyToId/MessageThreadId`）
+
+- [x] **移动端交互补齐：可视化“回复某条消息”**
+  已将移动端 Reply UI 改为结构化 reply preview：长按消息回复时保留 `messageId/body/senderName`，Composer 以上方引用条展示并可取消；发送时与服务端 `ReplyTo*` 字段一致，不再把引用文本直接拼进正文
+
+- [ ] **回归测试矩阵：元信息与回复能力**
+  新增测试覆盖：1) replyTo 生效；2) thread 路由不串会话；3) untrusted metadata 不进入用户可见输出；4) 模型误回显时清洗器生效；5) WS/HTTP 两条发送路径一致
+
+- [ ] **灰度与观测**
+  为元信息清洗与 reply/thread 路由增加诊断日志与开关（feature flag），先灰度启用，观察误杀率与漏拦截率，再全量发布

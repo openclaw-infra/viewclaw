@@ -11,14 +11,14 @@ import { useTheme } from "../theme/theme-context";
 import { SlashCommandPanel } from "./slash-command-panel";
 import { useVoiceRecorder } from "../hooks/use-voice-recorder";
 import type { SlashCommand } from "../data/slash-commands";
-import type { ImageAttachment } from "../types/gateway";
+import type { ImageAttachment, ReplyPreview } from "../types/gateway";
 
 type Props = {
   sending: boolean;
   gatewayHttpUrl: string;
-  replyContent?: string | null;
+  replyTarget?: ReplyPreview | null;
   onClearReply?: () => void;
-  onSend: (text: string, images?: ImageAttachment[]) => void;
+  onSend: (text: string, images?: ImageAttachment[], reply?: ReplyPreview | null) => void;
 };
 
 const formatDuration = (ms: number): string => {
@@ -75,7 +75,7 @@ const RecordingPulse = ({ color }: { color: string }) => {
   );
 };
 
-export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearReply, onSend }: Props) => {
+export const ChatComposer = ({ sending, gatewayHttpUrl, replyTarget, onClearReply, onSend }: Props) => {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -124,16 +124,13 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
 
   const submit = useCallback(() => {
     if (!canSend) return;
-    let text = value;
-    if (replyContent) {
-      const preview = replyContent.length > 200 ? replyContent.slice(0, 200) + "…" : replyContent;
-      text = `[Replying to: ${preview}]\n\n${value}`;
+    onSend(value, attachedImages.length > 0 ? attachedImages : undefined, replyTarget);
+    if (replyTarget) {
       onClearReply?.();
     }
-    onSend(text, attachedImages.length > 0 ? attachedImages : undefined);
     setValue("");
     setAttachedImages([]);
-  }, [canSend, value, attachedImages, replyContent, onSend, onClearReply]);
+  }, [canSend, value, attachedImages, replyTarget, onSend, onClearReply]);
 
   const handleSelect = useCallback(
     (cmd: SlashCommand) => {
@@ -165,7 +162,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
   const isTranscribing = voice.status === "transcribing";
   const isVoiceBusy = isRecording || isTranscribing;
 
-  const hasReply = !!replyContent;
+  const hasReply = !!replyTarget;
   const slashVisible = !!slashState?.active;
 
   return (
@@ -306,7 +303,7 @@ export const ChatComposer = ({ sending, gatewayHttpUrl, replyContent, onClearRep
                     ellipsizeMode="tail"
                     flex={1}
                   >
-                    {replyContent}
+                    {replyTarget?.body}
                   </Text>
                   <Pressable onPress={onClearReply} hitSlop={8}>
                     <X size={12} color={colors.text.muted} />

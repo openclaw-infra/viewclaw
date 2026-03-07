@@ -28,11 +28,18 @@ export type ImageAttachment = {
   height: number;
 };
 
+export type ReplyPreview = {
+  messageId?: string;
+  body: string;
+  senderName?: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
   localStatus?: "sending" | "failed";
+  replyTo?: ReplyPreview;
   thinking?: string;
   thinkingSummary?: string;
   streaming?: boolean;

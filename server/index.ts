@@ -73,6 +73,10 @@ const handleBridgeRequest = async (
     const content = typeof req.payload?.content === "string" ? req.payload.content : "";
     const agentId = typeof req.payload?.agentId === "string" ? req.payload.agentId : "main";
     const sessionKey = typeof req.payload?.sessionKey === "string" ? req.payload.sessionKey : undefined;
+    const replyToId = typeof req.payload?.replyToId === "string" ? req.payload.replyToId : undefined;
+    const replyToBody = typeof req.payload?.replyToBody === "string" ? req.payload.replyToBody : undefined;
+    const replyToSender = typeof req.payload?.replyToSender === "string" ? req.payload.replyToSender : undefined;
+    const threadId = typeof req.payload?.threadId === "string" ? req.payload.threadId : undefined;
     const forceNewSession = req.payload?.forceNewSession === true;
     const runtimeSessionKey = sessionKey ?? (forceNewSession ? `agent:${agentId}:${randomUUID()}` : undefined);
     const runtimeAdapter = createRuntimeAdapter({
@@ -84,6 +88,10 @@ const handleBridgeRequest = async (
       agentId,
       sessionKey: runtimeSessionKey,
       forceNewSession,
+      replyToId,
+      replyToBody,
+      replyToSender,
+      threadId,
       onReply: async () => {},
     });
 

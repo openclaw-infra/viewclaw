@@ -18,6 +18,7 @@ import { useGatewaySession } from "./src/hooks/use-gateway-session";
 import { useGatewayManager } from "./src/hooks/use-gateway-manager";
 import { useSessionContext } from "./src/hooks/use-session-context";
 import { AppThemeProvider, useTheme } from "./src/theme/theme-context";
+import type { ReplyPreview } from "./src/types/gateway";
 
 type Page = "chat" | "settings";
 
@@ -55,7 +56,7 @@ function Main() {
   const [sessionSheetVisible, setSessionSheetVisible] = useState(false);
   const [gatewaySheetVisible, setGatewaySheetVisible] = useState(false);
   const [forwardContent, setForwardContent] = useState<string | null>(null);
-  const [replyContent, setReplyContent] = useState<string | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyPreview | null>(null);
 
   const openSessionSheet = useCallback(() => setSessionSheetVisible(true), []);
   const closeSessionSheet = useCallback(() => setSessionSheetVisible(false), []);
@@ -80,11 +81,11 @@ function Main() {
 
   const closeForwardSheet = useCallback(() => setForwardContent(null), []);
 
-  const handleReplyRequest = useCallback((content: string) => {
-    setReplyContent(content);
+  const handleReplyRequest = useCallback((reply: ReplyPreview) => {
+    setReplyTarget(reply);
   }, []);
 
-  const clearReply = useCallback(() => setReplyContent(null), []);
+  const clearReply = useCallback(() => setReplyTarget(null), []);
 
   const themeName = isDark ? "dark" : "light";
 
@@ -140,9 +141,9 @@ function Main() {
               <ChatComposer
                 sending={session.sending}
                 gatewayHttpUrl={session.gatewayHttpUrl}
-                replyContent={replyContent}
+                replyTarget={replyTarget}
                 onClearReply={clearReply}
-                onSend={(text, images) => session.sendMessage(text, images)}
+                onSend={(text, images, reply) => session.sendMessage(text, images, reply)}
               />
             </YStack>
           </KeyboardAvoidingView>
