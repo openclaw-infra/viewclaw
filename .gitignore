@@ -1,50 +1,48 @@
-# macOS / editor
-.DS_Store
-.idea/
-.vscode/
+# Dependencies
+node_modules/
 
-# local agent/cache
-.codex/
+# Expo
+mobile/.expo/
+mobile/dist/
+mobile/web-build/
+mobile/ios/
+mobile/android/
 
-# env files
+# Bun
+*.lockb
+bun.lock
+
+# Build output
+*.tsbuildinfo
+dist/
+build/
+.output/
+
+# Environment
 .env
 .env.*
 !.env.example
 
-# logs
-*.log
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-pnpm-debug.log*
 
-# node
-node_modules/
-**/node_modules/
-
-# build / cache
-dist/
-build/
+# Test coverage
 coverage/
+
+# Temporary
+*.tmp
+*.temp
 .cache/
-tmp/
-temp/
-
-# Expo / React Native
-.expo/
-mobile/.expo/
-mobile/web-build/
-mobile/.expo-shared/
-android/
-ios/
-*.keystore
-
-# Metro / Babel / TypeScript
-.metro-health-check*
-.metro-cache/
-.rpt2_cache/
-*.tsbuildinfo
-
-# Server runtime data (keep directory only)
-server/data/*.json
-!server/data/.gitkeep

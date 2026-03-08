@@ -1,0 +1,41 @@
+import i18n from "i18next";
+import { initReactI18next } from "react-i18next";
+import { getLocales } from "expo-localization";
+import en from "./locales/en";
+import zh from "./locales/zh";
+import { settingsStorage } from "../data/settings-storage";
+import type { AppLanguage } from "../data/settings-storage";
+
+export type { AppLanguage };
+
+const getDeviceLanguage = (): string => {
+  const locales = getLocales();
+  const tag = locales[0]?.languageCode ?? "en";
+  return tag.startsWith("zh") ? "zh" : "en";
+};
+
+const resolveLanguage = (pref: AppLanguage): string => {
+  if (pref === "system") return getDeviceLanguage();
+  return pref;
+};
+
+const savedLang = settingsStorage.getLanguage();
+
+i18n.use(initReactI18next).init({
+  resources: { en: { translation: en }, zh: { translation: zh } },
+  lng: resolveLanguage(savedLang),
+  fallbackLng: "en",
+  interpolation: { escapeValue: false },
+  compatibilityJSON: "v4",
+});
+
+export const changeLanguage = (lang: AppLanguage) => {
+  settingsStorage.setLanguage(lang);
+  i18n.changeLanguage(resolveLanguage(lang));
+};
+
+export const getCurrentLanguagePref = (): AppLanguage => {
+  return settingsStorage.getLanguage();
+};
+
+export default i18n;

@@ -1,14 +1,41 @@
 {
-  "name": "viewclaw-server",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
+  "name": "clawflow",
+  "version": "2.0.0",
+  "description": "ClawFlow mobile companion plugin for OpenClaw — Elysia WebSocket/HTTP gateway for iOS app",
+  "keywords": [
+    "openclaw",
+    "plugin",
+    "mobile",
+    "gateway",
+    "websocket",
+    "clawflow"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicepkg/viewclaw"
+  },
+  "files": [
+    "index.ts",
+    "src/",
+    "!src/*.test.ts",
+    "openclaw.plugin.json"
+  ],
   "scripts": {
-    "dev": "bun --watch src/index.ts",
-    "start": "bun src/index.ts"
+    "dev": "bun run --watch src/index.ts",
+    "prepublishOnly": "echo 'Publishing clawflow plugin to npm'"
   },
   "dependencies": {
-    "elysia": "^1.1.24",
-    "@elysiajs/cors": "^1.1.1"
+    "@sinclair/typebox": "^0.34.0",
+    "elysia": "^1.4.0"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "module": "src/index.js",
+  "openclaw": {
+    "extensions": [
+      "index.ts"
+    ]
   }
 }
