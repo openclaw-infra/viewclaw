@@ -10,7 +10,6 @@ import type {
   SessionInfo,
   StreamItem,
 } from "../types/gateway";
-import { sanitizeAssistantDisplayText } from "../utils/message-sanitizer";
 
 const FALLBACK_WS = "ws://127.0.0.1:3000";
 
@@ -27,12 +26,23 @@ type Options = {
 
 type WsIncoming =
   | GatewayEvent
-  | { type: "pong" | "ack" | "connected" | "subscribed" | "unsubscribed" | "unknown_message" | "session_created"; [k: string]: unknown };
+  | {
+      type:
+        | "pong"
+        | "ack"
+        | "connected"
+        | "subscribed"
+        | "unsubscribed"
+        | "unknown_message"
+        | "session_created";
+      [k: string]: unknown;
+    };
 
 const DEFAULT_AGENT_ID = "main";
 const PENDING_PREFIX = "pending-";
 const isPendingSession = (id: string) => id.startsWith(PENDING_PREFIX);
-const isSessionKeyNotFoundError = (msg: string) => msg.includes("Session key not found");
+const isSessionKeyNotFoundError = (msg: string) =>
+  msg.includes("Session key not found");
 
 export const useGatewaySession = ({
   sessionId: initialSessionId,
@@ -43,10 +53,13 @@ export const useGatewaySession = ({
   const wsUrl = externalWsUrl || FALLBACK_WS;
   const httpUrl = externalHttpUrl || wsUrl.replace(/^ws(s?)/, "http$1");
 
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("connecting");
+  const [connectionStatus, setConnectionStatus] =
+    useState<ConnectionStatus>("connecting");
   const [stream, setStream] = useState<StreamItem[]>([]);
   const [sending, setSending] = useState(false);
-  const [currentSessionId, setCurrentSessionId] = useState(initialSessionId ?? "");
+  const [currentSessionId, setCurrentSessionId] = useState(
+    initialSessionId ?? "",
+  );
   const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [agents, setAgents] = useState<AgentInfo[]>([]);
 
@@ -72,7 +85,9 @@ export const useGatewaySession = ({
   const wsUrlRef = useRef(wsUrl);
   const httpUrlRef = useRef(httpUrl);
   const onMessageDoneRef = useRef(onMessageDone);
-  const pendingAckRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pendingAckRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
   const blockAutoFallbackRef = useRef(false);
 
   currentSessionRef.current = currentSessionId;
@@ -95,7 +110,7 @@ export const useGatewaySession = ({
       }
 
       const streamingIdx = prev.findIndex(
-        (item) => item.kind === "message" && item.data.streaming
+        (item) => item.kind === "message" && item.data.streaming,
       );
       if (streamingIdx !== -1) {
         const before = prev.slice(0, streamingIdx);
@@ -128,59 +143,71 @@ export const useGatewaySession = ({
     if (!typingIdRef.current) return;
     const tid = typingIdRef.current;
     typingIdRef.current = null;
-    setStream((prev) => prev.filter((item) => !(item.kind === "typing" && item.id === tid)));
+    setStream((prev) =>
+      prev.filter((item) => !(item.kind === "typing" && item.id === tid)),
+    );
   }, []);
 
   const streamingMsgRef = useRef<string | null>(null);
   const streamedDoneRef = useRef(false);
 
-  const updateStreamingMessage = useCallback((messageId: string, delta: string) => {
-    setStream((prev) => {
-      const idx = prev.findIndex(
-        (item) => item.kind === "message" && item.data.id === messageId
+  const updateStreamingMessage = useCallback(
+    (messageId: string, delta: string) => {
+      setStream((prev) => {
+        const idx = prev.findIndex(
+          (item) => item.kind === "message" && item.data.id === messageId,
+        );
+        if (idx === -1) return prev;
+        const item = prev[idx] as { kind: "message"; data: ChatMessage };
+        const updated: StreamItem = {
+          kind: "message",
+          data: { ...item.data, content: item.data.content + delta },
+        };
+        const next = [...prev];
+        next[idx] = updated;
+        return next;
+      });
+    },
+    [],
+  );
+
+  const finalizeStreamingMessage = useCallback(
+    (messageId: string, content?: string, replyTo?: ReplyPreview) => {
+      streamingMsgRef.current = null;
+      streamedDoneRef.current = true;
+      setStream((prev) =>
+        prev.map((item) => {
+          if (item.kind === "message" && item.data.id === messageId) {
+            const finalContent = content ?? item.data.content;
+            return {
+              kind: "message" as const,
+              data: {
+                ...item.data,
+                content: finalContent,
+                replyTo,
+                streaming: false,
+              },
+            };
+          }
+          return item;
+        }),
       );
-      if (idx === -1) return prev;
-      const item = prev[idx] as { kind: "message"; data: ChatMessage };
-      const updated: StreamItem = {
-        kind: "message",
-        data: { ...item.data, content: item.data.content + delta },
-      };
-      const next = [...prev];
-      next[idx] = updated;
-      return next;
-    });
-  }, []);
+    },
+    [],
+  );
 
-  const finalizeStreamingMessage = useCallback((messageId: string, content?: string) => {
-    streamingMsgRef.current = null;
-    streamedDoneRef.current = true;
-    setStream((prev) =>
-      prev.map((item) => {
-        if (item.kind === "message" && item.data.id === messageId) {
-          const finalContent = content ?? item.data.content;
-          return {
-            kind: "message" as const,
-            data: {
-              ...item.data,
-              content: sanitizeAssistantDisplayText(finalContent),
-              streaming: false,
-            },
-          };
-        }
-        return item;
-      })
-    );
-  }, []);
-
-  const markLocalMessageStatus = useCallback((messageId: string, localStatus?: ChatMessage["localStatus"]) => {
-    setStream((prev) =>
-      prev.map((item) =>
-        item.kind === "message" && item.data.id === messageId
-          ? { kind: "message" as const, data: { ...item.data, localStatus } }
-          : item,
-      ),
-    );
-  }, []);
+  const markLocalMessageStatus = useCallback(
+    (messageId: string, localStatus?: ChatMessage["localStatus"]) => {
+      setStream((prev) =>
+        prev.map((item) =>
+          item.kind === "message" && item.data.id === messageId
+            ? { kind: "message" as const, data: { ...item.data, localStatus } }
+            : item,
+        ),
+      );
+    },
+    [],
+  );
 
   const parseEvent = useCallback(
     (event: GatewayEvent) => {
@@ -200,7 +227,7 @@ export const useGatewaySession = ({
 
         setStream((prev) => {
           const exists = prev.some(
-            (item) => item.kind === "message" && item.data.id === msgId
+            (item) => item.kind === "message" && item.data.id === msgId,
           );
           if (exists) {
             return prev.map((item) => {
@@ -222,7 +249,10 @@ export const useGatewaySession = ({
             streaming: true,
             createdAt: event.ts,
           };
-          return [...prev.filter((i) => i.kind !== "typing"), { kind: "message" as const, data: msg }];
+          return [
+            ...prev.filter((i) => i.kind !== "typing"),
+            { kind: "message" as const, data: msg },
+          ];
         });
         return;
       }
@@ -237,8 +267,20 @@ export const useGatewaySession = ({
         }
         const msgId = event.messageId ?? streamingMsgRef.current;
         const content = typeof p.content === "string" ? p.content : undefined;
+        const replyToBody = typeof p.replyToBody === "string" ? p.replyToBody : undefined;
+        const replyToSender = typeof p.replyToSender === "string" ? p.replyToSender : undefined;
         if (msgId) {
-          finalizeStreamingMessage(msgId, content);
+          finalizeStreamingMessage(
+            msgId,
+            content,
+            replyToBody
+              ? {
+                  messageId: typeof p.replyToId === "string" ? p.replyToId : undefined,
+                  body: replyToBody,
+                  senderName: replyToSender,
+                }
+              : undefined,
+          );
         }
         onMessageDoneRef.current?.();
         return;
@@ -248,18 +290,21 @@ export const useGatewaySession = ({
         const role = p.role === "assistant" ? "assistant" : "user";
         const content = String(p.content ?? "");
         const imagePaths = Array.isArray(p.imagePaths)
-          ? (p.imagePaths as string[]).filter((x) => typeof x === "string" && x.length > 0)
+          ? (p.imagePaths as string[]).filter(
+              (x) => typeof x === "string" && x.length > 0,
+            )
           : [];
-        const images: ImageAttachment[] | undefined = imagePaths.length > 0
-          ? imagePaths.map((path) => {
-              const normalized = path.startsWith("/") ? path : `/${path}`;
-              return {
-                uri: `${httpUrlRef.current}/api/images${normalized}`,
-                width: 200,
-                height: 200,
-              };
-            })
-          : undefined;
+        const images: ImageAttachment[] | undefined =
+          imagePaths.length > 0
+            ? imagePaths.map((path) => {
+                const normalized = path.startsWith("/") ? path : `/${path}`;
+                return {
+                  uri: `${httpUrlRef.current}/api/images${normalized}`,
+                  width: 200,
+                  height: 200,
+                };
+              })
+            : undefined;
         if (!content && !images?.length) return;
 
         if (role === "assistant") {
@@ -267,10 +312,7 @@ export const useGatewaySession = ({
           removeTyping();
         }
 
-        let cleanContent = content;
-        if (role === "assistant") {
-          cleanContent = sanitizeAssistantDisplayText(content);
-        }
+        const cleanContent = content;
 
         const incomingId = event.messageId ?? `msg-${event.seq}`;
         // Sender side already inserted local user bubble. Upgrade its status instead of duplicating.
@@ -291,21 +333,29 @@ export const useGatewaySession = ({
           replyTo:
             typeof p.replyToBody === "string"
               ? {
-                  messageId: typeof p.replyToId === "string" ? p.replyToId : undefined,
+                  messageId:
+                    typeof p.replyToId === "string" ? p.replyToId : undefined,
                   body: p.replyToBody,
-                  senderName: typeof p.replyToSender === "string" ? p.replyToSender : undefined,
+                  senderName:
+                    typeof p.replyToSender === "string"
+                      ? p.replyToSender
+                      : undefined,
                 }
               : undefined,
           images,
           thinking: typeof p.thinking === "string" ? p.thinking : undefined,
-          thinkingSummary: typeof p.thinkingSummary === "string" ? p.thinkingSummary : undefined,
+          thinkingSummary:
+            typeof p.thinkingSummary === "string"
+              ? p.thinkingSummary
+              : undefined,
           createdAt: event.ts,
         });
         return;
       }
 
       if (event.type === "thought") {
-        const summary = typeof p.thinkingSummary === "string" ? p.thinkingSummary : "";
+        const summary =
+          typeof p.thinkingSummary === "string" ? p.thinkingSummary : "";
         const thinking = typeof p.thinking === "string" ? p.thinking : "";
         appendLog({
           id: `log-${event.sessionId}-${event.seq}`,
@@ -318,7 +368,9 @@ export const useGatewaySession = ({
       }
 
       if (event.type === "action") {
-        const toolCalls = p.toolCalls as Array<{ name?: string; arguments?: unknown }> | undefined;
+        const toolCalls = p.toolCalls as
+          | Array<{ name?: string; arguments?: unknown }>
+          | undefined;
         if (toolCalls && toolCalls.length > 0) {
           for (const tc of toolCalls) {
             const args = tc.arguments ? JSON.stringify(tc.arguments) : "";
@@ -351,8 +403,11 @@ export const useGatewaySession = ({
           id: `log-${event.sessionId}-${event.seq}`,
           messageId: event.messageId,
           level: "observation",
-          text: toolName ? `${toolName} returned` : content.slice(0, 200) || "Observation",
-          detail: content.length > 200 ? content.slice(0, 500) + "..." : content,
+          text: toolName
+            ? `${toolName} returned`
+            : content.slice(0, 200) || "Observation",
+          detail:
+            content.length > 200 ? content.slice(0, 500) + "..." : content,
           toolName,
           createdAt: event.ts,
         });
@@ -397,7 +452,14 @@ export const useGatewaySession = ({
         });
       }
     },
-    [appendMessage, appendLog, removeTyping, updateStreamingMessage, finalizeStreamingMessage, markLocalMessageStatus]
+    [
+      appendMessage,
+      appendLog,
+      removeTyping,
+      updateStreamingMessage,
+      finalizeStreamingMessage,
+      markLocalMessageStatus,
+    ],
   );
 
   const wsSend = useCallback((data: Record<string, unknown>) => {
@@ -410,17 +472,25 @@ export const useGatewaySession = ({
   const subscribeToSession = useCallback(
     (sessionId: string) => {
       if (!sessionId) return;
-      wsSend({ type: "subscribe_session", sessionId, agentId: getAgentId(sessionId) });
+      wsSend({
+        type: "subscribe_session",
+        sessionId,
+        agentId: getAgentId(sessionId),
+      });
     },
-    [wsSend, getAgentId]
+    [wsSend, getAgentId],
   );
 
   const unsubscribeFromSession = useCallback(
     (sessionId: string) => {
       if (!sessionId) return;
-      wsSend({ type: "unsubscribe_session", sessionId });
+      wsSend({
+        type: "unsubscribe_session",
+        sessionId,
+        agentId: getAgentId(sessionId),
+      });
     },
-    [wsSend]
+    [wsSend, getAgentId],
   );
 
   const scheduleReconnect = useCallback((connectFn: () => void) => {
@@ -462,7 +532,7 @@ export const useGatewaySession = ({
             type: "subscribe_session",
             sessionId: sid,
             agentId: getAgentId(sid),
-          })
+          }),
         );
       }
     };
@@ -478,7 +548,8 @@ export const useGatewaySession = ({
       if (parsed.type === "pong") return;
 
       if (parsed.type === "ack") {
-        const ackMessageId = typeof parsed.messageId === "string" ? parsed.messageId : "";
+        const ackMessageId =
+          typeof parsed.messageId === "string" ? parsed.messageId : "";
         if (ackMessageId) {
           const pending = pendingAckRef.current.get(ackMessageId);
           if (pending) {
@@ -503,12 +574,19 @@ export const useGatewaySession = ({
         const realAgent = (parsed.agentId as string) ?? DEFAULT_AGENT_ID;
         if (pendingId && realId) {
           blockAutoFallbackRef.current = false;
-          const title = sessionsRef.current.find((s) => s.id === pendingId)?.title || "";
+          const title =
+            sessionsRef.current.find((s) => s.id === pendingId)?.title || "";
           setSessions((prev) =>
-            prev.map((s) => s.id === pendingId ? { ...s, id: realId, agentId: realAgent, title } : s)
+            prev.map((s) =>
+              s.id === pendingId
+                ? { ...s, id: realId, agentId: realAgent, title }
+                : s,
+            ),
           );
           sessionsRef.current = sessionsRef.current.map((s) =>
-            s.id === pendingId ? { ...s, id: realId, agentId: realAgent, title } : s
+            s.id === pendingId
+              ? { ...s, id: realId, agentId: realAgent, title }
+              : s,
           );
           if (currentSessionRef.current === pendingId) {
             setCurrentSessionId(realId);
@@ -524,7 +602,11 @@ export const useGatewaySession = ({
       }
 
       const evt = parsed as GatewayEvent;
-      if (evt.sessionId && currentSessionRef.current && evt.sessionId !== currentSessionRef.current) {
+      if (
+        evt.sessionId &&
+        currentSessionRef.current &&
+        evt.sessionId !== currentSessionRef.current
+      ) {
         if (!isPendingSession(currentSessionRef.current)) return;
       }
       if (evt.seq != null && evt.seq <= lastSeqRef.current) return;
@@ -545,7 +627,7 @@ export const useGatewaySession = ({
     try {
       const baseUrl = httpUrlRef.current;
       const res = await fetch(
-        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${getAgentId(sessionId)}&limit=100`
+        `${baseUrl}/api/sessions/${sessionId}/history?agentId=${getAgentId(sessionId)}&limit=100`,
       );
       const data = await res.json();
       if (!data.ok || !Array.isArray(data.messages)) return;
@@ -561,34 +643,41 @@ export const useGatewaySession = ({
         seenRef.current.add(m.id);
 
         if (m.type === "message" && m.role) {
-          const images: ImageAttachment[] | undefined =
-            m.imagePaths?.length
-              ? (m.imagePaths as string[]).map((p: string) => ({
-                  uri: toImageUrl(p),
-                  width: 200,
-                  height: 200,
-                }))
-              : undefined;
+          const images: ImageAttachment[] | undefined = m.imagePaths?.length
+            ? (m.imagePaths as string[]).map((p: string) => ({
+                uri: toImageUrl(p),
+                width: 200,
+                height: 200,
+              }))
+            : undefined;
 
           const msg: ChatMessage = {
             id: m.id,
             role: m.role === "user" ? "user" : "assistant",
             content: m.content ?? "",
-            replyTo:
-              m.replyToBody
-                ? {
-                    messageId: typeof m.replyToId === "string" ? m.replyToId : undefined,
-                    body: m.replyToBody,
-                    senderName: typeof m.replyToSender === "string" ? m.replyToSender : undefined,
-                  }
-                : undefined,
+            replyTo: m.replyToBody
+              ? {
+                  messageId:
+                    typeof m.replyToId === "string" ? m.replyToId : undefined,
+                  body: m.replyToBody,
+                  senderName:
+                    typeof m.replyToSender === "string"
+                      ? m.replyToSender
+                      : undefined,
+                }
+              : undefined,
             thinking: m.thinking,
             thinkingSummary: m.thinkingSummary,
             images,
             createdAt: m.ts ? new Date(m.ts).getTime() : 0,
           };
           items.push({ kind: "message", data: msg });
-        } else if (m.type === "thought" || m.type === "action" || m.type === "observation" || m.type === "error") {
+        } else if (
+          m.type === "thought" ||
+          m.type === "action" ||
+          m.type === "observation" ||
+          m.type === "error"
+        ) {
           let text = "";
           if (m.type === "thought") {
             text = m.thinkingSummary || m.thinking || "Thinking...";
@@ -596,7 +685,9 @@ export const useGatewaySession = ({
             const tc = m.toolCalls as Array<{ name?: string }> | undefined;
             text = tc?.[0]?.name ?? m.content ?? "Action";
           } else if (m.type === "observation") {
-            text = m.toolName ? `${m.toolName} returned` : (m.content?.slice(0, 200) || "Observation");
+            text = m.toolName
+              ? `${m.toolName} returned`
+              : m.content?.slice(0, 200) || "Observation";
           } else {
             text = m.content ?? "Error";
           }
@@ -616,7 +707,9 @@ export const useGatewaySession = ({
       if (items.length > 0) {
         setStream((prev) => [...items, ...prev]);
       }
-    } catch { /* offline */ }
+    } catch {
+      /* offline */
+    }
   }, []);
 
   const fetchAgents = useCallback(async (): Promise<AgentInfo[]> => {
@@ -628,56 +721,70 @@ export const useGatewaySession = ({
         agentsRef.current = data.agents;
         return data.agents;
       }
-    } catch { /* offline */ }
+    } catch {
+      /* offline */
+    }
     return agentsRef.current;
   }, []);
 
-  const fetchSessions = useCallback(async (agentsList?: AgentInfo[]) => {
-    try {
-      const known = agentsList ?? agentsRef.current;
-      const agentIds = known.length > 0
-        ? known.map((a) => a.id)
-        : [DEFAULT_AGENT_ID];
+  const fetchSessions = useCallback(
+    async (agentsList?: AgentInfo[]) => {
+      try {
+        const known = agentsList ?? agentsRef.current;
+        const agentIds =
+          known.length > 0 ? known.map((a) => a.id) : [DEFAULT_AGENT_ID];
 
-      const allRes = await Promise.all(
-        agentIds.map((aid) =>
-          fetch(`${httpUrlRef.current}/api/sessions?agentId=${aid}`)
-            .then((r) => r.json())
-            .then((d) => ({ data: d, agentId: aid }))
-            .catch(() => null)
-        ),
-      );
+        const allRes = await Promise.all(
+          agentIds.map((aid) =>
+            fetch(`${httpUrlRef.current}/api/sessions?agentId=${aid}`)
+              .then((r) => r.json())
+              .then((d) => ({ data: d, agentId: aid }))
+              .catch(() => null),
+          ),
+        );
 
-      const seen = new Set<string>();
-      let allSessions: SessionInfo[] = [];
-      let firstActive: string | undefined;
+        const seen = new Set<string>();
+        let allSessions: SessionInfo[] = [];
+        let firstActive: string | undefined;
 
-      for (const item of allRes) {
-        if (!item || !item.data.ok || !Array.isArray(item.data.sessions)) continue;
-        for (const s of item.data.sessions as SessionInfo[]) {
-          if (seen.has(s.id)) continue;
-          seen.add(s.id);
-          allSessions.push(s);
+        for (const item of allRes) {
+          if (!item || !item.data.ok || !Array.isArray(item.data.sessions))
+            continue;
+          for (const s of item.data.sessions as SessionInfo[]) {
+            if (seen.has(s.id)) continue;
+            seen.add(s.id);
+            allSessions.push(s);
+          }
+          if (!firstActive && item.data.activeSessionId) {
+            firstActive = item.data.activeSessionId;
+          }
         }
-        if (!firstActive && item.data.activeSessionId) {
-          firstActive = item.data.activeSessionId;
+
+        allSessions.sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+        setSessions(allSessions);
+        sessionsRef.current = allSessions;
+
+        if (
+          !currentSessionRef.current &&
+          allSessions.length > 0 &&
+          !blockAutoFallbackRef.current
+        ) {
+          const active = firstActive ?? allSessions[0]?.id;
+          if (active) {
+            setCurrentSessionId(active);
+            subscribeToSession(active);
+            loadHistory(active);
+          }
         }
+      } catch {
+        /* offline */
       }
-
-      allSessions.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      setSessions(allSessions);
-      sessionsRef.current = allSessions;
-
-      if (!currentSessionRef.current && allSessions.length > 0 && !blockAutoFallbackRef.current) {
-        const active = firstActive ?? allSessions[0]?.id;
-        if (active) {
-          setCurrentSessionId(active);
-          subscribeToSession(active);
-          loadHistory(active);
-        }
-      }
-    } catch { /* offline */ }
-  }, [subscribeToSession, loadHistory]);
+    },
+    [subscribeToSession, loadHistory],
+  );
 
   useEffect(() => {
     isUnmountedRef.current = false;
@@ -707,13 +814,21 @@ export const useGatewaySession = ({
         const uri = img.uri;
         const filename = uri.split("/").pop() ?? "image.jpg";
         const formData = new FormData();
-        formData.append("file", { uri, name: filename, type: "image/jpeg" } as any);
+        formData.append("file", {
+          uri,
+          name: filename,
+          type: "image/jpeg",
+        } as any);
 
         const res = await fetch(`${httpUrlRef.current}/api/upload-image`, {
           method: "POST",
           body: formData,
         });
-        const data = (await res.json()) as { ok: boolean; path?: string; error?: string };
+        const data = (await res.json()) as {
+          ok: boolean;
+          path?: string;
+          error?: string;
+        };
         return data.ok ? (data.path ?? null) : null;
       } catch {
         return null;
@@ -723,9 +838,18 @@ export const useGatewaySession = ({
   );
 
   const sendMessage = useCallback(
-    async (content: string, images?: ImageAttachment[], reply?: ReplyPreview | null) => {
+    async (
+      content: string,
+      images?: ImageAttachment[],
+      reply?: ReplyPreview | null,
+    ) => {
       const text = content.trim();
-      if ((!text && !images?.length) || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+      if (
+        (!text && !images?.length) ||
+        !wsRef.current ||
+        wsRef.current.readyState !== WebSocket.OPEN
+      )
+        return;
 
       if (streamingMsgRef.current) {
         finalizeStreamingMessage(streamingMsgRef.current);
@@ -759,14 +883,18 @@ export const useGatewaySession = ({
       const isNew = isPendingSession(currentSid);
 
       if (isNew) {
-        const pendingSession = sessionsRef.current.find((s) => s.id === currentSid);
+        const pendingSession = sessionsRef.current.find(
+          (s) => s.id === currentSid,
+        );
         const titleText = text.length > 50 ? text.slice(0, 50) + "..." : text;
         if (pendingSession) {
           setSessions((prev) =>
-            prev.map((s) => s.id === currentSid ? { ...s, title: titleText } : s)
+            prev.map((s) =>
+              s.id === currentSid ? { ...s, title: titleText } : s,
+            ),
           );
           sessionsRef.current = sessionsRef.current.map((s) =>
-            s.id === currentSid ? { ...s, title: titleText } : s
+            s.id === currentSid ? { ...s, title: titleText } : s,
           );
         }
       }
@@ -810,7 +938,13 @@ export const useGatewaySession = ({
       pendingAckRef.current.set(messageId, ackTimer);
       setTimeout(() => setSending(false), 80);
     },
-    [uploadImage, finalizeStreamingMessage, removeTyping, getAgentId, markLocalMessageStatus],
+    [
+      uploadImage,
+      finalizeStreamingMessage,
+      removeTyping,
+      getAgentId,
+      markLocalMessageStatus,
+    ],
   );
 
   const forwardMessage = useCallback(
@@ -854,54 +988,62 @@ export const useGatewaySession = ({
         loadHistory(newSessionId);
       }
     },
-    [subscribeToSession, unsubscribeFromSession, loadHistory]
+    [subscribeToSession, unsubscribeFromSession, loadHistory],
   );
 
   const refreshSessions = useCallback(async () => {
     await fetchSessions();
   }, [fetchSessions]);
 
-  const createNewSession = useCallback(async (agentId?: string) => {
-    blockAutoFallbackRef.current = false;
-    const resolvedAgent = agentId ?? getAgentId();
-    const pendingId = `${PENDING_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    const pendingSession: SessionInfo = {
-      id: pendingId,
-      agentId: resolvedAgent,
-      jsonlPath: "",
-      createdAt: new Date().toISOString(),
-      title: "",
-    };
+  const createNewSession = useCallback(
+    async (agentId?: string) => {
+      blockAutoFallbackRef.current = false;
+      const resolvedAgent = agentId ?? getAgentId();
+      const pendingId = `${PENDING_PREFIX}${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const pendingSession: SessionInfo = {
+        id: pendingId,
+        agentId: resolvedAgent,
+        jsonlPath: "",
+        createdAt: new Date().toISOString(),
+        title: "",
+      };
 
-    setSessions((prev) => [pendingSession, ...prev]);
-    sessionsRef.current = [pendingSession, ...sessionsRef.current];
+      setSessions((prev) => [pendingSession, ...prev]);
+      sessionsRef.current = [pendingSession, ...sessionsRef.current];
 
-    setStream([]);
-    seenRef.current.clear();
-    bufferRef.current = [];
-    streamingMsgRef.current = null;
-    streamedDoneRef.current = false;
-    typingIdRef.current = null;
-    pendingAckRef.current.forEach((timer) => clearTimeout(timer));
-    pendingAckRef.current.clear();
-    lastSeqRef.current = 0;
+      setStream([]);
+      seenRef.current.clear();
+      bufferRef.current = [];
+      streamingMsgRef.current = null;
+      streamedDoneRef.current = false;
+      typingIdRef.current = null;
+      pendingAckRef.current.forEach((timer) => clearTimeout(timer));
+      pendingAckRef.current.clear();
+      lastSeqRef.current = 0;
 
-    const oldSessionId = currentSessionRef.current;
-    if (oldSessionId && !isPendingSession(oldSessionId)) {
-      unsubscribeFromSession(oldSessionId);
-    }
-    setCurrentSessionId(pendingId);
+      const oldSessionId = currentSessionRef.current;
+      if (oldSessionId && !isPendingSession(oldSessionId)) {
+        unsubscribeFromSession(oldSessionId);
+      }
+      setCurrentSessionId(pendingId);
 
-    return pendingId;
-  }, [getAgentId, unsubscribeFromSession]);
+      return pendingId;
+    },
+    [getAgentId, unsubscribeFromSession],
+  );
 
   const deleteSession = useCallback(
     (sessionId: string) => {
-      if (currentSessionRef.current === sessionId && !isPendingSession(sessionId)) {
+      if (
+        currentSessionRef.current === sessionId &&
+        !isPendingSession(sessionId)
+      ) {
         unsubscribeFromSession(sessionId);
       }
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      sessionsRef.current = sessionsRef.current.filter((s) => s.id !== sessionId);
+      sessionsRef.current = sessionsRef.current.filter(
+        (s) => s.id !== sessionId,
+      );
 
       if (currentSessionRef.current === sessionId) {
         setSessions((prev) => {
@@ -918,7 +1060,7 @@ export const useGatewaySession = ({
         });
       }
     },
-    [switchSession, unsubscribeFromSession]
+    [switchSession, unsubscribeFromSession],
   );
 
   return useMemo(
@@ -937,6 +1079,20 @@ export const useGatewaySession = ({
       refreshSessions,
       gatewayHttpUrl: httpUrl,
     }),
-    [connectionStatus, currentSessionId, sessions, agents, stream, sending, sendMessage, forwardMessage, switchSession, createNewSession, deleteSession, refreshSessions, httpUrl]
+    [
+      connectionStatus,
+      currentSessionId,
+      sessions,
+      agents,
+      stream,
+      sending,
+      sendMessage,
+      forwardMessage,
+      switchSession,
+      createNewSession,
+      deleteSession,
+      refreshSessions,
+      httpUrl,
+    ],
   );
 };

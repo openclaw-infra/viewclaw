@@ -64,9 +64,10 @@ const SessionRow = memo(
     const { colors } = useTheme();
     const { t } = useTranslation();
     const shortId = item.id.slice(0, 8);
-    const displayTitle = item.title || (item.sessionKey
+    const rawTitle = item.title || (item.sessionKey
       ? item.sessionKey.replace(/^agent:\w+:/, "").replace(/^openresponses:/, "").slice(0, 20)
       : shortId);
+    const displayTitle = rawTitle;
 
     return (
       <Pressable onPress={() => onSelect(item.id)}>

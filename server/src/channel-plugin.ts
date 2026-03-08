@@ -40,6 +40,8 @@ type BuildParams = {
 
 const CHANNEL_ID = "clawflow";
 const DEFAULT_ACCOUNT_ID = "mobile";
+const STARTUP_WAIT_TIMEOUT_MS = 10_000;
+const STARTUP_WAIT_INTERVAL_MS = 250;
 const LEGACY_ACCOUNT_FIELDS = [
   "name",
   "enabled",
@@ -49,6 +51,24 @@ const LEGACY_ACCOUNT_FIELDS = [
   "requireMention",
   "replyToMode",
 ] as const;
+
+async function probeGatewayHealth(port: number): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/healthz`);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function waitForGatewayHealthy(port: number, timeoutMs = STARTUP_WAIT_TIMEOUT_MS): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await probeGatewayHealth(port)) return true;
+    await new Promise((resolve) => setTimeout(resolve, STARTUP_WAIT_INTERVAL_MS));
+  }
+  return false;
+}
 
 const channelRoot = (cfg: any): Record<string, any> => cfg?.channels?.[CHANNEL_ID] ?? {};
 
@@ -468,7 +488,12 @@ export const buildClawflowChannelPlugin = ({
   gateway: {
     startAccount: async ({ account }: { account: ChannelAccount }) => {
       const logger = getLogger();
+      const gateway = getGatewayState();
       logger?.info(`[clawflow] [${account.accountId}] channel gateway start delegated to service runtime`);
+      const healthy = await waitForGatewayHealthy(gateway.port);
+      if (!healthy) {
+        throw new Error(`ClawFlow gateway did not become healthy on port ${gateway.port}`);
+      }
     },
     stopAccount: async ({ account }: { account: ChannelAccount }) => {
       const logger = getLogger();
@@ -493,10 +518,11 @@ export const buildClawflowChannelPlugin = ({
     }),
     probeAccount: async ({ account }: { account: ChannelAccount }) => {
       const gateway = getGatewayState();
+      const healthy = await probeGatewayHealth(gateway.port);
       return {
-        ok: gateway.running,
+        ok: healthy,
         accountId: account.accountId,
-        running: gateway.running,
+        running: healthy,
         port: gateway.port,
         lastError: gateway.lastError,
       };

@@ -36,6 +36,8 @@ export type StreamCallback = (event: {
   messageId: string;
   delta?: string;
   content?: string;
+  replyToBody?: string;
+  replyToSender?: string;
 }) => void;
 
 export const sendMessage = async (body: {
@@ -102,11 +104,18 @@ export const sendMessage = async (body: {
 
       if (streaming) {
         const msgId = `stream-msg-${Date.now()}`;
+        const cleaned = sanitizeWithReplyPreview(result.content ?? "");
         body.onStream!({ type: "message_start", messageId: msgId });
-        if (result.content) {
-          body.onStream!({ type: "message_delta", messageId: msgId, delta: result.content });
+        if (cleaned.content) {
+          body.onStream!({ type: "message_delta", messageId: msgId, delta: cleaned.content });
         }
-        body.onStream!({ type: "message_done", messageId: msgId, content: result.content ?? "" });
+        body.onStream!({
+          type: "message_done",
+          messageId: msgId,
+          content: cleaned.content,
+          ...(cleaned.replyToBody ? { replyToBody: cleaned.replyToBody } : {}),
+          ...(cleaned.replyToSender ? { replyToSender: cleaned.replyToSender } : {}),
+        });
       }
       return { ok: true, status: 200, responseId: result.responseId };
     } catch (error) {
@@ -181,7 +190,14 @@ export const sendMessage = async (body: {
               }
 
               if (evt.type === "response.completed") {
-                body.onStream!({ type: "message_done", messageId: currentMsgId, content: fullText });
+                const cleaned = sanitizeWithReplyPreview(fullText);
+                body.onStream!({
+                  type: "message_done",
+                  messageId: currentMsgId,
+                  content: cleaned.content,
+                  ...(cleaned.replyToBody ? { replyToBody: cleaned.replyToBody } : {}),
+                  ...(cleaned.replyToSender ? { replyToSender: cleaned.replyToSender } : {}),
+                });
               }
             } catch { /* skip malformed */ }
           }
@@ -287,6 +303,10 @@ export const listAgents = async (): Promise<AgentInfo[]> => {
   }
 };
 
+import { sanitizeDisplayText, sanitizeWithReplyPreview } from "./sanitize";
+
+
+
 const extractSessionTitle = async (jsonlPath: string): Promise<string | undefined> => {
   try {
     const raw = await readFile(jsonlPath, "utf8");
@@ -299,12 +319,13 @@ const extractSessionTitle = async (jsonlPath: string): Promise<string | undefine
         if (entry.type !== "message" || !entry.message) continue;
         if (entry.message.role !== "user") continue;
         const contents = entry.message.content ?? [];
-        const text = contents
+        const rawText = contents
           .filter((c: any) => c.type === "text" && c.text)
           .map((c: any) => c.text)
           .join(" ")
           .replace(/\[Attached image:[^\]]*\]/g, "")
           .trim();
+        const text = sanitizeDisplayText(rawText);
         if (text) return text.length > 50 ? text.slice(0, 50) + "..." : text;
       } catch { /* skip malformed */ }
     }

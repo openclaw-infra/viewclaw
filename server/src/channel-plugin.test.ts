@@ -92,4 +92,35 @@ describe("channel-plugin facade", () => {
     expect(result.id).toBe("evt-1");
     expect(called).toBe(1);
   });
+
+  it("probes gateway health via /healthz", async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      expect(String(input)).toBe("http://127.0.0.1:3000/healthz");
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+
+    try {
+      const plugin = buildClawflowChannelPlugin({
+        getGatewayState: () => ({
+          running: false,
+          port: 3000,
+          lastStartAt: null,
+          lastStopAt: null,
+          lastError: null,
+        }),
+        getLogger: () => null,
+      }) as any;
+
+      const probe = await plugin.status.probeAccount({
+        account: { accountId: "mobile", enabled: true, config: {} },
+      });
+
+      expect(probe.ok).toBe(true);
+      expect(probe.running).toBe(true);
+      expect(probe.port).toBe(3000);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

@@ -1,4 +1,10 @@
 import { randomUUID } from "node:crypto";
+import {
+  bindSessionKeyToThread,
+  buildConversationLabel,
+  buildThreadLabel,
+  normalizeThreadId,
+} from "./routing";
 
 type ReplyCallback = (payload: unknown) => Promise<void>;
 
@@ -84,15 +90,21 @@ export const createRuntimeAdapter = ({ runtime, config }: RuntimeAdapterParams) 
 
     async dispatchInboundMessage(params: DispatchParams): Promise<{ content: string }> {
       const chunks: string[] = [];
+      const normalizedThreadId = normalizeThreadId(params.threadId);
+      const routedSessionKey = bindSessionKeyToThread(params.sessionKey, normalizedThreadId);
       const chatId =
-        params.sessionKey ??
-        `clawflow-${params.agentId}-${params.forceNewSession ? randomUUID() : "main"}`;
-      const conversationLabel = params.threadId != null ? `mobile thread:${params.threadId}` : "mobile";
+        routedSessionKey ??
+        `clawflow-${params.agentId}-${params.forceNewSession ? randomUUID() : "main"}${normalizedThreadId ? `-thread-${normalizedThreadId}` : ""}`;
+      const conversationLabel = buildConversationLabel(normalizedThreadId);
+      const threadLabel = buildThreadLabel(normalizedThreadId);
+      const chatType = normalizedThreadId ? "thread" : "direct";
       const untrustedContext = [
         buildUntrustedMetadataBlock("Conversation info", {
+          channel: "clawflow",
           sender_id: "mobile",
           sender: "mobile",
-          thread_id: params.threadId ?? undefined,
+          thread_id: normalizedThreadId,
+          conversation_label: conversationLabel,
         }),
         buildUntrustedMetadataBlock("Sender", {
           label: "mobile",
@@ -111,16 +123,18 @@ export const createRuntimeAdapter = ({ runtime, config }: RuntimeAdapterParams) 
           channel: "clawflow",
           accountId: "mobile",
           senderId: "mobile",
-          chatType: "direct",
+          chatType,
           chatId,
           conversationLabel,
           text: params.content,
           agentId: params.agentId,
-          ...(params.sessionKey ? { sessionKey: params.sessionKey } : {}),
+          ...(routedSessionKey ? { sessionKey: routedSessionKey } : {}),
           ...(params.replyToId ? { replyToId: params.replyToId } : {}),
           ...(params.replyToBody ? { replyToBody: params.replyToBody } : {}),
           ...(params.replyToSender ? { replyToSender: params.replyToSender } : {}),
-          ...(params.threadId != null ? { messageThreadId: params.threadId } : {}),
+          ...(threadLabel ? { threadLabel } : {}),
+          ...(normalizedThreadId ? { messageThreadId: normalizedThreadId } : {}),
+          ...(normalizedThreadId ? { groupSubject: "ClawFlow Mobile" } : {}),
           ...(untrustedContext.length > 0 ? { untrustedContext } : {}),
           reply: onReply,
         });
@@ -135,19 +149,22 @@ export const createRuntimeAdapter = ({ runtime, config }: RuntimeAdapterParams) 
           RawBody: params.content,
           CommandBody: params.content,
           BodyForCommands: params.content,
-          ...(params.sessionKey ? { SessionKey: params.sessionKey } : {}),
+          ...(routedSessionKey ? { SessionKey: routedSessionKey } : {}),
           From: "clawflow-mobile",
           To: chatId,
           Provider: "clawflow",
           Surface: "clawflow",
-          ChatType: "direct",
+          ChatType: chatType,
           ConversationLabel: conversationLabel,
+          ...(threadLabel ? { ThreadLabel: threadLabel } : {}),
+          ...(normalizedThreadId ? { GroupSubject: "ClawFlow Mobile" } : {}),
+          ...(normalizedThreadId ? { GroupChannel: conversationLabel } : {}),
           SenderId: "mobile",
           SenderName: "mobile",
           ...(params.replyToId ? { ReplyToId: params.replyToId } : {}),
           ...(params.replyToBody ? { ReplyToBody: params.replyToBody } : {}),
           ...(params.replyToSender ? { ReplyToSender: params.replyToSender } : {}),
-          ...(params.threadId != null ? { MessageThreadId: params.threadId } : {}),
+          ...(normalizedThreadId ? { MessageThreadId: normalizedThreadId } : {}),
           ...(untrustedContext.length > 0 ? { UntrustedContext: untrustedContext } : {}),
           CommandAuthorized: true,
         };

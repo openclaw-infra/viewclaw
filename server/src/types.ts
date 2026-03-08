@@ -43,6 +43,7 @@ export type ClientMessage =
   | {
       type: "unsubscribe_session";
       sessionId: string;
+      agentId?: string;
     };
 
 export type OpenClawJsonlEntry = {

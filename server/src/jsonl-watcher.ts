@@ -1,6 +1,6 @@
 import { open, stat } from "node:fs/promises";
 import { JSONL_POLL_INTERVAL_MS } from "./config";
-import { emitEvent } from "./ws-manager";
+import { emitEventTo } from "./ws-manager";
 import { isPluginMode, log } from "./kernel";
 import type { OpenClawJsonlEntry, OpenClawMessage } from "./types";
 
@@ -10,6 +10,7 @@ type Watcher = {
   remainder: string;
   reading: boolean;
   sessionId: string;
+  routingKey: string;
   logFile: string;
 };
 
@@ -17,8 +18,8 @@ const watchers = new Map<string, Watcher>();
 
 const streamingSessions = new Set<string>();
 
-export const muteWatcher = (sessionId: string) => { streamingSessions.add(sessionId); };
-export const unmuteWatcher = (sessionId: string) => { streamingSessions.delete(sessionId); };
+export const muteWatcher = (routingKey: string) => { streamingSessions.add(routingKey); };
+export const unmuteWatcher = (routingKey: string) => { streamingSessions.delete(routingKey); };
 
 // ── Plugin-mode event bus bridge ────────────────────────────────────
 // In plugin mode, agent events arrive via OpenClaw lifecycle hooks
@@ -169,7 +170,7 @@ const extractThinkingSummary = (content?: Array<{ type: string; thinkingSignatur
 
 // ── JSONL file watcher (used for history + standalone real-time) ─────
 
-export const startWatcher = async (sessionId: string, logFile: string) => {
+export const startWatcher = async (sessionId: string, logFile: string, routingKey: string = sessionId) => {
   if (eventBusBridgeActive) {
     log.debug(`skip startWatcher(${sessionId}) because event bus bridge is active`);
     return;
@@ -196,7 +197,7 @@ export const startWatcher = async (sessionId: string, logFile: string) => {
         const lines = text.split("\n");
         watcher.remainder = lines.pop() ?? "";
 
-        const isStreaming = streamingSessions.has(sessionId);
+        const isStreaming = streamingSessions.has(watcher.routingKey);
 
         for (const line of lines) {
           const trimmed = line.trim();
@@ -206,14 +207,14 @@ export const startWatcher = async (sessionId: string, logFile: string) => {
             const result = classifyEntry(entry);
             if (!result) continue;
             if (isStreaming && result.eventType === "message") continue;
-            emitEvent({
+            emitEventTo(watcher.routingKey, {
               type: result.eventType,
               sessionId,
               messageId: entry.id,
               payload: result.payload,
             });
           } catch {
-            emitEvent({
+            emitEventTo(watcher.routingKey, {
               type: "error",
               sessionId,
               payload: { message: "Failed to parse JSONL line", line: trimmed.slice(0, 200) },
@@ -221,7 +222,7 @@ export const startWatcher = async (sessionId: string, logFile: string) => {
           }
         }
       } catch (error) {
-        emitEvent({
+        emitEventTo(watcher.routingKey, {
           type: "error",
           sessionId,
           payload: { message: (error as Error).message },
@@ -234,6 +235,7 @@ export const startWatcher = async (sessionId: string, logFile: string) => {
     remainder: "",
     reading: false,
     sessionId,
+    routingKey,
     logFile,
   };
 

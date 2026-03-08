@@ -38,6 +38,26 @@ export const emitEvent = (event: Omit<StreamEvent, "seq" | "ts">) => {
   for (const socket of sockets) socket.send(data);
 };
 
+export const emitEventTo = (routingKey: string, event: Omit<StreamEvent, "seq" | "ts">) => {
+  if (shouldDropDuplicate(event)) return;
+  const packet: StreamEvent = {
+    ...event,
+    seq: nextSeq(),
+    ts: Date.now(),
+  };
+  const data = JSON.stringify(packet);
+  const seen = new Set<any>();
+  for (const key of new Set([routingKey, packet.sessionId])) {
+    const sockets = socketBySession.get(key);
+    if (!sockets || sockets.size === 0) continue;
+    for (const socket of sockets) {
+      if (seen.has(socket)) continue;
+      seen.add(socket);
+      socket.send(data);
+    }
+  }
+};
+
 export const broadcastToAll = (event: Omit<StreamEvent, "seq" | "ts" | "sessionId">) => {
   const packet = { ...event, seq: nextSeq(), ts: Date.now(), sessionId: "__broadcast__" };
   const data = JSON.stringify(packet);

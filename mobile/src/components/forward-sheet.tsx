@@ -7,6 +7,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  View,
 } from "react-native";
 import { Text, XStack, YStack } from "tamagui";
 import { ArrowRight } from "@tamagui/lucide-icons";
@@ -35,7 +36,7 @@ const ForwardRow = memo(
   }) => {
     const { colors } = useTheme();
     const shortId = item.id.slice(0, 8);
-    const displayTitle =
+    const rawTitle =
       item.title ??
       (item.sessionKey
         ? item.sessionKey
@@ -43,6 +44,7 @@ const ForwardRow = memo(
             .replace(/^openresponses:/, "")
             .slice(0, 20)
         : shortId);
+    const displayTitle = rawTitle;
 
     return (
       <Pressable onPress={() => onSelect(item.id)}>
@@ -89,31 +91,49 @@ export const ForwardSheet = memo(
     const insets = useSafeAreaInsets();
     const screenHeight = Dimensions.get("window").height;
     const slideAnim = useRef(new Animated.Value(screenHeight)).current;
+    const backdropAnim = useRef(new Animated.Value(0)).current;
 
     const otherSessions = sessions.filter((s) => s.id !== currentSessionId);
 
     useEffect(() => {
       if (visible) {
-        Animated.spring(slideAnim, {
-          toValue: 0,
-          damping: 20,
-          mass: 1,
-          stiffness: 150,
-          useNativeDriver: true,
-        }).start();
+        Animated.parallel([
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            damping: 20,
+            mass: 1,
+            stiffness: 150,
+            useNativeDriver: true,
+          }),
+          Animated.timing(backdropAnim, {
+            toValue: 1,
+            duration: 180,
+            easing: Easing.out(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]).start();
       } else {
         slideAnim.setValue(screenHeight);
+        backdropAnim.setValue(0);
       }
-    }, [visible, slideAnim, screenHeight]);
+    }, [visible, slideAnim, backdropAnim, screenHeight]);
 
     const animatedClose = useCallback(() => {
-      Animated.spring(slideAnim, {
-        toValue: screenHeight,
-        damping: 20,
-        stiffness: 250,
-        useNativeDriver: true,
-      }).start(() => onClose());
-    }, [slideAnim, screenHeight, onClose]);
+      Animated.parallel([
+        Animated.spring(slideAnim, {
+          toValue: screenHeight,
+          damping: 20,
+          stiffness: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(backdropAnim, {
+          toValue: 0,
+          duration: 150,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]).start(() => onClose());
+    }, [slideAnim, backdropAnim, screenHeight, onClose]);
 
     const handleSelect = useCallback(
       (id: string) => {
@@ -132,28 +152,34 @@ export const ForwardSheet = memo(
         statusBarTranslucent
         onRequestClose={animatedClose}
       >
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)" }}
-          onPress={animatedClose}
-        >
+        <View style={StyleSheet.absoluteFill}>
           <Animated.View
             style={{
-              flex: 1,
-              marginTop: screenHeight * 0.35,
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              opacity: backdropAnim,
+            }}
+          >
+            <Pressable style={{ flex: 1 }} onPress={animatedClose} />
+          </Animated.View>
+
+          <Animated.View
+            style={{
+              position: "absolute",
+              left: 0,
+              right: 0,
+              top: screenHeight * 0.35,
+              bottom: 0,
               transform: [{ translateY: slideAnim }],
             }}
           >
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={(e) => e.stopPropagation?.()}
+            <YStack
+              flex={1}
+              backgroundColor={colors.bg.secondary}
+              borderTopLeftRadius={24}
+              borderTopRightRadius={24}
+              overflow="hidden"
             >
-              <YStack
-                flex={1}
-                backgroundColor={colors.bg.secondary}
-                borderTopLeftRadius={24}
-                borderTopRightRadius={24}
-                overflow="hidden"
-              >
                 <YStack alignItems="center" paddingVertical={10}>
                   <YStack
                     width={40}
@@ -219,10 +245,9 @@ export const ForwardSheet = memo(
                     </YStack>
                   }
                 />
-              </YStack>
-            </Pressable>
+            </YStack>
           </Animated.View>
-        </Pressable>
+        </View>
       </Modal>
     );
   },

@@ -2,7 +2,7 @@ import { Elysia, t } from "elysia";
 import { mkdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { join, extname } from "node:path";
 import { PORT, OPENCLAW_BASE_URL, OPENCLAW_HOME, WHISPER_API_URL, WHISPER_API_KEY, WHISPER_MODEL } from "./config";
-import { emitEvent, subscribeSession, unsubscribeAll, getSessionSubscriberCount } from "./ws-manager";
+import { emitEventTo, subscribeSession, unsubscribeAll, getSessionSubscriberCount, unsubscribeSession } from "./ws-manager";
 import { startWatcher, stopWatcher, isWatching, getActiveWatchers, classifyEntry, muteWatcher, unmuteWatcher, isEventBusBridgeActive, startEventBusBridge } from "./jsonl-watcher";
 import type { OpenClawJsonlEntry, OpenClawMessage, EventType } from "./types";
 import { initPluginBridge } from "./plugin-bridge";
@@ -19,6 +19,8 @@ import {
 } from "./openclaw-client";
 import type { ClientMessage } from "./types";
 import { isPluginMode } from "./kernel";
+import { buildRoutingKey, normalizeAgentId } from "./routing";
+import { sanitizeDisplayText, sanitizeWithReplyPreview } from "./sanitize";
 
 const activeRuns = new Map<string, AbortController>();
 const pendingSessionCreates = new Map<string, { agentId: string; startedAt: number }>();
@@ -39,11 +41,16 @@ const pruneStalePendingSessionCreates = () => {
 
 if (process.env.CLAWFLOW_PLUGIN_MODE === "1") {
   initPluginBridge((evt) => {
-    emitEvent({
+    const payload = evt.payload ?? evt.data ?? {};
+    const routingKey = buildRoutingKey({
+      sessionId: evt.sessionId ?? evt.sessionKey ?? "",
+      agentId: typeof payload.agentId === "string" ? payload.agentId : undefined,
+    });
+    emitEventTo(routingKey, {
       type: (evt.type ?? "status") as EventType,
       sessionId: evt.sessionId ?? evt.sessionKey ?? "",
       messageId: evt.messageId,
-      payload: evt.payload ?? evt.data ?? {},
+      payload,
     });
   });
 }
@@ -214,6 +221,9 @@ export const app = new Elysia()
         type: string;
         role?: string;
         content?: string;
+        replyToId?: string;
+        replyToBody?: string;
+        replyToSender?: string;
         thinking?: string;
         thinkingSummary?: string;
         toolName?: string;
@@ -253,13 +263,17 @@ export const app = new Elysia()
               if (!rawText) continue;
 
               const { clean, images } = extractImages(rawText);
+              const cleaned = sanitizeWithReplyPreview(clean);
               const item: HistoryItem = {
                 id: entry.id,
                 type: "message",
                 role: "user",
-                content: clean,
+                content: cleaned.content,
                 ts: entry.timestamp,
               };
+              if (cleaned.replyToId) item.replyToId = cleaned.replyToId;
+              if (cleaned.replyToBody) item.replyToBody = cleaned.replyToBody;
+              if (cleaned.replyToSender) item.replyToSender = cleaned.replyToSender;
               if (images.length > 0) item.imagePaths = images;
               messages.push(item);
               continue;
@@ -280,7 +294,11 @@ export const app = new Elysia()
             item.role = String(p.role ?? "assistant");
             let content = String(p.content ?? "");
             content = content.replace(REPLY_PREFIX_RE, "");
-            item.content = content;
+            const cleaned = sanitizeWithReplyPreview(content);
+            item.content = cleaned.content;
+            if (cleaned.replyToId) item.replyToId = cleaned.replyToId;
+            if (cleaned.replyToBody) item.replyToBody = cleaned.replyToBody;
+            if (cleaned.replyToSender) item.replyToSender = cleaned.replyToSender;
             if (p.thinking) item.thinking = String(p.thinking);
             if (p.thinkingSummary) item.thinkingSummary = String(p.thinkingSummary);
           } else if (classified.eventType === "thought") {
@@ -384,7 +402,9 @@ export const app = new Elysia()
     async ({ body }) => {
       const messageId = crypto.randomUUID();
       const sessionId = body.sessionId ?? "default";
-      const sessionKey = await resolveSessionKey(sessionId, body.agentId);
+      const agentId = normalizeAgentId(body.agentId);
+      const routingKey = buildRoutingKey({ sessionId, agentId });
+      const sessionKey = await resolveSessionKey(sessionId, agentId);
       if (!sessionKey) {
         return new Response(
           JSON.stringify({
@@ -395,11 +415,11 @@ export const app = new Elysia()
         );
       }
 
-      const prevController = activeRuns.get(sessionId);
+      const prevController = activeRuns.get(routingKey);
       if (prevController) {
         prevController.abort();
-        activeRuns.delete(sessionId);
-        emitEvent({
+        activeRuns.delete(routingKey);
+        emitEventTo(routingKey, {
           type: "message_done",
           sessionId,
           payload: { steered: true },
@@ -407,10 +427,10 @@ export const app = new Elysia()
       }
 
       const abortController = new AbortController();
-      activeRuns.set(sessionId, abortController);
+      activeRuns.set(routingKey, abortController);
 
       if (body.content.trim() || body.imagePaths?.length) {
-        emitEvent({
+        emitEventTo(routingKey, {
           type: "message",
           sessionId,
           messageId,
@@ -425,12 +445,12 @@ export const app = new Elysia()
         });
       }
 
-      muteWatcher(sessionId);
+      muteWatcher(routingKey);
 
       const result = await sendMessage({
         content: body.content,
         imagePaths: body.imagePaths,
-        agentId: body.agentId,
+        agentId,
         sessionKey,
         replyToId: body.replyToId,
         replyToBody: body.replyToBody,
@@ -438,22 +458,24 @@ export const app = new Elysia()
         threadId: body.threadId,
         signal: abortController.signal,
         onStream: (evt) => {
-          emitEvent({
-            type: evt.type,
-            sessionId,
-            messageId: evt.messageId,
+            emitEventTo(routingKey, {
+              type: evt.type,
+              sessionId,
+              messageId: evt.messageId,
             payload: {
               ...(evt.delta != null ? { delta: evt.delta } : {}),
               ...(evt.content != null ? { content: evt.content } : {}),
+              ...(evt.replyToBody ? { replyToBody: evt.replyToBody } : {}),
+              ...(evt.replyToSender ? { replyToSender: evt.replyToSender } : {}),
             },
           });
         },
       });
 
-      if (activeRuns.get(sessionId) === abortController) {
-        activeRuns.delete(sessionId);
+      if (activeRuns.get(routingKey) === abortController) {
+        activeRuns.delete(routingKey);
       }
-      unmuteWatcher(sessionId);
+      unmuteWatcher(routingKey);
 
       return { ok: true, accepted: true, messageId, forwarded: result };
     },
@@ -566,7 +588,10 @@ export const app = new Elysia()
   .post(
     "/api/dev/emit",
     ({ body }) => {
-      emitEvent({
+      emitEventTo(buildRoutingKey({
+        sessionId: body.sessionId,
+        agentId: typeof body.payload.agentId === "string" ? body.payload.agentId : undefined,
+      }), {
         type: body.type,
         sessionId: body.sessionId,
         messageId: body.messageId,
@@ -600,11 +625,15 @@ export const app = new Elysia()
       return { ok: true, ignored: true, reason: "event_bus_bridge_active" };
     }
     const evt = body as any;
-    emitEvent({
+    const payload = evt.payload ?? evt.data ?? {};
+    emitEventTo(buildRoutingKey({
+      sessionId: evt.sessionId ?? evt.sessionKey ?? "",
+      agentId: typeof payload.agentId === "string" ? payload.agentId : undefined,
+    }), {
       type: evt.type ?? "status",
       sessionId: evt.sessionId ?? evt.sessionKey ?? "",
       messageId: evt.messageId,
-      payload: evt.payload ?? evt.data ?? {},
+      payload,
     });
     return { ok: true };
   })
@@ -633,6 +662,7 @@ export const app = new Elysia()
       t.Object({
         type: t.Literal("unsubscribe_session"),
         sessionId: t.String(),
+        agentId: t.Optional(t.String()),
       }),
     ]),
 
@@ -656,13 +686,15 @@ export const app = new Elysia()
 
       if (body.type === "subscribe_session") {
         const agentId = body.agentId ?? "main";
+        const routingKey = buildRoutingKey({ sessionId: body.sessionId, agentId });
         subscribeSession(body.sessionId, ws);
+        subscribeSession(routingKey, ws);
         let jsonlPath = "";
 
         if (!isEventBusBridgeActive()) {
           jsonlPath = await getSessionJsonlPath(agentId, body.sessionId);
-          if (!isWatching(body.sessionId)) {
-            await startWatcher(body.sessionId, jsonlPath);
+          if (!isWatching(routingKey)) {
+            await startWatcher(body.sessionId, jsonlPath, routingKey);
           }
         }
 
@@ -679,11 +711,12 @@ export const app = new Elysia()
       }
 
       if (body.type === "unsubscribe_session") {
-        const { unsubscribeSession } = await import("./ws-manager");
+        const routingKey = buildRoutingKey({ sessionId: body.sessionId, agentId: body.agentId });
         unsubscribeSession(body.sessionId, ws);
+        unsubscribeSession(routingKey, ws);
 
-        if (getSessionSubscriberCount(body.sessionId) === 0) {
-          stopWatcher(body.sessionId);
+        if (getSessionSubscriberCount(body.sessionId) === 0 && getSessionSubscriberCount(routingKey) === 0) {
+          stopWatcher(routingKey);
         }
 
         ws.send(
@@ -701,9 +734,10 @@ export const app = new Elysia()
         const messageId = body.messageId ?? crypto.randomUUID();
         const sessionId = body.sessionId ?? "default";
         const isNewSession = !!body.newSession;
-        const agentId = body.agentId ?? "main";
+        const agentId = normalizeAgentId(body.agentId);
+        const routingKey = buildRoutingKey({ sessionId, agentId });
         if (isNewSession) {
-          const pending = pendingSessionCreates.get(sessionId);
+          const pending = pendingSessionCreates.get(routingKey);
           if (pending) {
             const age = Date.now() - pending.startedAt;
             const ttlLeft = Math.max(0, Math.ceil((NEW_SESSION_PENDING_TTL_MS - age) / 1000));
@@ -718,7 +752,7 @@ export const app = new Elysia()
             }));
             return;
           }
-          pendingSessionCreates.set(sessionId, { agentId, startedAt: Date.now() });
+          pendingSessionCreates.set(routingKey, { agentId, startedAt: Date.now() });
         }
         const sessionLookupStartedAt = Date.now();
         let baselineSessionIds: Set<string> | null = null;
@@ -743,11 +777,11 @@ export const app = new Elysia()
           return;
         }
 
-        const prevController = activeRuns.get(sessionId);
+        const prevController = activeRuns.get(routingKey);
         if (prevController) {
           prevController.abort();
-          activeRuns.delete(sessionId);
-          emitEvent({
+          activeRuns.delete(routingKey);
+          emitEventTo(routingKey, {
             type: "message_done",
             sessionId,
             payload: { steered: true },
@@ -760,7 +794,7 @@ export const app = new Elysia()
               ws.send(JSON.stringify({ ...packet, seq: ++streamSeq, ts: Date.now() }));
             }
           : (packet: { type: EventType; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
-              emitEvent(packet);
+              emitEventTo(routingKey, packet);
             };
 
         ws.send(JSON.stringify({ type: "ack", sessionId, messageId, ts: Date.now() }));
@@ -782,9 +816,9 @@ export const app = new Elysia()
         }
 
         const abortController = new AbortController();
-        activeRuns.set(sessionId, abortController);
+        activeRuns.set(routingKey, abortController);
 
-        if (!isNewSession) muteWatcher(sessionId);
+        if (!isNewSession) muteWatcher(routingKey);
 
         sendMessage({
           content: body.content,
@@ -804,6 +838,8 @@ export const app = new Elysia()
               payload: {
                 ...(evt.delta != null ? { delta: evt.delta } : {}),
                 ...(evt.content != null ? { content: evt.content } : {}),
+                ...(evt.replyToBody ? { replyToBody: evt.replyToBody } : {}),
+                ...(evt.replyToSender ? { replyToSender: evt.replyToSender } : {}),
               },
             });
           },
@@ -811,7 +847,7 @@ export const app = new Elysia()
           .then(async (result) => {
             if (isNewSession) {
               if (!result.ok || result.aborted) {
-                pendingSessionCreates.delete(sessionId);
+                pendingSessionCreates.delete(routingKey);
                 return;
               }
               try {
@@ -835,10 +871,12 @@ export const app = new Elysia()
                     ts: Date.now(),
                   }));
 
+                  const createdRoutingKey = buildRoutingKey({ sessionId: created.id, agentId });
                   subscribeSession(created.id, ws);
+                  subscribeSession(createdRoutingKey, ws);
                   const jsonlPath = await getSessionJsonlPath(agentId, created.id);
-                  if (!isWatching(created.id)) {
-                    await startWatcher(created.id, jsonlPath);
+                  if (!isWatching(createdRoutingKey)) {
+                    await startWatcher(created.id, jsonlPath, createdRoutingKey);
                   }
                 } else {
                   ws.send(JSON.stringify({
@@ -853,16 +891,16 @@ export const app = new Elysia()
                 }
               } catch { /* ignore */ }
               finally {
-                pendingSessionCreates.delete(sessionId);
+                pendingSessionCreates.delete(routingKey);
               }
             }
           })
           .catch(() => {})
           .finally(() => {
-            if (activeRuns.get(sessionId) === abortController) {
-              activeRuns.delete(sessionId);
+            if (activeRuns.get(routingKey) === abortController) {
+              activeRuns.delete(routingKey);
             }
-            if (!isNewSession) unmuteWatcher(sessionId);
+            if (!isNewSession) unmuteWatcher(routingKey);
           });
         return;
       }

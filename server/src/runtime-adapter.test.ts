@@ -19,6 +19,7 @@ describe("runtime-adapter", () => {
     const result = await adapter.dispatchInboundMessage({
       content: "ping",
       agentId: "main",
+      sessionKey: "agent:main:chat-1",
       replyToId: "msg-1",
       replyToBody: "quoted",
       replyToSender: "Alice",
@@ -30,7 +31,11 @@ describe("runtime-adapter", () => {
     expect(seenParams.replyToBody).toBe("quoted");
     expect(seenParams.replyToSender).toBe("Alice");
     expect(seenParams.messageThreadId).toBe("thread-1");
-    expect(seenParams.conversationLabel).toBe("mobile thread:thread-1");
+    expect(seenParams.sessionKey).toBe("agent:main:chat-1:thread:thread-1");
+    expect(seenParams.chatType).toBe("thread");
+    expect(seenParams.threadLabel).toBe("Thread thread-1");
+    expect(seenParams.groupSubject).toBe("ClawFlow Mobile");
+    expect(seenParams.conversationLabel).toBe("ClawFlow Mobile / Thread thread-1");
     expect(Array.isArray(seenParams.untrustedContext)).toBe(true);
   });
 
@@ -65,6 +70,7 @@ describe("runtime-adapter", () => {
     const result = await adapter.dispatchInboundMessage({
       content: "ping",
       agentId: "main",
+      sessionKey: "agent:main:chat-1",
       replyToId: "msg-2",
       replyToBody: "quoted-2",
       replyToSender: "Bob",
@@ -76,7 +82,36 @@ describe("runtime-adapter", () => {
     expect(seenCtx.ReplyToBody).toBe("quoted-2");
     expect(seenCtx.ReplyToSender).toBe("Bob");
     expect(seenCtx.MessageThreadId).toBe("thread-2");
-    expect(seenCtx.ConversationLabel).toBe("mobile thread:thread-2");
+    expect(seenCtx.SessionKey).toBe("agent:main:chat-1:thread:thread-2");
+    expect(seenCtx.ChatType).toBe("thread");
+    expect(seenCtx.ThreadLabel).toBe("Thread thread-2");
+    expect(seenCtx.GroupSubject).toBe("ClawFlow Mobile");
+    expect(seenCtx.ConversationLabel).toBe("ClawFlow Mobile / Thread thread-2");
     expect(Array.isArray(seenCtx.UntrustedContext)).toBe(true);
+  });
+
+  it("keeps direct-chat routing stable without thread id", async () => {
+    let seenParams: any = null;
+    const runtime = {
+      channel: {
+        reply: {
+          handleInboundMessage: async (params: any) => {
+            seenParams = params;
+            await params.reply({ text: "ok" });
+          },
+        },
+      },
+    };
+    const adapter = createRuntimeAdapter({ runtime });
+    await adapter.dispatchInboundMessage({
+      content: "ping",
+      agentId: "main",
+      sessionKey: "agent:main:chat-2",
+      onReply: async () => {},
+    });
+    expect(seenParams.sessionKey).toBe("agent:main:chat-2");
+    expect(seenParams.chatType).toBe("direct");
+    expect(seenParams.conversationLabel).toBe("ClawFlow Mobile");
+    expect(seenParams.messageThreadId).toBeUndefined();
   });
 });

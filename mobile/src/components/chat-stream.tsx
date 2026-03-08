@@ -10,7 +10,6 @@ import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
 import { MessageContextMenu, type MenuAction } from "./message-context-menu";
 import { useTheme } from "../theme/theme-context";
-import { sanitizeAssistantDisplayText } from "../utils/message-sanitizer";
 
 type ChatStreamActions = {
   onForward?: (content: string) => void;
@@ -145,8 +144,8 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
     : null;
 
   const displayContent = useMemo(
-    () => (isUser ? item.content : sanitizeAssistantDisplayText(item.content)),
-    [isUser, item.content],
+    () => item.content,
+    [item.content],
   );
   const replyPreview = item.replyTo;
 
@@ -604,7 +603,7 @@ export const ChatStream = ({ stream, onForward, onReply }: Props) => {
   const scrollToQuote = useCallback((quoteText: string) => {
     const target = reversed.findIndex((di) => {
       if (di.kind !== "message") return false;
-      const c = di.data.role === "assistant" ? sanitizeAssistantDisplayText(di.data.content) : di.data.content;
+      const c = di.data.content;
       return c.includes(quoteText);
     });
     if (target === -1) return;

@@ -188,10 +188,10 @@
 - [x] **回复语义补齐：ReplyTo / 引用回复**
   已补齐结构化回复语义：移动端 reply 不再把引用内容写进正文，而是单独传 `ReplyToId/ReplyToBody/ReplyToSender`；server 的 HTTP/WS/bridge/runtime-adapter 全链路透传，移动端本地气泡与实时事件也支持 reply 预览
 
-- [ ] **线程语义补齐：Thread / Topic 会话路由**
+- [x] **线程语义补齐：Thread / Topic 会话路由**
   对齐 Telegram forum topic 与 Discord thread 的思路，补齐 `MessageThreadId` 与会话键映射策略，确保同一会话下不同线程不会串上下文
 
-- [ ] **会话标签语义补齐：ConversationLabel / GroupSubject**
+- [x] **会话标签语义补齐：ConversationLabel / GroupSubject**
   统一会话展示标签生成规则（直聊/群聊/线程），兼容 `ConversationLabel`、`GroupSubject`、`GroupChannel`，并用于服务端路由与日志诊断
 
 - [x] **非可信元信息注入规范（UntrustedContext）**
