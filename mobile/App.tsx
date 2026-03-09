@@ -120,6 +120,7 @@ function Main() {
                 sessionId={session.currentSessionId}
                 sessionTitle={currentSessionTitle}
                 agentId={currentAgentId}
+                queuedCount={session.queuedCount}
                 status={session.connectionStatus}
                 sessionCount={session.sessions.length}
                 gatewayLabel={gateway.activeGateway?.label}

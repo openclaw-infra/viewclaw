@@ -12,6 +12,7 @@ type Props = {
   sessionId: string;
   sessionTitle?: string;
   agentId?: string;
+  queuedCount?: number;
   status: ConnectionStatus;
   sessionCount?: number;
   gatewayLabel?: string;
@@ -79,6 +80,7 @@ export const ChatHeader = ({
   sessionId,
   sessionTitle,
   agentId,
+  queuedCount,
   status,
   sessionCount,
   gatewayLabel,
@@ -165,6 +167,21 @@ export const ChatHeader = ({
                 >
                   <Text color={colors.text.muted} fontSize={10} fontWeight="600">
                     {sessionCount}
+                  </Text>
+                </YStack>
+              )}
+              {queuedCount != null && queuedCount > 0 && (
+                <YStack
+                  backgroundColor={colors.accent.yellow + "20"}
+                  borderWidth={1}
+                  borderColor={colors.accent.yellow + "40"}
+                  paddingHorizontal={8}
+                  paddingVertical={2}
+                  borderRadius={999}
+                  flexShrink={0}
+                >
+                  <Text color={colors.accent.yellow} fontSize={10} fontWeight="700">
+                    Queue {queuedCount}
                   </Text>
                 </YStack>
               )}

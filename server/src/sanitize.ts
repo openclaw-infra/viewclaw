@@ -13,7 +13,13 @@ export type ExtractedReplyPreview = {
   senderName?: string;
 };
 
+export type ExtractedQueuedMessage = {
+  queueIndex?: number;
+  content: string;
+};
+
 const CONVERSATION_INFO_RE = /(?:^|\n)\s*Conversation info \(untrusted metadata\):\s*(?:\n\s*)?(?:```(?:json)?\s*([\s\S]*?)```|(\{[\s\S]*?\}))(?=\n\s*\n|\n\s*(?:Conversation info|Sender|Replied message|Untrusted context)\b|$)/i;
+const QUEUED_MESSAGE_RE = /^\[Queued messages while agent was busy\]\s*\n+\s*---\s*\n+\s*Queued\s+#(\d+)\s*\n?/i;
 
 export const extractReplyPreview = (content: string): ExtractedReplyPreview | undefined => {
   const normalized = content.replace(/\r\n?/g, "\n");
@@ -62,7 +68,20 @@ export const sanitizeDisplayText = (content: string): string => {
     pattern.lastIndex = 0;
     out = out.replace(pattern, "\n");
   }
+  out = out.replace(QUEUED_MESSAGE_RE, "");
   return out.replace(/\n{3,}/g, "\n\n").trim();
+};
+
+export const extractQueuedMessage = (content: string): ExtractedQueuedMessage | undefined => {
+  const normalized = content.replace(/\r\n?/g, "\n");
+  const match = normalized.match(QUEUED_MESSAGE_RE);
+  if (!match) return undefined;
+  const queueIndexRaw = match[1];
+  const sanitized = sanitizeDisplayText(normalized);
+  return {
+    ...(queueIndexRaw ? { queueIndex: Number(queueIndexRaw) } : {}),
+    content: sanitized,
+  };
 };
 
 export const sanitizeWithReplyPreview = (content: string): {
@@ -70,12 +89,17 @@ export const sanitizeWithReplyPreview = (content: string): {
   replyToId?: string;
   replyToBody?: string;
   replyToSender?: string;
+  queued?: boolean;
+  queueIndex?: number;
 } => {
   const reply = extractReplyPreview(content);
+  const queued = extractQueuedMessage(content);
   return {
-    content: sanitizeDisplayText(content),
+    content: queued?.content ?? sanitizeDisplayText(content),
     ...(reply?.replyToId ? { replyToId: reply.replyToId } : {}),
     ...(reply?.body ? { replyToBody: reply.body } : {}),
     ...(reply?.senderName ? { replyToSender: reply.senderName } : {}),
+    ...(queued ? { queued: true } : {}),
+    ...(queued?.queueIndex ? { queueIndex: queued.queueIndex } : {}),
   };
 };

@@ -22,8 +22,21 @@ import { isPluginMode } from "./kernel";
 import { buildRoutingKey, normalizeAgentId } from "./routing";
 import { sanitizeDisplayText, sanitizeWithReplyPreview } from "./sanitize";
 
-const activeRuns = new Map<string, AbortController>();
+const activeRuns = new Map<string, Set<AbortController>>();
 const pendingSessionCreates = new Map<string, { agentId: string; startedAt: number }>();
+
+const addActiveRun = (routingKey: string, controller: AbortController) => {
+  const set = activeRuns.get(routingKey) ?? new Set<AbortController>();
+  set.add(controller);
+  activeRuns.set(routingKey, set);
+};
+
+const removeActiveRun = (routingKey: string, controller: AbortController) => {
+  const set = activeRuns.get(routingKey);
+  if (!set) return;
+  set.delete(controller);
+  if (set.size === 0) activeRuns.delete(routingKey);
+};
 const NEW_SESSION_PENDING_TTL_MS = Number(process.env.CLAWFLOW_NEW_SESSION_PENDING_TTL_MS ?? 45_000);
 const NEW_SESSION_MATCH_RETRIES = Number(process.env.CLAWFLOW_NEW_SESSION_MATCH_RETRIES ?? 12);
 const NEW_SESSION_MATCH_RETRY_DELAY_MS = Number(process.env.CLAWFLOW_NEW_SESSION_MATCH_RETRY_DELAY_MS ?? 750);
@@ -221,6 +234,8 @@ export const app = new Elysia()
         type: string;
         role?: string;
         content?: string;
+        queued?: boolean;
+        queueIndex?: number;
         replyToId?: string;
         replyToBody?: string;
         replyToSender?: string;
@@ -274,6 +289,8 @@ export const app = new Elysia()
               if (cleaned.replyToId) item.replyToId = cleaned.replyToId;
               if (cleaned.replyToBody) item.replyToBody = cleaned.replyToBody;
               if (cleaned.replyToSender) item.replyToSender = cleaned.replyToSender;
+              if (cleaned.queued) item.queued = true;
+              if (cleaned.queueIndex) item.queueIndex = cleaned.queueIndex;
               if (images.length > 0) item.imagePaths = images;
               messages.push(item);
               continue;
@@ -299,6 +316,8 @@ export const app = new Elysia()
             if (cleaned.replyToId) item.replyToId = cleaned.replyToId;
             if (cleaned.replyToBody) item.replyToBody = cleaned.replyToBody;
             if (cleaned.replyToSender) item.replyToSender = cleaned.replyToSender;
+            if (cleaned.queued) item.queued = true;
+            if (cleaned.queueIndex) item.queueIndex = cleaned.queueIndex;
             if (p.thinking) item.thinking = String(p.thinking);
             if (p.thinkingSummary) item.thinkingSummary = String(p.thinkingSummary);
           } else if (classified.eventType === "thought") {
@@ -415,19 +434,8 @@ export const app = new Elysia()
         );
       }
 
-      const prevController = activeRuns.get(routingKey);
-      if (prevController) {
-        prevController.abort();
-        activeRuns.delete(routingKey);
-        emitEventTo(routingKey, {
-          type: "message_done",
-          sessionId,
-          payload: { steered: true },
-        });
-      }
-
       const abortController = new AbortController();
-      activeRuns.set(routingKey, abortController);
+      addActiveRun(routingKey, abortController);
 
       if (body.content.trim() || body.imagePaths?.length) {
         emitEventTo(routingKey, {
@@ -451,6 +459,7 @@ export const app = new Elysia()
         content: body.content,
         imagePaths: body.imagePaths,
         agentId,
+        sessionId,
         sessionKey,
         replyToId: body.replyToId,
         replyToBody: body.replyToBody,
@@ -472,9 +481,7 @@ export const app = new Elysia()
         },
       });
 
-      if (activeRuns.get(routingKey) === abortController) {
-        activeRuns.delete(routingKey);
-      }
+      removeActiveRun(routingKey, abortController);
       unmuteWatcher(routingKey);
 
       return { ok: true, accepted: true, messageId, forwarded: result };
@@ -777,17 +784,6 @@ export const app = new Elysia()
           return;
         }
 
-        const prevController = activeRuns.get(routingKey);
-        if (prevController) {
-          prevController.abort();
-          activeRuns.delete(routingKey);
-          emitEventTo(routingKey, {
-            type: "message_done",
-            sessionId,
-            payload: { steered: true },
-          });
-        }
-
         let streamSeq = 0;
         const emitStream = isNewSession
           ? (packet: { type: EventType; sessionId: string; messageId?: string; payload: Record<string, unknown> }) => {
@@ -816,7 +812,7 @@ export const app = new Elysia()
         }
 
         const abortController = new AbortController();
-        activeRuns.set(routingKey, abortController);
+        addActiveRun(routingKey, abortController);
 
         if (!isNewSession) muteWatcher(routingKey);
 
@@ -824,6 +820,7 @@ export const app = new Elysia()
           content: body.content,
           imagePaths: body.imagePaths,
           agentId,
+          sessionId,
           sessionKey: sessionKey ?? undefined,
           replyToId: body.replyToId,
           replyToBody: body.replyToBody,
@@ -897,9 +894,7 @@ export const app = new Elysia()
           })
           .catch(() => {})
           .finally(() => {
-            if (activeRuns.get(routingKey) === abortController) {
-              activeRuns.delete(routingKey);
-            }
+            removeActiveRun(routingKey, abortController);
             if (!isNewSession) unmuteWatcher(routingKey);
           });
         return;

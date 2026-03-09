@@ -93,6 +93,24 @@ describe("channel-plugin facade", () => {
     expect(called).toBe(1);
   });
 
+  it("chunks long outbound text into multiple messages", () => {
+    const plugin = buildClawflowChannelPlugin({
+      getGatewayState: () => ({
+        running: true,
+        port: 3000,
+        lastStartAt: null,
+        lastStopAt: null,
+        lastError: null,
+      }),
+      getLogger: () => null,
+    }) as any;
+
+    const chunks = plugin.outbound.chunker("A".repeat(4500), 4000);
+    expect(Array.isArray(chunks)).toBe(true);
+    expect(chunks.length).toBeGreaterThan(1);
+    expect(chunks.every((chunk: string) => chunk.length <= 4000)).toBe(true);
+  });
+
   it("probes gateway health via /healthz", async () => {
     const originalFetch = globalThis.fetch;
     globalThis.fetch = (async (input: RequestInfo | URL) => {

@@ -42,6 +42,7 @@ const CHANNEL_ID = "clawflow";
 const DEFAULT_ACCOUNT_ID = "mobile";
 const STARTUP_WAIT_TIMEOUT_MS = 10_000;
 const STARTUP_WAIT_INTERVAL_MS = 250;
+const CLAWFLOW_TEXT_CHUNK_LIMIT = 4000;
 const LEGACY_ACCOUNT_FIELDS = [
   "name",
   "enabled",
@@ -68,6 +69,58 @@ async function waitForGatewayHealthy(port: number, timeoutMs = STARTUP_WAIT_TIME
     await new Promise((resolve) => setTimeout(resolve, STARTUP_WAIT_INTERVAL_MS));
   }
   return false;
+}
+
+function chunkClawflowText(text: string, limit: number): string[] {
+  const normalized = text.replace(/\r\n?/g, "\n").trim();
+  if (!normalized) return [];
+  if (normalized.length <= limit) return [normalized];
+
+  const paragraphs = normalized.split(/\n{2,}/);
+  const chunks: string[] = [];
+  let current = "";
+
+  const flush = () => {
+    const value = current.trim();
+    if (value) chunks.push(value);
+    current = "";
+  };
+
+  const pushLong = (value: string) => {
+    let start = 0;
+    while (start < value.length) {
+      let end = Math.min(start + limit, value.length);
+      if (end < value.length) {
+        const lastBreak = Math.max(
+          value.lastIndexOf("\n", end),
+          value.lastIndexOf(" ", end),
+        );
+        if (lastBreak > start + Math.floor(limit * 0.5)) end = lastBreak;
+      }
+      chunks.push(value.slice(start, end).trim());
+      start = end;
+      while (value[start] === "\n" || value[start] === " ") start += 1;
+    }
+  };
+
+  for (const paragraph of paragraphs) {
+    const part = paragraph.trim();
+    if (!part) continue;
+    const candidate = current ? `${current}\n\n${part}` : part;
+    if (candidate.length <= limit) {
+      current = candidate;
+      continue;
+    }
+    if (current) flush();
+    if (part.length <= limit) {
+      current = part;
+      continue;
+    }
+    pushLong(part);
+  }
+
+  if (current) flush();
+  return chunks.filter(Boolean);
 }
 
 const channelRoot = (cfg: any): Record<string, any> => cfg?.channels?.[CHANNEL_ID] ?? {};
@@ -440,8 +493,9 @@ export const buildClawflowChannelPlugin = ({
   },
   outbound: {
     deliveryMode: "direct",
-    chunker: null,
-    textChunkLimit: 4000,
+    chunker: chunkClawflowText,
+    chunkerMode: "markdown",
+    textChunkLimit: CLAWFLOW_TEXT_CHUNK_LIMIT,
     sendText: async ({
       to,
       text,

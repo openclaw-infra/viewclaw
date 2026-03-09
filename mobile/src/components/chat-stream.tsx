@@ -114,13 +114,14 @@ const ImageGrid = memo(({ images }: { images: ImageAttachment[] }) => {
   );
 });
 
-const GeneratingLabel = () => {
+const InlineTypingDots = () => {
   const { colors } = useTheme();
-  const { t } = useTranslation();
   return (
-    <Text color={colors.text.muted} fontSize={12} marginRight={4} fontStyle="italic">
-      {t("chat.generating")}
-    </Text>
+    <XStack gap={4} marginRight={6} alignItems="center">
+      <TypingDot color={colors.brand.blue} delay={0} />
+      <TypingDot color={colors.brand.blue} delay={150} />
+      <TypingDot color={colors.brand.blue} delay={300} />
+    </XStack>
   );
 };
 
@@ -138,6 +139,8 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const statusLabel = isUser
     ? item.localStatus === "sending"
       ? t("chat.sending")
+      : item.localStatus === "queued"
+        ? "等待中"
       : item.localStatus === "failed"
         ? t("chat.sendFailed")
         : null
@@ -291,9 +294,9 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
             {item.streaming ? (
               <XStack alignItems="center" height={20}>
                 {!item.content && (
-                  <GeneratingLabel />
+                  <InlineTypingDots />
                 )}
-                <StreamingCursor />
+                {item.content ? <StreamingCursor /> : null}
               </XStack>
             ) : (
               <XStack alignItems="center" gap={6} alignSelf={isUser ? "flex-end" : "flex-start"}>

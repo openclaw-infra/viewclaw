@@ -1,5 +1,6 @@
 import { readdir, stat, readFile, access } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
+import { randomUUID } from "node:crypto";
 import { OPENCLAW_BASE_URL, OPENCLAW_HOME, getGatewayToken, normalizeToken } from "./config";
 import { isPluginMode, getWorkspaceDirFromKernel, getLoadedConfig } from "./kernel";
 import { sendBridgeRequest } from "./plugin-bridge";
@@ -44,6 +45,7 @@ export const sendMessage = async (body: {
   content: string;
   imagePaths?: string[];
   agentId?: string;
+  sessionId?: string;
   sessionKey?: string;
   replyToId?: string;
   replyToBody?: string;
@@ -86,6 +88,7 @@ export const sendMessage = async (body: {
       const run = sendBridgeRequest<{ content?: string; responseId?: string }>("send_message", {
         content: finalContent,
         agentId,
+        sessionId: body.sessionId ?? null,
         sessionKey: body.sessionKey ?? null,
         forceNewSession: !body.sessionKey,
         replyToId: body.replyToId ?? null,
@@ -102,21 +105,6 @@ export const sendMessage = async (body: {
           ])
         : await run;
 
-      if (streaming) {
-        const msgId = `stream-msg-${Date.now()}`;
-        const cleaned = sanitizeWithReplyPreview(result.content ?? "");
-        body.onStream!({ type: "message_start", messageId: msgId });
-        if (cleaned.content) {
-          body.onStream!({ type: "message_delta", messageId: msgId, delta: cleaned.content });
-        }
-        body.onStream!({
-          type: "message_done",
-          messageId: msgId,
-          content: cleaned.content,
-          ...(cleaned.replyToBody ? { replyToBody: cleaned.replyToBody } : {}),
-          ...(cleaned.replyToSender ? { replyToSender: cleaned.replyToSender } : {}),
-        });
-      }
       return { ok: true, status: 200, responseId: result.responseId };
     } catch (error) {
       const message = (error as Error).message;
@@ -180,7 +168,7 @@ export const sendMessage = async (body: {
               }
 
               if (evt.type === "response.output_item.added" && evt.item?.role === "assistant") {
-                currentMsgId = evt.item.id ?? `stream-msg-${Date.now()}`;
+                currentMsgId = evt.item.id ?? `stream-msg-${randomUUID()}`;
                 body.onStream!({ type: "message_start", messageId: currentMsgId });
               }
 

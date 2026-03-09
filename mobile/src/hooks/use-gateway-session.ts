@@ -57,6 +57,7 @@ export const useGatewaySession = ({
     useState<ConnectionStatus>("connecting");
   const [stream, setStream] = useState<StreamItem[]>([]);
   const [sending, setSending] = useState(false);
+  const [queuedCount, setQueuedCount] = useState(0);
   const [currentSessionId, setCurrentSessionId] = useState(
     initialSessionId ?? "",
   );
@@ -88,12 +89,29 @@ export const useGatewaySession = ({
   const pendingAckRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
+  const queuedCountRef = useRef(0);
+  const queuedLocalMessageIdsRef = useRef<string[]>([]);
+  const pendingAssistantIdsRef = useRef<string[]>([]);
+  const pseudoStreamTimersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
   const blockAutoFallbackRef = useRef(false);
 
   currentSessionRef.current = currentSessionId;
   wsUrlRef.current = wsUrl;
   httpUrlRef.current = httpUrl;
   onMessageDoneRef.current = onMessageDone;
+  queuedCountRef.current = queuedCount;
+
+  const setQueuedCountSafe = useCallback((value: number) => {
+    const next = Math.max(0, value);
+    queuedCountRef.current = next;
+    setQueuedCount(next);
+  }, []);
+
+  const updateQueuedCount = useCallback((updater: (current: number) => number) => {
+    const next = Math.max(0, updater(queuedCountRef.current));
+    queuedCountRef.current = next;
+    setQueuedCount(next);
+  }, []);
 
   const bufferRef = useRef<StreamItem[]>([]);
 
@@ -175,23 +193,44 @@ export const useGatewaySession = ({
     (messageId: string, content?: string, replyTo?: ReplyPreview) => {
       streamingMsgRef.current = null;
       streamedDoneRef.current = true;
-      setStream((prev) =>
-        prev.map((item) => {
-          if (item.kind === "message" && item.data.id === messageId) {
-            const finalContent = content ?? item.data.content;
-            return {
-              kind: "message" as const,
-              data: {
-                ...item.data,
-                content: finalContent,
-                replyTo,
-                streaming: false,
-              },
-            };
-          }
-          return item;
-        }),
-      );
+      const finalContent = content ?? "";
+      setStream((prev) => {
+        const withoutTyping = prev.filter((item) => item.kind !== "typing");
+        const idx = withoutTyping.findIndex(
+          (item) => item.kind === "message" && item.data.id === messageId,
+        );
+        if (idx !== -1) {
+          return withoutTyping.map((item) => {
+            if (item.kind === "message" && item.data.id === messageId) {
+              return {
+                kind: "message" as const,
+                data: {
+                  ...item.data,
+                  content: content ?? item.data.content,
+                  replyTo,
+                  streaming: false,
+                },
+              };
+            }
+            return item;
+          });
+        }
+        if (!finalContent.trim()) return withoutTyping;
+        return [
+          ...withoutTyping,
+          {
+            kind: "message" as const,
+            data: {
+              id: messageId,
+              role: "assistant" as const,
+              content: finalContent,
+              replyTo,
+              streaming: false,
+              createdAt: Date.now(),
+            },
+          },
+        ];
+      });
     },
     [],
   );
@@ -209,6 +248,92 @@ export const useGatewaySession = ({
     [],
   );
 
+  const appendPendingAssistant = useCallback((placeholderId: string) => {
+    pendingAssistantIdsRef.current.push(placeholderId);
+    setStream((prev) => [
+      ...prev.filter((item) => item.kind !== "typing"),
+      {
+        kind: "message" as const,
+        data: {
+          id: placeholderId,
+          role: "assistant" as const,
+          content: "",
+          streaming: true,
+          createdAt: Date.now(),
+        },
+      },
+    ]);
+  }, []);
+
+  const resolvePendingAssistant = useCallback((content: string, replyTo?: ReplyPreview) => {
+    const placeholderId = pendingAssistantIdsRef.current.shift();
+    if (!placeholderId) {
+      return false;
+    }
+    const existingTimer = pseudoStreamTimersRef.current.get(placeholderId);
+    if (existingTimer) {
+      clearInterval(existingTimer);
+      pseudoStreamTimersRef.current.delete(placeholderId);
+    }
+
+    const total = content ?? "";
+    if (!total) {
+      setStream((prev) =>
+        prev.map((item) => {
+          if (item.kind === "message" && item.data.id === placeholderId) {
+            return {
+              kind: "message" as const,
+              data: {
+                ...item.data,
+                content: "",
+                replyTo,
+                streaming: false,
+              },
+            };
+          }
+          return item;
+        }),
+      );
+      return true;
+    }
+
+    const step = Math.max(1, Math.ceil(total.length / 30));
+    let index = 0;
+    const tick = () => {
+      index = Math.min(total.length, index + step);
+      const nextContent = total.slice(0, index);
+      const done = index >= total.length;
+      setStream((prev) =>
+        prev.map((item) => {
+          if (item.kind === "message" && item.data.id === placeholderId) {
+            return {
+              kind: "message" as const,
+              data: {
+                ...item.data,
+                content: nextContent,
+                replyTo,
+                streaming: !done,
+              },
+            };
+          }
+          return item;
+        }),
+      );
+      if (done) {
+        const timer = pseudoStreamTimersRef.current.get(placeholderId);
+        if (timer) clearInterval(timer);
+        pseudoStreamTimersRef.current.delete(placeholderId);
+      }
+    };
+
+    tick();
+    if (index < total.length) {
+      const timer = setInterval(tick, 35);
+      pseudoStreamTimersRef.current.set(placeholderId, timer);
+    }
+    return true;
+  }, []);
+
   const parseEvent = useCallback(
     (event: GatewayEvent) => {
       const p = event.payload;
@@ -217,6 +342,65 @@ export const useGatewaySession = ({
         const msgId = event.messageId ?? `stream-msg-${event.seq}`;
         streamingMsgRef.current = msgId;
         seenRef.current.add(msgId);
+        removeTyping();
+        let placeholderId = pendingAssistantIdsRef.current.shift();
+        if (!placeholderId && queuedLocalMessageIdsRef.current.length > 0) {
+          const nextQueuedId = queuedLocalMessageIdsRef.current.shift();
+          if (nextQueuedId) {
+            markLocalMessageStatus(nextQueuedId, undefined);
+            updateQueuedCount((current) => current - 1);
+            placeholderId = `pending-assistant-${nextQueuedId}`;
+            setStream((prev) => [
+              ...prev,
+              {
+                kind: "message" as const,
+                data: {
+                  id: placeholderId!,
+                  role: "assistant" as const,
+                  content: "",
+                  streaming: true,
+                  createdAt: event.ts,
+                },
+              },
+            ]);
+          }
+        }
+        if (placeholderId) {
+          setStream((prev) => {
+            const next = prev.filter((item) => item.kind !== "typing");
+            const idx = next.findIndex(
+              (item) => item.kind === "message" && item.data.id === placeholderId,
+            );
+            if (idx === -1) {
+              return [
+                ...next,
+                {
+                  kind: "message" as const,
+                  data: {
+                    id: msgId,
+                    role: "assistant" as const,
+                    content: "",
+                    streaming: true,
+                    createdAt: event.ts,
+                  },
+                },
+              ];
+            }
+            const entry = next[idx];
+            if (entry.kind !== "message") return next;
+            const updated = {
+              kind: "message" as const,
+              data: {
+                ...entry.data,
+                id: msgId,
+                streaming: true,
+              },
+            };
+            const out = [...next];
+            out[idx] = updated;
+            return out;
+          });
+        }
         return;
       }
 
@@ -263,6 +447,7 @@ export const useGatewaySession = ({
           // Server aborted the previous run; Mobile sendMessage already finalized
           // the streaming message, so just reset refs to avoid stale state.
           streamingMsgRef.current = null;
+          removeTyping();
           return;
         }
         const msgId = event.messageId ?? streamingMsgRef.current;
@@ -322,7 +507,42 @@ export const useGatewaySession = ({
             clearTimeout(pending);
             pendingAckRef.current.delete(incomingId);
           }
-          markLocalMessageStatus(incomingId, undefined);
+          if (!queuedLocalMessageIdsRef.current.includes(incomingId)) {
+            markLocalMessageStatus(incomingId, undefined);
+          }
+          return;
+        }
+
+        const replyTo =
+          typeof p.replyToBody === "string"
+            ? {
+                messageId:
+                  typeof p.replyToId === "string" ? p.replyToId : undefined,
+                body: p.replyToBody,
+                senderName:
+                  typeof p.replyToSender === "string"
+                    ? p.replyToSender
+                    : undefined,
+              }
+            : undefined;
+
+        if (role === "assistant") {
+          const matched = resolvePendingAssistant(cleanContent, replyTo);
+          if (!matched) {
+            appendMessage({
+              id: incomingId,
+              role,
+              content: cleanContent,
+              replyTo,
+              images,
+              thinking: typeof p.thinking === "string" ? p.thinking : undefined,
+              thinkingSummary:
+                typeof p.thinkingSummary === "string"
+                  ? p.thinkingSummary
+                  : undefined,
+              createdAt: event.ts,
+            });
+          }
           return;
         }
 
@@ -330,18 +550,7 @@ export const useGatewaySession = ({
           id: incomingId,
           role,
           content: cleanContent,
-          replyTo:
-            typeof p.replyToBody === "string"
-              ? {
-                  messageId:
-                    typeof p.replyToId === "string" ? p.replyToId : undefined,
-                  body: p.replyToBody,
-                  senderName:
-                    typeof p.replyToSender === "string"
-                      ? p.replyToSender
-                      : undefined,
-                }
-              : undefined,
+          replyTo,
           images,
           thinking: typeof p.thinking === "string" ? p.thinking : undefined,
           thinkingSummary:
@@ -350,6 +559,9 @@ export const useGatewaySession = ({
               : undefined,
           createdAt: event.ts,
         });
+        if (role === "user" && typeof p.queueIndex === "number") {
+          setQueuedCountSafe(p.queueIndex);
+        }
         return;
       }
 
@@ -637,6 +849,27 @@ export const useGatewaySession = ({
         return `${baseUrl}/api/images${normalized}`;
       };
 
+      const trailingQueuedCount = (() => {
+        let maxQueued = 0;
+        for (let i = data.messages.length - 1; i >= 0; i -= 1) {
+          const message = data.messages[i];
+          if (message?.type !== "message" || !message.role) continue;
+          if (message.role === "assistant") break;
+          if (message.role === "user" && message.queued === true) {
+            const index = typeof message.queueIndex === "number" ? message.queueIndex : 1;
+            maxQueued = Math.max(maxQueued, index);
+            continue;
+          }
+          break;
+        }
+        return maxQueued;
+      })();
+      pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
+      pseudoStreamTimersRef.current.clear();
+      queuedLocalMessageIdsRef.current = [];
+      pendingAssistantIdsRef.current = [];
+      setQueuedCountSafe(trailingQueuedCount);
+
       const items: StreamItem[] = [];
       for (const m of data.messages) {
         if (seenRef.current.has(m.id)) continue;
@@ -851,31 +1084,36 @@ export const useGatewaySession = ({
       )
         return;
 
-      if (streamingMsgRef.current) {
-        finalizeStreamingMessage(streamingMsgRef.current);
+      const willQueueBehindBusyAgent = Boolean(streamingMsgRef.current || typingIdRef.current);
+      if (willQueueBehindBusyAgent) {
+        updateQueuedCount((current) => current + 1);
       }
-      removeTyping();
 
       const messageId = `local-${Date.now()}`;
       const msg: ChatMessage = {
         id: messageId,
         role: "user",
         content: text,
-        localStatus: "sending",
+        localStatus: willQueueBehindBusyAgent ? "queued" : "sending",
         replyTo: reply ?? undefined,
         images: images?.length ? images : undefined,
         createdAt: Date.now(),
       };
+      if (willQueueBehindBusyAgent) {
+        queuedLocalMessageIdsRef.current.push(messageId);
+      }
       seenRef.current.add(messageId);
 
       streamedDoneRef.current = false;
-      const typingId = `typing-${Date.now()}`;
-      typingIdRef.current = typingId;
-      setStream((prev) => [
-        ...prev,
-        { kind: "message" as const, data: msg },
-        { kind: "typing" as const, id: typingId },
-      ]);
+      if (!willQueueBehindBusyAgent) {
+        setStream((prev) => [
+          ...prev,
+          { kind: "message" as const, data: msg },
+        ]);
+        appendPendingAssistant(`pending-assistant-${messageId}`);
+      } else {
+        setStream((prev) => [...prev, { kind: "message" as const, data: msg }]);
+      }
 
       setSending(true);
 
@@ -940,10 +1178,10 @@ export const useGatewaySession = ({
     },
     [
       uploadImage,
-      finalizeStreamingMessage,
-      removeTyping,
+      appendPendingAssistant,
       getAgentId,
       markLocalMessageStatus,
+      updateQueuedCount,
     ],
   );
 
@@ -980,7 +1218,12 @@ export const useGatewaySession = ({
       typingIdRef.current = null;
       pendingAckRef.current.forEach((timer) => clearTimeout(timer));
       pendingAckRef.current.clear();
+      pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
+      pseudoStreamTimersRef.current.clear();
+      queuedLocalMessageIdsRef.current = [];
+      pendingAssistantIdsRef.current = [];
       lastSeqRef.current = 0;
+      setQueuedCountSafe(0);
       setCurrentSessionId(newSessionId);
 
       if (!isPendingSession(newSessionId)) {
@@ -1019,7 +1262,12 @@ export const useGatewaySession = ({
       typingIdRef.current = null;
       pendingAckRef.current.forEach((timer) => clearTimeout(timer));
       pendingAckRef.current.clear();
+      pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
+      pseudoStreamTimersRef.current.clear();
+      queuedLocalMessageIdsRef.current = [];
+      pendingAssistantIdsRef.current = [];
       lastSeqRef.current = 0;
+      setQueuedCountSafe(0);
 
       const oldSessionId = currentSessionRef.current;
       if (oldSessionId && !isPendingSession(oldSessionId)) {
@@ -1054,6 +1302,11 @@ export const useGatewaySession = ({
             setStream([]);
             seenRef.current.clear();
             bufferRef.current = [];
+            pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
+            pseudoStreamTimersRef.current.clear();
+            queuedLocalMessageIdsRef.current = [];
+            pendingAssistantIdsRef.current = [];
+            setQueuedCountSafe(0);
             setCurrentSessionId("");
           }
           return remaining;
@@ -1071,6 +1324,7 @@ export const useGatewaySession = ({
       agents,
       stream,
       sending,
+      queuedCount,
       sendMessage,
       forwardMessage,
       switchSession,
@@ -1086,6 +1340,7 @@ export const useGatewaySession = ({
       agents,
       stream,
       sending,
+      queuedCount,
       sendMessage,
       forwardMessage,
       switchSession,

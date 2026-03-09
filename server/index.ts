@@ -13,6 +13,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildClawflowChannelPlugin } from "./src/channel-plugin";
 import { createRuntimeAdapter } from "./src/runtime-adapter";
+import { sanitizeWithReplyPreview } from "./src/sanitize";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -39,6 +40,8 @@ let childStdoutBuffer = "";
 let gatewayLastStartAt: number | null = null;
 let gatewayLastStopAt: number | null = null;
 let gatewayLastError: string | null = null;
+const outboundQueues = new Map<string, Promise<unknown>>();
+const sessionIdByRuntimeKey = new Map<string, string>();
 
 const REQ_PREFIX = "__CF_REQ__";
 const RES_PREFIX = "__CF_RES__";
@@ -52,6 +55,43 @@ const writeChildLine = (line: string) => {
 async function postEvent(payload: Record<string, unknown>) {
   writeChildLine(`${EVT_PREFIX}${JSON.stringify(payload)}`);
 }
+
+const queueOutbound = async <T>(key: string, task: () => Promise<T>): Promise<T> => {
+  const previous = outboundQueues.get(key) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(task);
+  outboundQueues.set(key, next);
+  try {
+    return await next;
+  } finally {
+    if (outboundQueues.get(key) === next) outboundQueues.delete(key);
+  }
+};
+
+const buildRuntimeSessionLookupKey = (agentId: string, sessionKey?: string | null) =>
+  sessionKey ? `${agentId}::${sessionKey}` : undefined;
+
+const extractMessageText = (message: any): string => {
+  const content = Array.isArray(message?.content) ? message.content : [];
+  return content
+    .filter((block: any) => block?.type === "text" && typeof block?.text === "string")
+    .map((block: any) => String(block.text))
+    .join("\n")
+    .trim();
+};
+
+const toCompactText = (value: unknown, max = 1200): string => {
+  if (value == null) return "";
+  if (typeof value === "string") {
+    return value.length > max ? `${value.slice(0, max)}...` : value;
+  }
+  try {
+    const json = JSON.stringify(value, null, 2);
+    return json.length > max ? `${json.slice(0, max)}...` : json;
+  } catch {
+    const raw = String(value);
+    return raw.length > max ? `${raw.slice(0, max)}...` : raw;
+  }
+};
 
 const sendBridgeResponse = (reqId: string, ok: boolean, result?: unknown, error?: string) => {
   writeChildLine(`${RES_PREFIX}${JSON.stringify({ reqId, ok, result, error })}`);
@@ -73,12 +113,17 @@ const handleBridgeRequest = async (
     const content = typeof req.payload?.content === "string" ? req.payload.content : "";
     const agentId = typeof req.payload?.agentId === "string" ? req.payload.agentId : "main";
     const sessionKey = typeof req.payload?.sessionKey === "string" ? req.payload.sessionKey : undefined;
+    const sessionId = typeof req.payload?.sessionId === "string" ? req.payload.sessionId : undefined;
     const replyToId = typeof req.payload?.replyToId === "string" ? req.payload.replyToId : undefined;
     const replyToBody = typeof req.payload?.replyToBody === "string" ? req.payload.replyToBody : undefined;
     const replyToSender = typeof req.payload?.replyToSender === "string" ? req.payload.replyToSender : undefined;
     const threadId = typeof req.payload?.threadId === "string" ? req.payload.threadId : undefined;
     const forceNewSession = req.payload?.forceNewSession === true;
     const runtimeSessionKey = sessionKey ?? (forceNewSession ? `agent:${agentId}:${randomUUID()}` : undefined);
+    const runtimeLookupKey = buildRuntimeSessionLookupKey(agentId, runtimeSessionKey);
+    if (runtimeLookupKey && sessionId) {
+      sessionIdByRuntimeKey.set(runtimeLookupKey, sessionId);
+    }
     const runtimeAdapter = createRuntimeAdapter({
       runtime: api.runtime,
       config: api.config,
@@ -153,22 +198,25 @@ const plugin = {
         });
       },
       sendOutbound: async ({ to, text, mediaUrl, accountId, replyToId, threadId }) => {
-        const messageId = randomUUID();
-        await postEvent({
-          type: "message",
-          sessionId: to,
-          messageId,
-          payload: {
-            role: "assistant",
-            content: text,
-            channel: "clawflow",
-            accountId: accountId ?? undefined,
-            mediaUrl: mediaUrl ?? undefined,
-            replyToId: replyToId ?? undefined,
-            threadId: threadId ?? undefined,
-          },
+        const queueKey = [to, accountId ?? "default", threadId ?? "main"].join("::");
+        return await queueOutbound(queueKey, async () => {
+          const messageId = randomUUID();
+          await postEvent({
+            type: "message",
+            sessionId: to,
+            messageId,
+            payload: {
+              role: "assistant",
+              content: text,
+              channel: "clawflow",
+              accountId: accountId ?? undefined,
+              mediaUrl: mediaUrl ?? undefined,
+              replyToId: replyToId ?? undefined,
+              threadId: threadId ?? undefined,
+            },
+          });
+          return { id: messageId };
         });
-        return { id: messageId };
       },
     });
     if (typeof (api as any).registerChannel === "function") {
@@ -268,15 +316,75 @@ const plugin = {
     });
 
     api.on("after_tool_call", (event: any, ctx: any) => {
+      const agentId = typeof ctx?.agentId === "string" ? ctx.agentId : "main";
+      const sessionKey = typeof ctx?.sessionKey === "string" ? ctx.sessionKey : undefined;
+      const lookupKey = buildRuntimeSessionLookupKey(agentId, sessionKey);
+      const resolvedSessionId =
+        (typeof ctx?.sessionId === "string" && ctx.sessionId) ||
+        (lookupKey ? sessionIdByRuntimeKey.get(lookupKey) : undefined) ||
+        sessionKey ||
+        "";
+      const toolName = typeof event?.toolName === "string" ? event.toolName : "tool_call";
+      const toolArgs = event?.params ?? {};
+      const resultText = toCompactText(event?.result);
+      const errorText = typeof event?.error === "string" ? event.error : undefined;
+
+      postEvent({
+        type: "action",
+        sessionId: resolvedSessionId,
+        payload: {
+          toolCalls: [
+            {
+              name: toolName,
+              arguments: toolArgs,
+            },
+          ],
+          text: toolName,
+          durationMs: event?.durationMs,
+          agentId,
+        },
+      });
+
       postEvent({
         type: "observation",
-        sessionId: ctx.sessionKey ?? "",
+        sessionId: resolvedSessionId,
         payload: {
-          toolName: event.toolName,
+          toolName,
+          content: errorText ? `${errorText}${resultText ? `\n${resultText}` : ""}` : resultText,
+          details: event?.result,
           result: event.result,
-          error: event.error,
+          error: errorText,
           durationMs: event.durationMs,
-          agentId: ctx.agentId,
+          agentId,
+        },
+      });
+    });
+
+    api.on("before_message_write", (event: any, ctx: any) => {
+      const message = event?.message;
+      if (message?.role !== "assistant") return;
+      const agentId = typeof ctx?.agentId === "string" ? ctx.agentId : "main";
+      const sessionKey = typeof ctx?.sessionKey === "string" ? ctx.sessionKey : undefined;
+      const lookupKey = buildRuntimeSessionLookupKey(agentId, sessionKey);
+      const sessionId =
+        (typeof ctx?.sessionId === "string" && ctx.sessionId) ||
+        (lookupKey ? sessionIdByRuntimeKey.get(lookupKey) : undefined) ||
+        sessionKey ||
+        "";
+      if (!sessionId) return;
+
+      const cleaned = sanitizeWithReplyPreview(extractMessageText(message));
+      void postEvent({
+        type: "message",
+        sessionId,
+        messageId: message?.id ?? randomUUID(),
+        payload: {
+          role: "assistant",
+          content: cleaned.content,
+          ...(cleaned.replyToId ? { replyToId: cleaned.replyToId } : {}),
+          ...(cleaned.replyToBody ? { replyToBody: cleaned.replyToBody } : {}),
+          ...(cleaned.replyToSender ? { replyToSender: cleaned.replyToSender } : {}),
+          agentId,
         },
       });
     });

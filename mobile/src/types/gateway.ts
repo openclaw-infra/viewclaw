@@ -38,7 +38,7 @@ export type ChatMessage = {
   id: string;
   role: "user" | "assistant" | "system";
   content: string;
-  localStatus?: "sending" | "failed";
+  localStatus?: "sending" | "queued" | "failed";
   replyTo?: ReplyPreview;
   thinking?: string;
   thinkingSummary?: string;
