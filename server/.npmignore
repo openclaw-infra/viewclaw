@@ -1,0 +1,13 @@
+.env
+.env.*
+*.test.ts
+tsconfig.json
+bun.lock
+node_modules/
+.DS_Store
+*.trace
+*.zip
+*.tar.gz
+*.tgz
+*.log
+*.bun
