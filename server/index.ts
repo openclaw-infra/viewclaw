@@ -79,6 +79,35 @@ const extractMessageText = (message: any): string => {
     .trim();
 };
 
+const extractThinkingSummary = (message: any): string | undefined => {
+  const content = Array.isArray(message?.content) ? message.content : [];
+  for (const block of content) {
+    if (!block || block.type !== "thinking") continue;
+    if (typeof block.thinkingSignature === "string") {
+      try {
+        const parsed = JSON.parse(block.thinkingSignature) as {
+          summary?: Array<{ text?: string }>;
+        };
+        const summary = parsed.summary?.[0]?.text;
+        if (typeof summary === "string" && summary.trim()) return summary.trim();
+      } catch {
+        // ignore malformed thinking signature
+      }
+    }
+  }
+  return undefined;
+};
+
+const extractThinkingText = (message: any): string | undefined => {
+  const content = Array.isArray(message?.content) ? message.content : [];
+  const thoughts = content
+    .filter((block: any) => block?.type === "thinking" && typeof block?.thinking === "string")
+    .map((block: any) => String(block.thinking).trim())
+    .filter(Boolean);
+  if (thoughts.length === 0) return undefined;
+  return thoughts.join("\n");
+};
+
 const toCompactText = (value: unknown, max = 1200): string => {
   if (value == null) return "";
   if (typeof value === "string") {
@@ -372,6 +401,21 @@ const plugin = {
         sessionKey ||
         "";
       if (!sessionId) return;
+
+      const thinkingSummary = extractThinkingSummary(message);
+      const thinking = extractThinkingText(message);
+      if (thinkingSummary || thinking) {
+        void postEvent({
+          type: "thought",
+          sessionId,
+          messageId: message?.id ?? randomUUID(),
+          payload: {
+            ...(thinkingSummary ? { thinkingSummary } : {}),
+            ...(thinking ? { thinking } : {}),
+            agentId,
+          },
+        });
+      }
 
       const cleaned = sanitizeWithReplyPreview(extractMessageText(message));
       void postEvent({

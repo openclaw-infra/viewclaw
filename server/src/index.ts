@@ -326,6 +326,8 @@ export const app = new Elysia()
           } else if (classified.eventType === "action") {
             if (p.toolCalls) item.toolCalls = p.toolCalls as unknown[];
             if (p.text) item.content = String(p.text);
+            if (p.thinking) item.thinking = String(p.thinking);
+            if (p.thinkingSummary) item.thinkingSummary = String(p.thinkingSummary);
           } else if (classified.eventType === "observation") {
             item.toolName = p.toolName ? String(p.toolName) : undefined;
             item.content = p.content ? String(p.content) : undefined;

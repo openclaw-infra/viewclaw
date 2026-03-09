@@ -4,7 +4,7 @@ import Reanimated, { useSharedValue, useAnimatedStyle, withRepeat, withSequence,
 import { Text, XStack, YStack, AnimatePresence } from "tamagui";
 import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
-import { ArrowDown, Forward, Reply } from "@tamagui/lucide-icons";
+import { ArrowDown, ChevronDown, Forward, MessageCircle, Reply } from "@tamagui/lucide-icons";
 import type { ChatMessage, ExecutionLog, ImageAttachment, ReplyPreview, StreamItem } from "../types/gateway";
 import { ProcessCard } from "./process-card";
 import { MarkdownBody } from "./markdown-body";
@@ -125,8 +125,6 @@ const InlineTypingDots = () => {
   );
 };
 
-const SHOW_INTERNAL_THINKING_SUMMARY = false;
-
 const Bubble = memo(({ item }: { item: ChatMessage }) => {
   const { colors, isDark } = useTheme();
   const { t } = useTranslation();
@@ -150,6 +148,69 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
     () => item.content,
     [item.content],
   );
+  const [thinkExpanded, setThinkExpanded] = useState(false);
+  const thinkText = item.thinkingSummary || item.thinking || "";
+  const hasThink = !isUser && !!thinkText;
+  const [displayThinkText, setDisplayThinkText] = useState(thinkText);
+  const thinkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const displayThinkRef = useRef(displayThinkText);
+  const thinkStatusLabel = item.streaming ? "思考中" : "已思考";
+
+  useEffect(() => {
+    displayThinkRef.current = displayThinkText;
+  }, [displayThinkText]);
+
+  useEffect(() => {
+    if (!hasThink) {
+      if (thinkTimerRef.current) {
+        clearInterval(thinkTimerRef.current);
+        thinkTimerRef.current = null;
+      }
+      setDisplayThinkText("");
+      return;
+    }
+
+    if (!item.streaming) {
+      if (thinkTimerRef.current) {
+        clearInterval(thinkTimerRef.current);
+        thinkTimerRef.current = null;
+      }
+      setDisplayThinkText(thinkText);
+      return;
+    }
+
+    if (displayThinkRef.current.length > thinkText.length) {
+      setDisplayThinkText("");
+      return;
+    }
+
+    if (displayThinkRef.current === thinkText) return;
+
+    if (thinkTimerRef.current) {
+      clearInterval(thinkTimerRef.current);
+      thinkTimerRef.current = null;
+    }
+
+    const step = Math.max(1, Math.ceil((thinkText.length - displayThinkRef.current.length) / 24));
+    thinkTimerRef.current = setInterval(() => {
+      setDisplayThinkText((prev) => {
+        const nextLen = Math.min(thinkText.length, prev.length + step);
+        const next = thinkText.slice(0, nextLen);
+        if (nextLen >= thinkText.length && thinkTimerRef.current) {
+          clearInterval(thinkTimerRef.current);
+          thinkTimerRef.current = null;
+        }
+        return next;
+      });
+    }, 30);
+
+    return () => {
+      if (thinkTimerRef.current) {
+        clearInterval(thinkTimerRef.current);
+        thinkTimerRef.current = null;
+      }
+    };
+  }, [hasThink, thinkText, item.streaming]);
   const replyPreview = item.replyTo;
 
   const isHighlighted = highlightedId === item.id;
@@ -249,16 +310,70 @@ const Bubble = memo(({ item }: { item: ChatMessage }) => {
               shadowRadius: 3,
             })}
           >
-            {item.images?.length ? <ImageGrid images={item.images} /> : null}
+            {hasThink ? (
+              <YStack marginBottom={2}>
+                <YStack
+                  backgroundColor={colors.bg.tertiary}
+                  borderRadius={10}
+                  borderWidth={1}
+                  borderColor={colors.border.subtle}
+                  overflow="hidden"
+                >
+                  <Pressable
+                    onPress={() => setThinkExpanded((prev) => !prev)}
+                    hitSlop={6}
+                  >
+                    <XStack
+                      alignItems="center"
+                      gap={6}
+                      paddingHorizontal={10}
+                      paddingVertical={7}
+                    >
+                      <MessageCircle size={12} color={colors.accent.yellow} />
+                      <Text
+                        color={colors.accent.yellow}
+                        fontSize={11}
+                        fontWeight="600"
+                        numberOfLines={1}
+                        flex={1}
+                      >
+                        {thinkStatusLabel}
+                      </Text>
+                      <YStack animation="quick" rotate={thinkExpanded ? "180deg" : "0deg"}>
+                        <ChevronDown size={12} color={colors.text.muted} />
+                      </YStack>
+                    </XStack>
+                  </Pressable>
 
-            {SHOW_INTERNAL_THINKING_SUMMARY && item.thinkingSummary ? (
-              <XStack alignItems="center" gap={4} marginBottom={2}>
-                <View style={[emptyStyles.thinkDot, { backgroundColor: colors.accent.yellow }]} />
-                <Text color={colors.accent.yellow} fontSize={11} opacity={0.85} fontWeight="500">
-                  {item.thinkingSummary}
-                </Text>
-              </XStack>
+                  <AnimatePresence>
+                    {thinkExpanded ? (
+                      <YStack
+                        key="think-content"
+                        animation="bouncy"
+                        enterStyle={{ opacity: 0, scale: 0.98, y: -4 }}
+                        exitStyle={{ opacity: 0, scale: 0.98, y: -4 }}
+                        borderTopWidth={StyleSheet.hairlineWidth}
+                        borderTopColor={colors.border.subtle}
+                        backgroundColor={colors.bg.codeBlock + "55"}
+                        paddingHorizontal={10}
+                        paddingVertical={8}
+                      >
+                        <Text
+                          color={colors.text.secondary}
+                          fontSize={11}
+                          fontFamily="$mono"
+                          lineHeight={16}
+                        >
+                          {displayThinkText}
+                        </Text>
+                      </YStack>
+                    ) : null}
+                  </AnimatePresence>
+                </YStack>
+              </YStack>
             ) : null}
+
+            {item.images?.length ? <ImageGrid images={item.images} /> : null}
 
             {replyPreview && (
               <Pressable onPress={handleQuotePress} style={{ alignSelf: "flex-start", maxWidth: Math.round((Dimensions.get("window").width - 24) * 0.5) }}>
@@ -398,10 +513,6 @@ const TypingIndicator = () => {
   );
 };
 
-const emptyStyles = StyleSheet.create({
-  thinkDot: { width: 4, height: 4, borderRadius: 2 },
-});
-
 type DisplayItem =
   | { kind: "message"; id: string; data: ChatMessage }
   | { kind: "process"; id: string; logs: ExecutionLog[] }
@@ -434,6 +545,9 @@ const groupStreamItems = (stream: StreamItem[]): DisplayItem[] => {
 
   for (const item of stream) {
     if (item.kind === "log") {
+      if (item.data.level === "thought") {
+        continue;
+      }
       currentLogs.push(item.data);
     } else {
       const closesProcess = item.kind === "message";

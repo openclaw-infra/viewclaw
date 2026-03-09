@@ -215,7 +215,10 @@ export const SessionListSheet = memo(
     const [agentPickerVisible, setAgentPickerVisible] = useState(false);
 
     const screenWidth = Dimensions.get("window").width;
+    const screenHeight = Dimensions.get("window").height;
     const drawerWidth = screenWidth * DRAWER_WIDTH_RATIO;
+    const agentPickerWidth = Math.min(340, screenWidth - 32);
+    const agentPickerMaxHeight = Math.min(screenHeight * 0.72, 560);
     const slideAnim = useRef(new Animated.Value(-drawerWidth)).current;
     const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -477,7 +480,8 @@ export const SessionListSheet = memo(
                 <YStack
                   backgroundColor={colors.bg.secondary}
                   borderRadius={24}
-                  width={300}
+                  width={agentPickerWidth}
+                  maxHeight={agentPickerMaxHeight}
                   overflow="hidden"
                   shadowColor="#000"
                   shadowOffset={{ width: 0, height: 8 }}
@@ -509,10 +513,15 @@ export const SessionListSheet = memo(
                     </Pressable>
                   </XStack>
 
-                  <YStack paddingHorizontal={12} paddingTop={12} paddingBottom={16} gap={8}>
-                    {agents.map((agent) => (
+                  <FlatList
+                    data={agents}
+                    keyExtractor={(agent) => agent.id}
+                    style={{ flexGrow: 0 }}
+                    contentContainerStyle={{ paddingHorizontal: 12, paddingTop: 12, paddingBottom: 16, gap: 8 }}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={agents.length > 5}
+                    renderItem={({ item: agent }) => (
                       <Pressable
-                        key={agent.id}
                         onPress={() => {
                           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                           handleCreateWithAgent(agent.id);
@@ -562,8 +571,8 @@ export const SessionListSheet = memo(
                           </XStack>
                         )}
                       </Pressable>
-                    ))}
-                  </YStack>
+                    )}
+                  />
                 </YStack>
               </Pressable>
             </View>

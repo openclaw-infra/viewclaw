@@ -39,6 +39,7 @@ type WsIncoming =
     };
 
 const DEFAULT_AGENT_ID = "main";
+const SHOW_REALTIME_PROCESS_LOGS = true;
 const PENDING_PREFIX = "pending-";
 const isPendingSession = (id: string) => id.startsWith(PENDING_PREFIX);
 const isSessionKeyNotFoundError = (msg: string) =>
@@ -93,6 +94,7 @@ export const useGatewaySession = ({
   const queuedLocalMessageIdsRef = useRef<string[]>([]);
   const pendingAssistantIdsRef = useRef<string[]>([]);
   const pseudoStreamTimersRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  const messageDoneDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockAutoFallbackRef = useRef(false);
 
   currentSessionRef.current = currentSessionId;
@@ -100,6 +102,16 @@ export const useGatewaySession = ({
   httpUrlRef.current = httpUrl;
   onMessageDoneRef.current = onMessageDone;
   queuedCountRef.current = queuedCount;
+
+  const notifyMessageDone = useCallback(() => {
+    if (messageDoneDebounceRef.current) {
+      clearTimeout(messageDoneDebounceRef.current);
+    }
+    messageDoneDebounceRef.current = setTimeout(() => {
+      onMessageDoneRef.current?.();
+      messageDoneDebounceRef.current = null;
+    }, 350);
+  }, []);
 
   const setQueuedCountSafe = useCallback((value: number) => {
     const next = Math.max(0, value);
@@ -334,6 +346,45 @@ export const useGatewaySession = ({
     return true;
   }, []);
 
+  const applyThinkingToAssistantBubble = useCallback((thinking?: string, thinkingSummary?: string) => {
+    if (!thinking && !thinkingSummary) return;
+    setStream((prev) => {
+      let targetId: string | undefined;
+
+      // Prefer current pending placeholder (real-time in-progress assistant)
+      if (pendingAssistantIdsRef.current.length > 0) {
+        targetId = pendingAssistantIdsRef.current[0];
+      }
+
+      // Fallback: last assistant bubble in stream
+      if (!targetId) {
+        for (let i = prev.length - 1; i >= 0; i -= 1) {
+          const item = prev[i];
+          if (item.kind === "message" && item.data.role === "assistant") {
+            targetId = item.data.id;
+            break;
+          }
+        }
+      }
+
+      if (!targetId) return prev;
+
+      return prev.map((item) => {
+        if (item.kind === "message" && item.data.id === targetId) {
+          return {
+            kind: "message" as const,
+            data: {
+              ...item.data,
+              thinking: thinking ?? item.data.thinking,
+              thinkingSummary: thinkingSummary ?? item.data.thinkingSummary,
+            },
+          };
+        }
+        return item;
+      });
+    });
+  }, []);
+
   const parseEvent = useCallback(
     (event: GatewayEvent) => {
       const p = event.payload;
@@ -467,7 +518,7 @@ export const useGatewaySession = ({
               : undefined,
           );
         }
-        onMessageDoneRef.current?.();
+        notifyMessageDone();
         return;
       }
 
@@ -543,6 +594,7 @@ export const useGatewaySession = ({
               createdAt: event.ts,
             });
           }
+          notifyMessageDone();
           return;
         }
 
@@ -569,21 +621,19 @@ export const useGatewaySession = ({
         const summary =
           typeof p.thinkingSummary === "string" ? p.thinkingSummary : "";
         const thinking = typeof p.thinking === "string" ? p.thinking : "";
-        appendLog({
-          id: `log-${event.sessionId}-${event.seq}`,
-          messageId: event.messageId,
-          level: "thought",
-          text: summary || thinking || "Thinking...",
-          createdAt: event.ts,
-        });
+        applyThinkingToAssistantBubble(thinking || undefined, summary || undefined);
         return;
       }
 
       if (event.type === "action") {
+        const actionThinking = typeof p.thinking === "string" ? p.thinking : undefined;
+        const actionThinkingSummary =
+          typeof p.thinkingSummary === "string" ? p.thinkingSummary : undefined;
+        applyThinkingToAssistantBubble(actionThinking, actionThinkingSummary);
         const toolCalls = p.toolCalls as
           | Array<{ name?: string; arguments?: unknown }>
           | undefined;
-        if (toolCalls && toolCalls.length > 0) {
+        if (SHOW_REALTIME_PROCESS_LOGS && toolCalls && toolCalls.length > 0) {
           for (const tc of toolCalls) {
             const args = tc.arguments ? JSON.stringify(tc.arguments) : "";
             appendLog({
@@ -596,7 +646,7 @@ export const useGatewaySession = ({
               createdAt: event.ts,
             });
           }
-        } else {
+        } else if (SHOW_REALTIME_PROCESS_LOGS) {
           appendLog({
             id: `log-${event.sessionId}-${event.seq}`,
             messageId: event.messageId,
@@ -611,18 +661,20 @@ export const useGatewaySession = ({
       if (event.type === "observation") {
         const content = typeof p.content === "string" ? p.content : "";
         const toolName = typeof p.toolName === "string" ? p.toolName : "";
-        appendLog({
-          id: `log-${event.sessionId}-${event.seq}`,
-          messageId: event.messageId,
-          level: "observation",
-          text: toolName
-            ? `${toolName} returned`
-            : content.slice(0, 200) || "Observation",
-          detail:
-            content.length > 200 ? content.slice(0, 500) + "..." : content,
-          toolName,
-          createdAt: event.ts,
-        });
+        if (SHOW_REALTIME_PROCESS_LOGS) {
+          appendLog({
+            id: `log-${event.sessionId}-${event.seq}`,
+            messageId: event.messageId,
+            level: "observation",
+            text: toolName
+              ? `${toolName} returned`
+              : content.slice(0, 200) || "Observation",
+            detail:
+              content.length > 200 ? content.slice(0, 500) + "..." : content,
+            toolName,
+            createdAt: event.ts,
+          });
+        }
         return;
       }
 
@@ -667,10 +719,12 @@ export const useGatewaySession = ({
     [
       appendMessage,
       appendLog,
+      applyThinkingToAssistantBubble,
       removeTyping,
       updateStreamingMessage,
       finalizeStreamingMessage,
       markLocalMessageStatus,
+      notifyMessageDone,
     ],
   );
 
@@ -911,6 +965,10 @@ export const useGatewaySession = ({
           m.type === "observation" ||
           m.type === "error"
         ) {
+          if (m.type === "thought") {
+            continue;
+          }
+
           let text = "";
           if (m.type === "thought") {
             text = m.thinkingSummary || m.thinking || "Thinking...";
@@ -1218,6 +1276,10 @@ export const useGatewaySession = ({
       typingIdRef.current = null;
       pendingAckRef.current.forEach((timer) => clearTimeout(timer));
       pendingAckRef.current.clear();
+      if (messageDoneDebounceRef.current) {
+        clearTimeout(messageDoneDebounceRef.current);
+        messageDoneDebounceRef.current = null;
+      }
       pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
       pseudoStreamTimersRef.current.clear();
       queuedLocalMessageIdsRef.current = [];
@@ -1262,6 +1324,10 @@ export const useGatewaySession = ({
       typingIdRef.current = null;
       pendingAckRef.current.forEach((timer) => clearTimeout(timer));
       pendingAckRef.current.clear();
+      if (messageDoneDebounceRef.current) {
+        clearTimeout(messageDoneDebounceRef.current);
+        messageDoneDebounceRef.current = null;
+      }
       pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
       pseudoStreamTimersRef.current.clear();
       queuedLocalMessageIdsRef.current = [];
@@ -1302,6 +1368,10 @@ export const useGatewaySession = ({
             setStream([]);
             seenRef.current.clear();
             bufferRef.current = [];
+            if (messageDoneDebounceRef.current) {
+              clearTimeout(messageDoneDebounceRef.current);
+              messageDoneDebounceRef.current = null;
+            }
             pseudoStreamTimersRef.current.forEach((timer) => clearInterval(timer));
             pseudoStreamTimersRef.current.clear();
             queuedLocalMessageIdsRef.current = [];
