@@ -1,5 +1,5 @@
 {
-  "name": "clawflow",
+  "name": "@openclaw-infra/clawflow",
   "version": "2.0.0",
   "description": "ClawFlow mobile companion plugin for OpenClaw — Elysia WebSocket/HTTP gateway for iOS app",
   "keywords": [
